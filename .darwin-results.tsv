@@ -1,12 +1,6 @@
 ﻿timestamp	commit	asset	old_score	new_score	status	dimension	note	eval_mode
-2026-08-28T20:49	2e4b29c	research-orchestration-team-team-lead	-	58.4	baseline	-	基线评估（含3个BUG）	dry_run
-2026-08-28T20:49	2e4b29c	socratic-questioner	-	58.2	baseline	-	基线评估	dry_run
-2026-08-28T20:49	2e4b29c	meta-architect	-	58.2	baseline	-	基线评估	dry_run
-2026-08-28T20:49	2e4b29c	domain-expert	-	58.2	baseline	-	基线评估	dry_run
-2026-08-28T20:49	2e4b29c	methodological-reviewer	-	61.4	baseline	-	基线评估	dry_run
-2026-08-28T20:49	2e4b29c	skills/research-orchestration-workflow	-	52.1	baseline	-	基线评估：无frontmatter	dry_run
-2026-08-28T20:52	758d487	ALL(3 files)	57.6	-	fix	边界条件+资源整合	修复3个BUG：占位符泄漏/分值无校验/API路径错误	full_test
-2026-08-28T21:10	33f9b53	skills/research-orchestration-workflow	52.1	63.0	keep	D1+D3+D4	frontmatter+6类fallback+3检查点	full_test
-2026-08-28T21:15	HEAD	team-lead	58.4	64.8	keep	D3+D1	状态机6类异常fallback+中文触发词	full_test
-2026-08-28T21:20	HEAD	4x members	58.2/61.4	62.6-65.8	keep	D1+D3	触发词+各4类专属fallback	full_test
-2026-08-28T21:30	HEAD	ALL(TP-1/2/3)	-	87.3	keep	D8实测	3场景真实测试全过：TP-1工作流A+脚本真实调用；TP-2冻结追问0%完整度；TP-3降档决策+fallback正确应用	full_test
+2026-08-29T06:30	e3d7cf4	team-lead	84.8	89.2	keep	D1+D3+D5+D7+D9+D10	Harness运行时6组件注入（TAO/三级记忆/上下文治理/提示装配/护栏/验证）+通信协议引用	full_test
+2026-08-29T06:30	e3d7cf4	agent-protocol.md	NEW	88.0	keep	D2+D6+D7+D8+D11+D12	新增9节协议：角色矩阵/信封/状态/上下文/任务分配/冲突仲裁/错误四分类/生命周期	full_test
+2026-08-29T06:30	HEAD	T1 script bench	-	all 4 passed	full_test	D7+D10	脚本层：avg=41-46ms, sd≤3.2ms, 10/10 稳定	full_test
+2026-08-29T06:30	HEAD	T3 protocol unit	-	12 envelope + 4 conflict	full_test	D2+D6+D7+D8	协议合规单测：12信封(3正向+9负向拦截)，4冲突仲裁全通过	full_test
+2026-08-29T06:30	HEAD	T2/T4 integration	-	all passed	full_test	D11	真实spawn：111s跑完8阶段, 10/10上下文回引保持, 仲裁正确	full_test
