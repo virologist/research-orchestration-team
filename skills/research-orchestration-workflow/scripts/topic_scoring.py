@@ -4,6 +4,8 @@
 为科研价值驱动研究编排团提供选题评分、分档、止损线、复评决策的全自动化输出。
 """
 
+import sys
+
 # 八维评分维度
 DIMENSIONS = [
     "originality",       # 原创性：研究问题是否首创/突破
@@ -141,10 +143,25 @@ def score_topic(topic_name: str, scores: dict, risks: list = None) -> dict:
         "max_score": 最高分,
     }
     """
-    # 校验
+    # 校验一：维度完整性——缺任何一个维度都无法分档
     missing = [d for d in DIMENSIONS if d not in scores]
     if missing:
         raise ValueError(f"缺少评分维度: {missing}")
+
+    # 校验二：分值范围——每维必须是 1-10 的整数
+    # 说明：不做静默钳制，必须显式报错。否则 11/999 这类误输入会让分档静默失真
+    invalid = []
+    for d in DIMENSIONS:
+        v = scores[d]
+        if not isinstance(v, int) or isinstance(v, bool):
+            invalid.append(f"{DIMENSION_LABELS_ZH[d]}={v!r}（必须为整数）")
+        elif not (1 <= v <= 10):
+            invalid.append(f"{DIMENSION_LABELS_ZH[d]}={v}（超出 1-10）")
+    if invalid:
+        raise ValueError(
+            "评分超出有效范围（每维须为 1-10 的整数）：\n  - "
+            + "\n  - ".join(invalid)
+        )
 
     bucket = grade_bucket(scores)
     stop_loss = stop_loss_matrix(scores)
@@ -210,5 +227,10 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     scores = {d: getattr(args, d.replace("-", "_")) for d in DIMENSIONS}
-    result = score_topic(args.topic, scores)
+    try:
+        result = score_topic(args.topic, scores)
+    except ValueError as e:
+        # 友好报错：直接给出原因，不抛栈，方便主理人/团员把错误回传给用户
+        print(f"❌ 评分失败：{e}", file=sys.stderr)
+        sys.exit(1)
     print(format_report(result))

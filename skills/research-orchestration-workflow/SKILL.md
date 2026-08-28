@@ -65,24 +65,47 @@
 
 ## 使用方式
 
-### 方式 1：主理人 / 团员直接调用
+> ⚠️ **注意**：skill 目录名含连字符（`research-orchestration-workflow`），**不能**直接
+> `from skills.research_orchestration_workflow.scripts... import`。必须按文件路径加载（见方式 1）。
+
+### 方式 1：主理人 / 团员直接调用（Python API）
 
 ```python
-# 在主理人或团员的执行逻辑中调用
-from skills.research_orchestration_workflow.scripts.topic_scoring import score_topic
+import importlib.util
+from pathlib import Path
 
-result = score_topic(
-    topic_name="...",
-    scores={...}  # 8 维评分
+# 按文件路径加载：目录名含连字符，无法作为 Python 包导入
+SCRIPT = Path("/Users/biodog/.workbuddy/plugins/marketplaces/my-experts/plugins/"
+              "research-orchestration-team/skills/research-orchestration-workflow/"
+              "scripts/topic_scoring.py")
+
+def _load_scoring():
+    spec = importlib.util.spec_from_file_location("topic_scoring", SCRIPT)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+scoring = _load_scoring()
+
+result = scoring.score_topic(
+    topic_name="禽流感HA糖基化与宿主适应",
+    scores={          # 8 维评分，每维必须是 1-10 的整数（越界会抛 ValueError）
+        "originality": 9, "feasibility": 7, "value_density": 9,
+        "data_availability": 8, "competition": 6, "cognition": 8,
+        "resource_fit": 7, "sustainability": 8,
+    },
 )
-# 返回分档建议 + 止损线 + 决策建议
+print(scoring.format_report(result))   # 分档 + 止损线 + 决策建议
+
+# 复评闭环（对比前后两轮评分，必给维持/升档/降档/止损之一）
+decision, reason, action = scoring.review_decision(scores_old, scores_new, risks=["中"])
 ```
 
 ### 方式 2：以模板形式输出
 
 参考 `templates/topic-scoring-card.md`，由主理人在每个选题任务结束时填充。
 
-### 方式 3：以 CLI 工具调用
+### 方式 3：以 CLI 工具调用（推荐，最简单可靠）
 
 ```bash
 python3 scripts/topic_scoring.py \
@@ -91,6 +114,9 @@ python3 scripts/topic_scoring.py \
   --data-availability 7 --competition 6 --cognition 8 \
   --resource-fit 7 --sustainability 7
 ```
+
+**CLI 错误处理**：评分越界（如 `--originality 11`）或缺失维度时，脚本会在 stderr 打印
+`❌ 评分失败：...` 并以退出码 1 结束，不会静默产生错误分档。
 
 ## 注意事项
 
