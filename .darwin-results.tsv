@@ -1,0 +1,8 @@
+﻿timestamp	commit	asset	old_score	new_score	status	dimension	note	eval_mode
+2026-08-28T20:49	2e4b29c	research-orchestration-team-team-lead	-	58.4	baseline	-	基线评估（含3个BUG）	dry_run
+2026-08-28T20:49	2e4b29c	socratic-questioner	-	58.2	baseline	-	基线评估	dry_run
+2026-08-28T20:49	2e4b29c	meta-architect	-	58.2	baseline	-	基线评估	dry_run
+2026-08-28T20:49	2e4b29c	domain-expert	-	58.2	baseline	-	基线评估	dry_run
+2026-08-28T20:49	2e4b29c	methodological-reviewer	-	61.4	baseline	-	基线评估	dry_run
+2026-08-28T20:49	2e4b29c	skills/research-orchestration-workflow	-	52.1	baseline	-	基线评估：无frontmatter	dry_run
+2026-08-28T20:52	758d487	ALL(3 files)	57.6	-	fix	边界条件+资源整合	修复3个BUG：占位符泄漏/分值无校验/API路径错误	full_test

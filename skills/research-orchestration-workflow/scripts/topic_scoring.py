@@ -58,9 +58,23 @@ def grade_bucket(scores: dict) -> tuple:
             f"8维均≥5分，至少1维≥8分（min={min_score}, max={max_score}, avg={avg_score:.1f}）",
             "保守投入，留退出通道；建议 B 级资源包 + 月度复评",
         )
+    # C 档是兜底分支，必须区分两种落 C 情形，否则文案会与实际数据自相矛盾
+    # 情形A（真·低质）：确有维度 <5；情形B（门槛未达）：维度尚可但未达 S/A/B 门槛
+    if min_score < 5:
+        reason = f"有维度低于5分（短板维={min_score}分，min={min_score}, max={max_score}, avg={avg_score:.1f}）"
+    elif max_score < 8:
+        reason = (
+            f"未达B档门槛：最高分仅{max_score}分，未满足「至少1维≥8分」"
+            f"（min={min_score}, max={max_score}, avg={avg_score:.1f}）"
+        )
+    else:
+        reason = (
+            f"未达B档门槛：最低分{min_score}分分布在5分档，但未满足S/A/B任一组合条件"
+            f"（min={min_score}, max={max_score}, avg={avg_score:.1f}）"
+        )
     return (
         "C",
-        f"任一维<5分，或证据等级<3（min={min_score}, max={max_score}, avg={avg_score:.1f}）",
+        reason,
         "不投入/止损；建议重新选题或转向相邻问题",
     )
 
