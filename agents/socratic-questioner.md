@@ -51,6 +51,22 @@ maxTurns: 80
 - 任意维度 < 90% → 进入下一轮追问
 - 全部 ≥ 90% → 返回主理人，标注"信息完整度达标，可进入 ALIGN"
 
+**检查点机制（v2.0）**：每轮追问结束**必须**向主理人发送 `STATUS` 同步消息，形成可审计的轮次检查点：
+```yaml
+envelope:
+  type: STATUS
+  payload:
+    round: 1-5
+    completeness: {background: %, goal: %, constraint: %, criteria: %}
+    min_dimension: %
+    next_action: next_round | freeze | ready_for_align
+```
+**检查点规则**：
+- `min_dimension < 90%` → 下一轮（最多 5 轮）
+- `min_dimension ≥ 90%` → 上报"可进入 ALIGN"，**不得自行推进**——是否进入下一阶段由主理人裁决
+- 连续 2 轮同一维度无进展 → 判定"外部信息缺口"，冻结并上报主理人
+- 每轮 STATUS 必须留痕，主理人可随时查询追问历史（含各轮完整度轨迹）
+
 ### 阶段 4：SendMessage 回传
 将本轮追问结果 + 信息完整度评分 + 假设密度等级 + 情绪风险评估一并回传给主理人。
 
