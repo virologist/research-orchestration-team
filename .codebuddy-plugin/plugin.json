@@ -1,7 +1,7 @@
 {
   "name": "research-orchestration-team",
-  "version": "1.0.0",
-  "description": "Cross-disciplinary research orchestration team: planning, deep investigation, and decision support driven by scientific value.",
+  "version": "2.0.0",
+  "description": "Six-role cross-disciplinary research orchestration team with ACP communication protocol, five-role matrix (orchestrator/analyzer/executor/reviewer/integrator), L1-L3 conflict arbitration, and harness-compliant 12-component runtime. v2.0: added synthesis-integrator, unified message envelopes, task dispatch primitives.",
   "author": {
     "name": "TZUVet",
     "email": "tzuvet@example.com"
@@ -11,7 +11,8 @@
     "./agents/socratic-questioner.md",
     "./agents/meta-architect.md",
     "./agents/domain-expert.md",
-    "./agents/methodological-reviewer.md"
+    "./agents/methodological-reviewer.md",
+    "./agents/synthesis-integrator.md"
   ],
   "skills": ["./skills/research-orchestration-workflow"],
 
@@ -23,7 +24,8 @@
       "socratic-questioner",
       "meta-architect",
       "domain-expert",
-      "methodological-reviewer"
+      "methodological-reviewer",
+      "synthesis-integrator"
     ]
   },
 
@@ -36,33 +38,33 @@
     "zh": "科研价值驱动研究编排团"
   },
   "displayDescription": {
-    "en": "Cross-disciplinary research orchestration team specializing in topic selection, deep investigation, and decision support driven by scientific value.",
-    "zh": "科研价值驱动的跨学科研究编排团，融合追问、架构、领域、复评四大能力，专攻选题、调研与决策。"
+    "en": "Six-role research orchestration team with ACP protocol and L1-L3 conflict arbitration: orchestrator, analyzer, architect, executor, reviewer, and integrator for topic selection, deep investigation, and decision support.",
+    "zh": "六角色科研编排团，含ACP通信协议与三级冲突仲裁，覆盖编排、追问、架构、领域、复评、整合全链路。"
   },
   "avatar": "avatars/team.png",
   "categoryId": "12-IndustryConsultant",
   "defaultInitPrompt": {
-    "zh": "我是沈知枢，科研价值驱动研究编排团主理人。告诉我你的研究目标或当前卡点，我会先用 FREEZE 协议评估信息完整度，再决定直接执行还是先做 5 轮×5 问的苏格拉底澄清。",
-    "en": "I'm Shen, lead orchestrator. Tell me your research goal or current blocker — I'll first run FREEZE to gauge info completeness, then either execute or trigger 5-round Socratic clarification."
+    "zh": "我是沈知枢，科研编排团（六人制 v2.0）主理人。告诉我你的研究目标或当前卡点，我会先用 FREEZE 协议评估信息完整度，再决定直接执行还是先做苏格拉底澄清；多方产出冲突时由整合者顾合璧执行三级仲裁。",
+    "en": "I'm Shen, lead of the six-role research orchestration team (v2.0). Tell me your research goal or blocker — I'll run FREEZE completeness assessment first, then execute or trigger Socratic clarification; multi-agent conflicts go through three-level arbitration by our integrator."
   },
   "plugin": "research-orchestration-team",
   "tags": [
     { "en": "Research Planning", "zh": "科研规划" },
-    { "en": "Topic Selection", "zh": "选题决策" },
+    { "en": "Multi-Agent Orchestration", "zh": "多代理编排" },
     { "en": "Deep Investigation", "zh": "深度调研" }
   ],
   "quickPrompts": [
     {
-      "en": "I'm Shen, lead orchestrator. Tell me your research goal or current blocker — I'll first run FREEZE to gauge info completeness, then either execute or trigger 5-round Socratic clarification.",
-      "zh": "我是沈知枢，科研价值驱动研究编排团主理人。告诉我你的研究目标或当前卡点，我会先用 FREEZE 协议评估信息完整度，再决定直接执行还是先做 5 轮×5 问的苏格拉底澄清。"
+      "en": "I'm Shen, lead of the six-role research orchestration team (v2.0). Tell me your research goal or blocker — I'll run FREEZE completeness assessment first, then execute or trigger Socratic clarification; multi-agent conflicts go through three-level arbitration by our integrator.",
+      "zh": "我是沈知枢，科研编排团（六人制 v2.0）主理人。告诉我你的研究目标或当前卡点，我会先用 FREEZE 协议评估信息完整度，再决定直接执行还是先做苏格拉底澄清；多方产出冲突时由整合者顾合璧执行三级仲裁。"
     },
     {
       "en": "I have a research idea — run the 5-task orchestration (identify / collapse / clarify / execute / evolve) on it.",
       "zh": "我已经有了一个研究idea，请用五项核心任务帮我做深度调研编排。"
     },
     {
-      "en": "My research is stuck at stage X — use the review loop to decide upgrade / downgrade / stop-loss.",
-      "zh": "我的研究卡在XX阶段，请用复评闭环帮我决定升档、降档还是止损。"
+      "en": "My research is stuck at stage X — use the review loop with conflict arbitration to decide upgrade / downgrade / stop-loss.",
+      "zh": "我的研究卡在XX阶段，请用复评闭环（含冲突仲裁）帮我决定升档、降档还是止损。"
     }
   ],
   "members": [
@@ -99,6 +101,13 @@
       "displayName": { "en": "Yan Fuhui", "zh": "严复回" },
       "profession": { "en": "Methodological Reviewer", "zh": "方法学复评官" },
       "avatar": "avatars/methodological-reviewer.png",
+      "role": "member"
+    },
+    {
+      "id": "synthesis-integrator",
+      "displayName": { "en": "Gu Hebi", "zh": "顾合璧" },
+      "profession": { "en": "Synthesis Integrator", "zh": "整合者" },
+      "avatar": "avatars/synthesis-integrator.png",
       "role": "member"
     }
   ]
