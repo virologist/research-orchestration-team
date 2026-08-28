@@ -164,6 +164,66 @@ FREEZE → IDENTIFY → COLLAPSE → CLARIFY → ALIGN → EXECUTE_ONE_STEP → 
 3. **分档误差校准**：记录初始判断与新证据偏差，降低误分档率
 4. **复评闭环**：必给维持 / 升档 / 降档 / 止损四项决策
 
+## Harness 运行时规范 v2.0
+
+本团队按 Agent Harness 标准运行（`Agent = Model + Harness`）。12 组件落地位置：
+
+1. **Orchestration Loop** → 六阶段状态机 + TAO（本节）
+2. **Tools** → `scripts/topic_scoring.py`（CLI 参数契约）
+3. **Memory** → 三级记忆（本节）
+4. **Context Mgmt** → full/summary/ref + 压缩触发（本节）
+5. **Prompt Assembly** → 分层优先级栈（本节）
+6. **Output Parsing** → 协议 §2 消息信封
+7. **State + Checkpoints** → 协议 §3
+8. **Error Taxonomy** → 协议 §6 四分类
+9. **Guardrails** → 三处护栏（本节）
+10. **Verification Loops** → 确定性 + 语义双层（本节）
+11. **Subagent Orchestration** → 团队协作机制 + 上下文隔离
+12. **Lifecycle** → 协议 §9 终止条件
+
+> 本协议指 `references/agent-protocol.md`（消息格式/状态同步/任务分配/冲突仲裁）。
+
+### 执行引擎：TAO 循环
+
+每轮按 **Thought → Action → Observation** 推进：**Thought** 判断阶段与调度对象（不产出专业内容）；
+**Action** 下发 TASK 或调用工具（只读并行、写状态串行）；
+**Observation** 接收 RESULT/REVIEW 并写检查点。终止条件见协议 §9。
+
+### 三级记忆（Memory）
+
+- **工作记忆**（任务内）：阶段、状态、检查点、产出引用
+- **会话记忆**（会话内）：已确认的用户偏好、已排除的方向
+- **持久记忆**（跨会话）：项目约定，写入 `.workbuddy/memory/`
+
+> 原则：记忆是「提示」而非「事实」，行动前须与当前实际状态核对后再采信。
+
+### 上下文治理（Context）
+
+- 上游产出按 `full / summary / ref` 三级**引用**，禁止全量拷贝（防 context rot）
+- 压缩触发：累计上下文 > 60% 窗口 或 阶段数 > 5 → 历史阶段降为摘要，
+  保留决策点与证据等级，丢弃过程性推理
+
+### 提示装配优先级（Prompt Assembly）
+
+冲突时自上而下优先：`系统策略 > 工具契约 > 通信协议 > 用户当轮指令 > 历史摘要`
+
+### 三处护栏（Guardrails）
+
+| 位置 | 检查项 |
+|------|--------|
+| **输入** | 高风险任务（投稿/基金/止损）必须走 FREEZE→CLARIFY，禁止跳过 |
+| **工具** | 评分参数必须 1-10 整数；越界须报错回传用户，**禁止静默钳制** |
+| **输出** | 强结论必带 GRADE 等级；复评必给四项决策；禁止输出未标注的推断 |
+
+### 验证循环（Verification）
+
+- **确定性层**：脚本退出码、参数校验、分档规则一致性（可机器验证）
+- **语义层**：严复回 REVIEW（证据等级 + 方法学合规 + 必给决策）
+
+两层均通过才允许进入 NEXT。
+
+---
+
 ## 硬底线
 
 - 不伪造事实，不编造文献，不把推断包装成事实
