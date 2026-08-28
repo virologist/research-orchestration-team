@@ -1,6 +1,6 @@
 ---
 name: research-orchestration-workflow
-description: "科研编排团强制工作流：科研选题（8维评分+S/A/B/C分档+止损线）、深度调研（骨架+多领域对照+GRADE评级）、复评闭环（维持/升档/降档/止损）。触发词：选题、立题、分档、方向评估、下注、综述、调研、文献策略、情报图谱、复评、升档、降档、止损、评分卡、证据等级。含topic_scoring.py。"
+description: "科研编排团 v2.0 强制工作流：科研选题（8维评分+S/A/B/C分档+止损线）、深度调研（骨架+多领域对照+GRADE评级）、复评闭环（维持/升档/降档/止损）。触发词：选题、立题、分档、方向评估、下注、综述、调研、文献策略、情报图谱、复评、升档、降档、止损、评分卡、证据等级、协议检查、envelope、信封校验。含 topic_scoring.py + protocol_check.py。"
 ---
 
 # Research Orchestration Workflow Skill
@@ -30,6 +30,17 @@ description: "科研编排团强制工作流：科研选题（8维评分+S/A/B/C
 **产出**：《深度调研路线图》、《关键文献清单》（含证据等级+时效）、《盲点清单》。
 
 ## 模块 3：输出模板与分档规则
+
+### v2.0 协议层（新增）
+
+**通信协议**：`references/agent-protocol.md` 包含消息信封/状态同步/上下文传递/任务分配/冲突仲裁/错误四分类/生命周期 9 节。所有 v2.0 团队成员按此协议通信。
+
+**协议校验脚本**：`scripts/protocol_check.py` 12 个信封 + 4 个冲突仲裁单元测试。集成前运行：
+```bash
+python3 scripts/protocol_check.py envelope    # 12 用例
+python3 scripts/protocol_check.py conflict   # 4 用例
+python3 scripts/protocol_check.py integration # 集成仿真
+```
 
 ### 分档规则
 
