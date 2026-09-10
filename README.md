@@ -4,6 +4,8 @@
 > **专家类型**：Team 型（6 人协作团）
 > **行业分类**：12-IndustryConsultant（跨学科咨询）
 > **版本**：2.0.0
+> **许可证**：MIT
+> **仓库**：[github.com/virologist/research-orchestration-team](https://github.com/virologist/research-orchestration-team)
 
 ## 团队定位
 
@@ -86,3 +88,73 @@ research-orchestration-team/
 
 - **v1.0.0** (2026-08-28)：初始版本，5 人团队 + 选题评分卡 Skill
 - **v2.0.0** (2026-09)：六人团队（新增整合者顾合璧）+ 八阶段状态机 + ACP 通信协议（9 节）+ 冲突五级仲裁 + harness 12 组件运行时
+
+## 安装方式（三套并存）
+
+### 方式 1 · Marketplace 一键添加（推荐）
+
+适用于 **Claude Code** 与 **WorkBuddy**（两者共用同一 marketplace 协议）：
+
+```bash
+# Claude Code
+/plugin marketplace add virologist/research-orchestration-team
+/plugin install research-orchestration-team
+
+# WorkBuddy（同一组命令）
+/plugin marketplace add virologist/research-orchestration-team
+/plugin install research-orchestration-team
+```
+
+### 方式 2 · 手动 git clone + 拷贝
+
+```bash
+# 克隆仓库
+git clone https://github.com/virologist/research-orchestration-team.git
+
+# WorkBuddy 用户级加载路径
+cp -r research-orchestration-team ~/.workbuddy/plugins/marketplaces/my-experts/plugins/
+
+# Claude Code 用户级 skills 路径
+mkdir -p ~/.claude/skills
+cp -r research-orchestration-team ~/.claude/skills/research-orchestration-team
+```
+
+### 方式 3 · GitHub Release tarball
+
+下载 [v2.0.0 release](https://github.com/virologist/research-orchestration-team/releases/tag/v2.0.0) 的 `research-orchestration-team-2.0.0.tar.gz` → 解压 → 按方式 2 拷贝。
+
+### 方式 4 · 开发测试（`--plugin-dir`）
+
+```bash
+# Claude Code 本地开发模式
+claude --plugin-dir ./research-orchestration-team
+```
+
+## 三种 agent 工具的兼容性
+
+| 工具 | manifest | marketplace 命令 | 加载路径 |
+|------|---------|-----------------|---------|
+| **Claude Code** | `.claude-plugin/plugin.json` | `/plugin marketplace add` | `~/.claude/skills/` 或 `--plugin-dir` |
+| **WorkBuddy** | `.codebuddy-plugin/plugin.json` | `/plugin marketplace add` | `~/.workbuddy/plugins/marketplaces/my-experts/plugins/` |
+| **Claude Desktop** | 通过 MCP bridge 包装 | 暂不支持 marketplace，需手动装 | 见 `docs/MCP-BRIDGE.md`（TODO） |
+
+> 本仓库双 manifest 共存：`.claude-plugin/` 与 `.codebuddy-plugin/` 指向同一组组件。两份元数据保持同步（每次改 agent 必须 review 两份 manifest）。
+
+## 引用本包
+
+```bibtex
+@misc{research_orchestration_team_2026,
+  author = {TZUVet},
+  title = {Research Value-Driven Research Orchestration Team},
+  year = {2026},
+  publisher = {GitHub},
+  url = {https://github.com/virologist/research-orchestration-team}
+}
+```
+
+## 反馈与贡献
+
+- Issues: https://github.com/virologist/research-orchestration-team/issues
+- 详细贡献流程见 [CONTRIBUTING.md](./CONTRIBUTING.md)
+- 版本变更历史见 [CHANGELOG.md](./CHANGELOG.md)
+- 红队审查报告见 [docs/REDTEAM-REPORT.md](./docs/REDTEAM-REPORT.md)

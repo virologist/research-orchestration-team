@@ -1,0 +1,128 @@
+name: Validate Plugin Package
+
+on:
+  push:
+    branches: [master, main]
+    paths:
+      - 'agents/**'
+      - 'skills/**'
+      - '.codebuddy-plugin/**'
+      - '.claude-plugin/**'
+      - 'scripts/**'
+      - '.github/workflows/validate.yml'
+  pull_request:
+    branches: [master, main]
+  workflow_dispatch:
+
+jobs:
+  validate:
+    name: Validate Plugin Package
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Validate expert package structure
+        run: |
+          python3 - <<'PYEOF'
+          import json, os, sys
+          errors = []
+          # 1. plugin.json 合法性
+          for path in ['.codebuddy-plugin/plugin.json', '.claude-plugin/plugin.json']:
+              if not os.path.exists(path):
+                  errors.append(f'❌ missing: {path}')
+                  continue
+              try:
+                  p = json.load(open(path))
+                  for req in ['name', 'version', 'description']:
+                      if req not in p:
+                          errors.append(f'❌ {path} 缺少字段: {req}')
+                  print(f'✅ {path} 合法 (name={p.get("name")}, version={p.get("version")})')
+              except Exception as e:
+                  errors.append(f'❌ {path} JSON 非法: {e}')
+
+          # 2. 所有 agent 文件存在
+          for path in ['.codebuddy-plugin/plugin.json']:
+              if not os.path.exists(path):
+                  continue
+              p = json.load(open(path))
+              for a in p.get('agents', []):
+                  if not os.path.exists(a.lstrip('./')):
+                      errors.append(f'❌ agent 文件不存在: {a}')
+                  else:
+                      print(f'✅ agent 文件存在: {a}')
+
+          if errors:
+              print('\n'.join(errors))
+              sys.exit(1)
+          print('\n✅ 专家包结构校验通过')
+          PYEOF
+
+      - name: Protocol compliance tests
+        run: |
+          cd skills/research-orchestration-workflow/scripts
+          python3 protocol_check.py envelope
+          python3 protocol_check.py conflict
+          python3 protocol_check.py integration
+
+      - name: Topic scoring edge cases
+        run: |
+          cd skills/research-orchestration-workflow/scripts
+          # 越界必须 rc=1
+          python3 topic_scoring.py --topic bad --originality 11 --feasibility 7 \
+            --value-density 9 --data-availability 7 --competition 6 \
+            --cognition 8 --resource-fit 7 --sustainability 7
+          if [ $? -ne 1 ]; then
+            echo "❌ 越界应退出码 1，实际未拒绝"
+            exit 1
+          fi
+          echo "✅ 越界输入被正确拒绝"
+
+          # 缺维必须报错
+          python3 topic_scoring.py --topic miss --originality 8
+          if [ $? -ne 1 ]; then
+            echo "❌ 缺维应退出码 1"
+            exit 1
+          fi
+          echo "✅ 缺维被正确拒绝"
+
+      - name: Cross-file consistency scan
+        run: |
+          echo "=== 一致性扫描：检查已废弃表述是否完全清除 ==="
+          echo "（审计文档 CHANGELOG.md 与 docs/REDTEAM-REPORT.md 故意保留以记录已修复术语，已排除）"
+          FORBIDDEN=(
+            "三级仲裁"
+            "六阶段"
+            "5 人协作"
+            "Six-role"
+            "six-role research"
+            "L1-L3 conflict"
+            "msg_type"
+            "任意一维 < 90"
+          )
+          HITS=0
+          for pat in "${FORBIDDEN[@]}"; do
+            if grep -rnE "$pat" --include="*.md" --include="*.json" --include="*.py" . 2>/dev/null \
+              | grep -v "\.bak" \
+              | grep -v "CHANGELOG.md" \
+              | grep -v "docs/REDTEAM-REPORT.md" \
+              > /tmp/hit; then
+              if [ -s /tmp/hit ]; then
+                echo "❌ 残留: $pat"
+                cat /tmp/hit
+                HITS=$((HITS+1))
+              fi
+            fi
+          done
+          if [ $HITS -gt 0 ]; then
+            echo "❌ 发现 $HITS 处残留表述"
+            exit 1
+          fi
+          echo "✅ 无残留表述"
