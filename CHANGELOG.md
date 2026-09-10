@@ -2,6 +2,18 @@
 
 所有重要变更按版本倒序记录。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [Unreleased] - 2026-09-10
+
+**docs patch**：仅文档变更，不发新 release。协议、运行时、CI 校验均无变化。
+
+### Added
+
+- README 新增「§5 · OneDrive 镜像同步」一节：明确三处真值源（canonical / GitHub 远端 / OneDrive 镜像）的角色分工、发布后同步契约、`git pull --ff-only` 步骤、健康检查 4 项必跑。
+
+### Why
+
+v2.0.1 → v2.0.2 期间 OneDrive 镜像未自动同步（落后一个版本），根因是发布流程没有明文契约。`docs/REDTEAM-REPORT.md` 把这列为「跨文件不一致」类风险的典型例子。此节固化该教训，避免下次重演。
+
 ## [2.0.2] - 2026-09-10
 
 修复 v2.0.1 未覆盖的一个**用户可见功能缺陷**：README 把「Marketplace 一键添加」列为**推荐**安装方式，但该命令**实际会失败**。协议与运行时行为无变更。

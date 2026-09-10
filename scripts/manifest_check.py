@@ -24,6 +24,28 @@
   C8 仓库内不得残留已废弃表述（比 CI 的 grep 更严格，支持跨字符匹配）
   C9 团队每个 agent 的 MD 都声明了契约章节（新成员不得裸奔入场）
   C10 市场描述文件 marketplace.json 存在且指向本插件（缺它则一键安装失效）
+  C11 每个 agent 的 MD 具备结构合法的 YAML frontmatter（宿主据此注册代理）
+
+## C11 的动机与解析范围（重要）
+
+C1–C10 全都只读 manifest 与目录结构，**没有一条读过 agent MD 的内容结构**。
+frontmatter 一旦损坏，宿主（Claude Code / WorkBuddy）会静默地加载不了该代理，
+而 manifest 校验依旧全绿 —— 这是一种「发布物看起来完整、实际运行时缺人」的故障。
+v2.0.2 发布后由独立验证者注入破坏用例发现：删掉 frontmatter 结束分隔符后校验器
+仍返回 rc=0。实测更宽：完全删除 frontmatter、YAML 结构非法、name 与文件名不符、
+description 缺失或为空 —— 六种破坏形态全部放行。
+
+C11 的解析器**不是**通用 YAML 解析器，只覆盖 frontmatter 实际使用的子集：
+
+  - 顶层与一层嵌套的 `键: 值`
+  - 标量：裸值 / 单引号 / 双引号 / 块标量指示符（| > |- >- 等）
+  - 缩进序列项（`- 值`）
+  - 空行与整行注释
+
+超出该子集的结构会**报错而非放行**（fail-closed）。这是刻意的：本包的 6 个 agent
+都用简单结构，遇到解析器不认识的东西应当让人工看一眼，而不是默默判绿。
+选择纯标准库实现而非依赖 PyYAML，是为了维持本脚本「零依赖可直接在 CI 运行」的约定，
+同时避免出现「本地有 PyYAML 更严、CI 没装更松」的双重判定标准。
 
 ## 用法
 
@@ -115,6 +137,31 @@ CONTRACT_SECTION_MARKERS = (
     "Harness 运行时规范",
 )
 
+# ── C11 frontmatter 校验常量 ────────────────────────────────────────────────
+FRONTMATTER_FENCE = "---"
+
+# 每个 agent MD 的 frontmatter 必须提供的顶层字段（值为空视为缺失）
+FRONTMATTER_REQUIRED = ("name", "description")
+
+# description 最短长度：过短则宿主无法据此判断何时启用该代理
+FRONTMATTER_MIN_DESCRIPTION = 10
+
+# 结束分隔符的搜索上限。frontmatter 本应只有几十行；超出这个窗口还找不到
+# 结束符，说明首行 `---` 是正文里的一条水平线，或结束符已被误删。
+FRONTMATTER_MAX_LINES = 200
+
+# 需要与 manifest members[] 交叉核对的展示字段
+FRONTMATTER_CROSSCHECK_FIELDS = ("displayName", "profession")
+
+# 键名允许的字符集
+FRONTMATTER_KEY_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_.-]*$")
+
+# 块标量指示符（其后内容原样保留，不做标量校验）
+BLOCK_SCALAR_INDICATORS = {"|", ">", "|-", ">-", "|+", ">+"}
+
+# 流式集合的配对括号
+FLOW_PAIRS = {"[": "]", "{": "}"}
+
 
 class Checker:
     """收集校验结果；失败项汇总后统一以退出码 1 结束。"""
@@ -196,7 +243,7 @@ def check_c1_c2(chk: Checker):
 
 
 def check_c3_agents(chk: Checker, manifests: dict) -> None:
-    """C3 agents 数组引用的文件必须存在。"""
+    """C3 agents 数组引用的文件必须存在（并反向检查孤儿文件）。"""
     chk.section("C3 agents 引用完整性")
     seen: set[str] = set()
     for label, data in manifests.items():
@@ -215,6 +262,30 @@ def check_c3_agents(chk: Checker, manifests: dict) -> None:
                 chk.ok(f"agent 文件存在: {entry}")
             else:
                 chk.fail(f"{label} 引用的 agent 文件不存在: {entry}")
+
+    # 反向：agents/ 下不得有未被 manifest 引用的孤儿文件。
+    # 孤儿文件同样会被打进发布物（tarball 走 git archive 全量打包），
+    # 却不会被宿主加载 —— 属于「体积涨了、能力没涨」的隐性缺陷。
+    declared: set[str] = set()
+    for data in manifests.values():
+        if data:
+            declared |= {Path(a).name for a in (data.get("agents") or [])}
+
+    agents_dir = chk.root / "agents"
+    if not agents_dir.is_dir():
+        chk.fail("agents/ 目录不存在")
+        return
+    if not declared:
+        chk.fail("C3 反向检查跳过：manifest 未声明任何 agent")
+        return
+
+    orphans = sorted(p.name for p in agents_dir.glob("*.md") if p.name not in declared)
+    if orphans:
+        chk.fail(
+            f"agents/ 下存在未被 manifest 引用的孤儿文件（会进入发布物但不被加载）: {orphans}"
+        )
+    else:
+        chk.ok(f"agents/ 下无孤儿文件（{len(declared)} 个文件全部被引用）")
 
 
 def check_c4_skills(chk: Checker, manifests: dict) -> None:
@@ -473,6 +544,250 @@ def check_c10_marketplace(chk: Checker, manifests: dict) -> None:
             chk.fail("两份市场的 plugins 列表不一致")
 
 
+def _unquote(value: str) -> str:
+    """去掉成对包裹的引号，得到可用于比较 / 计长的裸值。"""
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+        return value[1:-1]
+    return value
+
+
+def _scalar_error(value: str) -> str:
+    """检查标量写法是否结构性合法；合法返回空串，否则返回错误说明。"""
+    if value == "" or value in BLOCK_SCALAR_INDICATORS:
+        return ""
+    head = value[0]
+    if head in "\"'":
+        if len(value) < 2 or not value.endswith(head):
+            return f"引号未闭合: {value[:40]}"
+        return ""
+    if head in FLOW_PAIRS:
+        if not value.endswith(FLOW_PAIRS[head]):
+            return f"流式集合括号未闭合: {value[:40]}"
+        return ""
+    return ""
+
+
+def _parse_frontmatter_block(inner: list[str], offset: int):
+    """解析 frontmatter 正文行。返回 (data, errors)。
+
+    只覆盖本包 frontmatter 实际使用的 YAML 子集；遇到不认识的结构一律记错误
+    （fail-closed），避免「解析器不懂」被误当成「格式没问题」。
+    """
+    data: dict = {}
+    errors: list[str] = []
+    seen_top: dict[str, int] = {}
+    nested_seen: dict[str, int] = {}
+    current_top: str | None = None
+    block_scalar: tuple[str, int] | None = None
+
+    for i, raw in enumerate(inner):
+        lineno = offset + i
+        if not raw.strip():
+            continue
+
+        stripped = raw.rstrip()
+        content = stripped.strip()
+        indent = len(stripped) - len(stripped.lstrip(" "))
+
+        if "\t" in stripped[:indent]:
+            errors.append(f"第 {lineno} 行：缩进不得使用 Tab（YAML 只允许空格）")
+            continue
+        if content.startswith("#"):
+            continue
+
+        # 块标量的续行：缩进深于键行的内容整体视为文本，交给 YAML 宿主处理
+        if block_scalar is not None:
+            if indent > block_scalar[1]:
+                continue
+            block_scalar = None
+
+        if content.startswith("- "):
+            if indent == 0:
+                errors.append(
+                    f"第 {lineno} 行：顶层不支持序列项 `- `（frontmatter 顶层应为键值对）"
+                )
+            elif current_top is None:
+                errors.append(f"第 {lineno} 行：序列项无所属的顶层键")
+            elif not isinstance(data.get(current_top), dict):
+                errors.append(
+                    f"第 {lineno} 行：顶层键 `{current_top}` 已是标量，其下不应再有列表项"
+                )
+            continue
+
+        if ":" not in content:
+            errors.append(f"第 {lineno} 行：不是 `键: 值` 结构 → {content[:40]!r}")
+            continue
+
+        key, _, value = content.partition(":")
+        key, value = key.strip(), value.strip()
+
+        if not FRONTMATTER_KEY_RE.match(key):
+            errors.append(f"第 {lineno} 行：键名不合法 `{key}`")
+            continue
+
+        scalar_err = _scalar_error(value)
+        if scalar_err:
+            errors.append(f"第 {lineno} 行：{scalar_err}（键 `{key}`）")
+            continue
+
+        if indent == 0:
+            if key in seen_top:
+                errors.append(
+                    f"第 {lineno} 行：顶层键重复 `{key}`（首次出现于第 {seen_top[key]} 行）"
+                )
+                continue
+            seen_top[key] = lineno
+            current_top = key
+            nested_seen = {}
+            if value == "":
+                data[key] = {}          # 期待其下出现缩进子项
+            else:
+                data[key] = _unquote(value)
+                if value in BLOCK_SCALAR_INDICATORS:
+                    block_scalar = (key, 0)
+            continue
+
+        # 缩进层：只允许一层嵌套
+        if current_top is None:
+            errors.append(f"第 {lineno} 行：缩进项无所属的顶层键")
+            continue
+        if not isinstance(data.get(current_top), dict):
+            errors.append(
+                f"第 {lineno} 行：顶层键 `{current_top}` 已是标量，其下不应再有缩进子项"
+            )
+            continue
+        if key in nested_seen:
+            errors.append(
+                f"第 {lineno} 行：`{current_top}` 下子键重复 `{key}`"
+                f"（首次出现于第 {nested_seen[key]} 行）"
+            )
+            continue
+        nested_seen[key] = lineno
+        if value == "":
+            errors.append(f"第 {lineno} 行：`{current_top}.{key}` 为空值（不支持三层嵌套）")
+            continue
+        data[current_top][key] = _unquote(value)
+        if value in BLOCK_SCALAR_INDICATORS:
+            block_scalar = (key, indent)
+
+    return data, errors
+
+
+def parse_frontmatter(text: str):
+    """提取并结构校验 Markdown 的 YAML frontmatter。
+
+    返回 (data, errors, fence_start_line)：
+      data   : 顶层键 -> 裸标量字符串 / 子键字典（引号已去除）
+      errors : 结构性问题的可读描述（含行号）；空列表表示结构合法
+    """
+    if text.startswith("\ufeff"):
+        return {}, [
+            "文件以 UTF-8 BOM 开头，宿主可能无法识别首行分隔符 `---`；请另存为无 BOM 的 UTF-8"
+        ], 1
+
+    lines = text.splitlines()
+    if not lines:
+        return {}, ["文件为空"], 1
+    if lines[0].strip() != FRONTMATTER_FENCE:
+        return {}, [
+            f"缺少起始分隔符 `{FRONTMATTER_FENCE}`（文件第一行必须是它），"
+            f"实际为: {lines[0][:40]!r}"
+        ], 1
+
+    end = None
+    for i in range(1, min(len(lines), FRONTMATTER_MAX_LINES + 1)):
+        if lines[i].strip() == FRONTMATTER_FENCE:
+            end = i
+            break
+    if end is None:
+        return {}, [
+            f"起始分隔符 `{FRONTMATTER_FENCE}` 未在前 {FRONTMATTER_MAX_LINES} 行内找到结束分隔符"
+            f"（frontmatter 未闭合，或首行分隔符其实是正文里的水平线）"
+        ], 1
+
+    data, errors = _parse_frontmatter_block(lines[1:end], offset=2)
+    return data, errors, 1
+
+
+def check_c11_frontmatter(chk: Checker, manifests: dict) -> None:
+    """C11 agent MD 的 frontmatter 必须结构合法、字段齐备，且与 manifest 自洽。
+
+    动机见模块文档字符串「C11 的动机与解析范围」。要点：C1–C10 没有任何一条
+    读过 agent MD 的内容结构，frontmatter 损坏会让宿主静默地加载不了该代理，
+    而全部 manifest 校验依旧全绿。
+    """
+    chk.section("C11 agent frontmatter 结构有效性")
+    data = manifests.get("WorkBuddy") or manifests.get("Claude Code")
+    if not data:
+        chk.fail("C11 跳过：无可用 manifest")
+        return
+
+    entries = data.get("agents") or []
+    if not entries:
+        chk.fail("C11 跳过：manifest 未声明任何 agent")
+        return
+
+    members = {m.get("id"): m for m in (data.get("members") or [])}
+
+    for entry in entries:
+        target = chk.rel(entry)
+        rel = Path(str(entry)).as_posix()
+        if not target.is_file():
+            chk.fail(f"{rel} 不存在，无法校验 frontmatter")
+            continue
+
+        fm, errors, _ = parse_frontmatter(target.read_text(encoding="utf-8"))
+        if errors:
+            chk.fail(
+                f"{rel} frontmatter 结构非法：\n"
+                + "\n".join(f"       - {e}" for e in errors)
+            )
+            continue
+
+        problems: list[str] = []
+
+        missing = [k for k in FRONTMATTER_REQUIRED if not str(fm.get(k) or "").strip()]
+        if missing:
+            problems.append(f"缺少必需字段或值为空: {missing}")
+
+        stem = target.stem
+        declared = str(fm.get("name") or "").strip()
+        if declared and declared != stem:
+            problems.append(
+                f"frontmatter name=`{declared}` 与文件名 `{stem}` 不一致"
+                f"（宿主按 name 注册代理，文件被改名会导致引用失效）"
+            )
+
+        desc = str(fm.get("description") or "").strip()
+        if desc and len(desc) < FRONTMATTER_MIN_DESCRIPTION:
+            problems.append(
+                f"description 过短（{len(desc)} 字符 < {FRONTMATTER_MIN_DESCRIPTION}），"
+                f"宿主难以据此判断何时启用该代理"
+            )
+
+        member = members.get(stem)
+        if member:
+            for field in FRONTMATTER_CROSSCHECK_FIELDS:
+                md_val, man_val = fm.get(field), member.get(field)
+                if isinstance(md_val, dict) and isinstance(man_val, dict):
+                    md_norm = {str(k): str(v) for k, v in md_val.items()}
+                    man_norm = {str(k): str(v) for k, v in man_val.items()}
+                    if md_norm != man_norm:
+                        problems.append(
+                            f"{field} 与 manifest members[].{field} 不一致："
+                            f"MD={json.dumps(md_norm, ensure_ascii=False)} "
+                            f"manifest={json.dumps(man_norm, ensure_ascii=False)}"
+                        )
+
+        if problems:
+            chk.fail(
+                f"{rel} frontmatter 校验未通过：\n"
+                + "\n".join(f"       - {p}" for p in problems)
+            )
+        else:
+            chk.ok(f"{rel} frontmatter 合法（name={declared}, description {len(desc)} 字符）")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="专家包一致性校验：manifest 对等 / 资产完整性 / 版本一致 / 废弃表述",
@@ -501,6 +816,7 @@ def main() -> int:
     check_c8_forbidden(chk)
     check_c9_contracts(chk, manifests)
     check_c10_marketplace(chk, manifests)
+    check_c11_frontmatter(chk, manifests)
 
     print("\n" + "=" * 72)
     if chk.failures:

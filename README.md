@@ -193,3 +193,41 @@ claude --plugin-dir ./research-orchestration-team
 |------|------|
 | [docs/REDTEAM-REPORT.md](./docs/REDTEAM-REPORT.md) | 红队审查报告：5 维度诊断、缺陷清单与根因、修复方案、回归证据 |
 | [docs/arbitration-L4L5-live-test.md](./docs/arbitration-L4L5-live-test.md) | 冲突仲裁协议 §7 第 4/5 层（升级主理人 / 用户裁决）的真实团队实测记录 |
+
+## §5 · OneDrive 镜像同步（云备份契约）
+
+仓库存在三处真值源：
+
+| 位置 | 角色 | 路径 |
+|------|------|------|
+| **canonical** | 编辑、CI 校验、WorkBuddy 实际加载 | `~/.workbuddy/plugins/marketplaces/my-experts/plugins/research-orchestration-team/` |
+| **GitHub 远端** | 公开/私有仓库 | `virologist/research-orchestration-team`（PRIVATE） |
+| **OneDrive 镜像** | 只读云备份，跨设备可用 | `~/Library/CloudStorage/OneDrive-Personal/GPT/Claude/research-orchestration-team/` |
+
+**发布契约**：每次 push 到 GitHub 之后，必须把 OneDrive 镜像 fast-forward 到同一 commit。**v2.0.1 → v2.0.2 期间发生过漏同步**，原因是没有明文契约——本节即是修补。
+
+```bash
+# 1. 在 canonical 仓库推送
+cd ~/.workbuddy/plugins/marketplaces/my-experts/plugins/research-orchestration-team
+git push origin master
+gh release create vX.Y.Z --repo virologist/research-orchestration-team \
+  --title "..." --notes-file /tmp/release-notes.md /tmp/release-X.Y.Z.tar.gz
+
+# 2. 同步 OneDrive（**必做**，否则云镜像会落后）
+cd ~/Library/CloudStorage/OneDrive-Personal/GPT/Claude/research-orchestration-team
+git pull --ff-only
+git rev-parse HEAD    # 确认与 remote master 一致
+
+# 3. 健康检查（本地跑全部 4 个校验脚本）
+cd ~/.workbuddy/plugins/marketplaces/my-experts/plugins/research-orchestration-team
+python3 scripts/manifest_check.py
+python3 scripts/manifest_check_selftest.py
+python3 skills/research-orchestration-workflow/scripts/protocol_check.py
+python3 skills/research-orchestration-workflow/scripts/topic_scoring.py --topic probe \
+  --originality 8 --feasibility 7 --value-density 9 --data-availability 7 \
+  --competition 6 --cognition 8 --resource-fit 7 --sustainability 7
+```
+
+> **为何不自动化**：OneDrive 是只读云备份，不是 critical path。手写契约比 launchd cron / WebDAV 推送简单可靠，且无凭据泄漏面。若未来团队规模扩大、需要 ≤1 天同步窗口，再考虑 GitHub Action + WebDAV（成本：OAuth + secret 配置）。
+
+> **冲突处理**：OneDrive 路径永远只 `git pull --ff-only`，**禁止**在 OneDrive 路径做 commit 或 push。如果发现分歧（本地有未推送 commit 或 OneDrive 有本地没有的 commit），立即停下来排查，不要盲覆盖。
