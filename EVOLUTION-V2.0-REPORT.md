@@ -31,7 +31,7 @@
 
 | # | 组件 | v1.0 | **v2.0 现况** | 落地位置 |
 |---|------|------|-------------|---------|
-| 1 | **Orchestration Loop** | ✅ 六阶段状态机 | ✅ **+ TAO 循环** | team-lead.md |
+| 1 | **Orchestration Loop** | ✅ 八阶段状态机 | ✅ **+ TAO 循环** | team-lead.md |
 | 2 | **Tools** | ⚠️ 脚本无契约 | ✅ **CLI 参数契约** | topic_scoring.py |
 | 3 | **Memory** | ❌ 无 | ✅ **三级记忆**（工作/会话/持久） | team-lead.md |
 | 4 | **Context Mgmt** | ⚠️ V0/V1/V2 雏形 | ✅ **full/summary/ref + 压缩触发** | team-lead.md |
