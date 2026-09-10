@@ -76,27 +76,65 @@ def check_evidence_grade(ev_list: list) -> list:
 
 GRADE_RANK = {"1a": 8, "1b": 7, "2a": 6, "2b": 5, "3a": 4, "3b": 3, "4": 2, "5": 1}
 
+# ─────────────────────────────────────────────────────────────────────
+# 角色权威表：协议 §7 层级 3（涉及方法学→审查者；领域事实→执行者；结构→分析者）
+# 无 subject 时回退到默认角色权重（审查者 > 执行者 > 架构者 > 分析者 > 整合者）
+# ─────────────────────────────────────────────────────────────────────
+
+SUBJECT_AUTHORITY = {
+    "methodology": {"methodological-reviewer": 5, "domain-expert": 3,
+                    "meta-architect": 2, "socratic-questioner": 1, "synthesis-integrator": 1},
+    "domain_fact": {"domain-expert": 5, "methodological-reviewer": 4,
+                    "meta-architect": 2, "socratic-questioner": 1, "synthesis-integrator": 1},
+    "structure":    {"meta-architect": 5, "socratic-questioner": 3,
+                    "domain-expert": 2, "methodological-reviewer": 2, "synthesis-integrator": 1},
+}
+
+DEFAULT_AUTHORITY = {"methodological-reviewer": 5, "domain-expert": 4,
+                     "meta-architect": 3, "socratic-questioner": 2, "synthesis-integrator": 1}
+
+
+def _authority(agent: str, subject: str | None) -> int:
+    if subject in SUBJECT_AUTHORITY:
+        return SUBJECT_AUTHORITY[subject].get(agent, 0)
+    return DEFAULT_AUTHORITY.get(agent, 0)
+
 
 def arbitrate(conflict: dict) -> dict:
-    """执行协议 §7 五层仲裁，返回 resolution 字段。"""
+    """执行协议 §7 五层仲裁。
+
+    返回 dict：{rule, winner, verdict, escalated}
+    - escalated=None        → 已自动裁决（层级 1-3）
+    - escalated="orchestrator" → 层级 4 升级主理人判断
+    - escalated="user"      → 层级 5 升级用户裁决（本脚本不自动触发，由主理人语义判定）
+    """
     positions = conflict["positions"]
     # 层级 1：证据等级优先
     by_grade = max(positions, key=lambda p: GRADE_RANK.get(p.get("grade", "5"), 0))
     top_grade = by_grade.get("grade", "5")
     winners = [p for p in positions if p.get("grade") == top_grade]
     if len(winners) == 1:
-        return {
-            "rule": "层级1 证据等级优先",
-            "winner": winners[0]["agent"],
-            "verdict": winners[0]["verdict"],
-        }
+        return {"rule": "层级1 证据等级优先", "winner": winners[0]["agent"],
+                "verdict": winners[0]["verdict"], "escalated": None}
     # 层级 2：置信度优先
     by_conf = max(winners, key=lambda p: p.get("confidence", 0))
-    return {
-        "rule": "层级2 置信度优先",
-        "winner": by_conf["agent"],
-        "verdict": by_conf["verdict"],
-    }
+    top_conf = by_conf.get("confidence", 0)
+    conf_winners = [p for p in winners if p.get("confidence") == top_conf]
+    if len(conf_winners) == 1:
+        return {"rule": "层级2 置信度优先", "winner": by_conf["agent"],
+                "verdict": by_conf["verdict"], "escalated": None}
+    # 层级 3：角色权威
+    subject = conflict.get("subject")
+    by_role = max(conf_winners, key=lambda p: _authority(p.get("agent", ""), subject))
+    top_auth = _authority(by_role.get("agent", ""), subject)
+    role_winners = [p for p in conf_winners
+                    if _authority(p.get("agent", ""), subject) == top_auth]
+    if top_auth > 0 and len(role_winners) == 1:
+        return {"rule": "层级3 角色权威", "winner": by_role["agent"],
+                "verdict": by_role["verdict"], "escalated": None}
+    # 层级 4：升级主理人判断（不再按到达顺序静默选边）
+    return {"rule": "层级4 升级主理人判断", "winner": None,
+            "verdict": None, "escalated": "orchestrator"}
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -130,10 +168,10 @@ def run_envelope_tests() -> tuple:
     # U1: 标准合规
     cases.append(("U1 信封合规", check_envelope(ENVELOPE_OK, producer_must_have_evidence=True), []))
 
-    # U2: 缺字段
+    # U2: 执行者（producer）缺 evidence 必报错
     bad = {k: v for k, v in ENVELOPE_OK.items() if k != "evidence"}
-    cases.append(("U2 缺 evidence", check_envelope(bad, producer_must_have_evidence=True),
-                  ["缺少字段: evidence"]))
+    cases.append(("U2 执行者缺 evidence", check_envelope(bad, producer_must_have_evidence=True),
+                  ["执行者/审查者产出必带 evidence[]（domain-expert）"]))
 
     # U3: 版本错误
     bad = dict(ENVELOPE_OK); bad["v"] = "1.0"
@@ -145,10 +183,10 @@ def run_envelope_tests() -> tuple:
     cases.append(("U4 confidence 越界", check_envelope(bad),
                   ["confidence 非法: 150（应为 0-100）"]))
 
-    # U5: 执行者缺 evidence
-    bad = {k: v for k, v in ENVELOPE_OK.items() if k != "evidence"}
-    cases.append(("U5 执行者缺 evidence", check_envelope(bad, producer_must_have_evidence=True),
-                  ["缺少字段: evidence"]))
+    # U5: evidence 非数组（此前该分支从未被测试覆盖）
+    bad = dict(ENVELOPE_OK); bad["evidence"] = "not-a-list"
+    cases.append(("U5 evidence 非数组", check_envelope(bad),
+                  ["evidence 必须是数组"]))
 
     # U6: context_ref.mode 非法
     bad = dict(ENVELOPE_OK); bad["context_ref"] = {"mode": "all", "pointer": "x"}
@@ -184,13 +222,19 @@ def run_envelope_tests() -> tuple:
     anlz = dict(ENVELOPE_OK); anlz["from"] = "socratic-questioner"; anlz["evidence"] = []
     cases.append(("U12 分析者 evidence 合法为空", check_envelope(anlz), []))
 
-    passed = sum(1 for _, fails, _ in cases if not fails)
-    failures = [(name, fails) for name, fails, _ in cases if fails]
+    passed = 0
+    failures = []
+    for name, fails, expected in cases:
+        if fails == expected:
+            passed += 1
+        else:
+            failures.append((name, fails, expected))
     return cases, passed, failures
 
 
 def run_conflict_tests() -> tuple:
-    """冲突仲裁测试集。"""
+    """冲突仲裁测试集。返回 (用例列表, 通过数, 失败列表)。
+    每个用例为 5 元组 (名称, 结果, 期望 winner, 期望 rule, 期望 escalated)。"""
     cases = []
 
     # C1: 等级优先（2a > 3b，命中即止）
@@ -201,7 +245,7 @@ def run_conflict_tests() -> tuple:
             {"agent": "domain-expert",           "verdict": "足够", "grade": "3b", "confidence": 55},
             {"agent": "methodological-reviewer", "verdict": "不足", "grade": "2a", "confidence": 85},
         ],
-    }), "methodological-reviewer", "层级1 证据等级优先"))
+    }), "methodological-reviewer", "层级1 证据等级优先", None))
 
     # C2: 等级相同时置信度优先
     cases.append(("C2 等级相同→置信度优先", arbitrate({
@@ -211,7 +255,7 @@ def run_conflict_tests() -> tuple:
             {"agent": "a", "verdict": "YES", "grade": "2a", "confidence": 60},
             {"agent": "b", "verdict": "NO",  "grade": "2a", "confidence": 90},
         ],
-    }), "b", "层级2 置信度优先"))
+    }), "b", "层级2 置信度优先", None))
 
     # C3: 三方冲突（多 vs 一），等级优先仍生效
     cases.append(("C3 三方冲突", arbitrate({
@@ -222,20 +266,50 @@ def run_conflict_tests() -> tuple:
             {"agent": "b", "verdict": "2", "grade": "2a", "confidence": 70},
             {"agent": "c", "verdict": "3", "grade": "3b", "confidence": 75},
         ],
-    }), "b", "层级1 证据等级优先"))
+    }), "b", "层级1 证据等级优先", None))
 
-    # C4: 等级和置信度都相同，按协议应升级到主理人判断
-    cases.append(("C4 等级与置信度全平", arbitrate({
+    # C4: 等级与置信度全平，且角色无权威差 → 必须升级主理人（不再按到达顺序静默选边）
+    cases.append(("C4 等级与置信度全平→升级主理人", arbitrate({
         "id": "cf-004",
         "claim": "Z",
         "positions": [
             {"agent": "a", "verdict": "X", "grade": "2a", "confidence": 80},
             {"agent": "b", "verdict": "Y", "grade": "2a", "confidence": 80},
         ],
-    }), None, "层级2 置信度优先"))   # 当前实现按到达顺序返回第一人，可被升级
+    }), None, "层级4 升级主理人判断", "orchestrator"))
 
-    passed = sum(1 for _, _, w, r in cases if w == cases[0][3] or True)  # 全部打印详情
-    return cases, passed, []
+    # C5: 等级与置信度全平，但存在角色权威差（方法学→审查者优先）
+    cases.append(("C5 角色权威（方法学→审查者）", arbitrate({
+        "id": "cf-005",
+        "claim": "样本量是否支撑结论",
+        "subject": "methodology",
+        "positions": [
+            {"agent": "domain-expert",           "verdict": "支撑", "grade": "2a", "confidence": 80},
+            {"agent": "methodological-reviewer", "verdict": "不足", "grade": "2a", "confidence": 80},
+        ],
+    }), "methodological-reviewer", "层级3 角色权威", None))
+
+    failures = []
+    for name, r, exp_winner, exp_rule, exp_esc in cases:
+        if (r["rule"] != exp_rule or r["winner"] != exp_winner
+                or r.get("escalated") != exp_esc):
+            failures.append((name, r, exp_winner, exp_rule, exp_esc))
+    passed = len(cases) - len(failures)
+    return cases, passed, failures
+
+
+def check_handoff_coverage(checkpoints: list, context_refs: list) -> list:
+    """校验 HANDOFF 的 context_ref 是否覆盖所有检查点 cp-*。
+
+    对应 team-lead「HANDOFF 回引硬约束」：context_ref 必须覆盖所有 cp-*，
+    违规须重新生成。返回未覆盖的检查点列表（空 = 通过）。
+    """
+    covered = set()
+    for cr in context_refs:
+        pointer = cr.get("pointer", "")
+        if pointer:
+            covered.add(pointer)
+    return [cp for cp in checkpoints if cp not in covered]
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -246,25 +320,30 @@ def main():
     suite = sys.argv[1] if len(sys.argv) > 1 else "all"
 
     if suite in ("all", "envelope"):
-        cases, passed, fails = run_envelope_tests()
+        cases, passed, failures = run_envelope_tests()
         total = len(cases)
         print(f"\n── 信封套件：{passed}/{total} 通过 ──")
-        for name, f, _ in cases:
-            mark = "✅" if not f else "❌"
+        for name, fails, expected in cases:
+            mark = "✅" if fails == expected else "❌"
             print(f"  {mark} {name}")
-            for line in f:
-                print(f"      ↳ {line}")
+            if fails != expected:
+                print(f"      ↳ 实际: {fails}")
+                print(f"      ↳ 期望: {expected}")
+            elif fails:
+                for line in fails:
+                    print(f"      ↳ 已检出: {line}")
 
     if suite in ("all", "conflict"):
-        cases, _, _ = run_conflict_tests()
-        print(f"\n── 冲突仲裁套件：{len(cases)} 用例 ──")
-        for name, r, exp_winner, exp_rule in cases:
-            mark = "✅" if r["rule"] == exp_rule and (exp_winner is None or r["winner"] == exp_winner) else "❌"
-            print(f"  {mark} {name}  →  winner={r['winner']}  rule={r['rule']}")
+        cases, passed, failures = run_conflict_tests()
+        print(f"\n── 冲突仲裁套件：{passed}/{len(cases)} 通过 ──")
+        for name, r, exp_winner, exp_rule, exp_esc in cases:
+            mark = "✅" if (r["rule"] == exp_rule and r["winner"] == exp_winner
+                           and r.get("escalated") == exp_esc) else "❌"
+            esc = f"  escalated={r.get('escalated')!r}" if r.get("escalated") else ""
+            print(f"  {mark} {name}  →  winner={r['winner']!r}  rule={r['rule']}{esc}")
 
     if suite in ("all", "integration"):
-        # 集成：模拟完整流水线
-        print(f"\n── 集成仿真 ──")
+        print("\n── 集成仿真：状态机流水线 + HANDOFF 回引链校验 ──")
         pipeline = [
             ("FREEZE",   None),
             ("IDENTIFY", None),
@@ -277,7 +356,28 @@ def main():
         ]
         for stage, dep in pipeline:
             print(f"  ✅ {stage:<10}  dep={dep}")
-        print("\n  上下文保持回引链：5 条 cp-* 全部在最终 HANDOFF 中按 full/summary/ref 三级引用")
+
+        # 真实回引链校验：HANDOFF 的 context_ref 必须覆盖所有检查点 cp-*
+        checkpoints = ["state://cp-001", "state://cp-002", "state://cp-003",
+                       "state://cp-004", "state://cp-005", "state://cp-006",
+                       "state://cp-007", "state://cp-008"]
+        ok_refs = [
+            {"mode": "ref", "pointer": "state://cp-001"},
+            {"mode": "ref", "pointer": "state://cp-002"},
+            {"mode": "summary", "pointer": "state://cp-003"},
+            {"mode": "summary", "pointer": "state://cp-004"},
+            {"mode": "summary", "pointer": "state://cp-005"},
+            {"mode": "summary", "pointer": "state://cp-006"},
+            {"mode": "summary", "pointer": "state://cp-007"},
+            {"mode": "full", "pointer": "state://cp-008"},
+        ]
+        missing = check_handoff_coverage(checkpoints, ok_refs)
+        ok = not missing
+        print(f"  {'✅' if ok else '❌'} 合规回引：覆盖 {len(checkpoints)-len(missing)}/{len(checkpoints)} 检查点"
+              + (f"，缺失 {missing}" if missing else ""))
+        # 违规案例：漏 cp-008，必须被检出
+        missing = check_handoff_coverage(checkpoints, ok_refs[:-1])
+        print(f"  {'✅ 正确检出' if missing == ['state://cp-008'] else '❌ 未检出'} 违规回引：缺失 {missing}")
 
     print()
 

@@ -51,15 +51,25 @@ maxTurns: 80
 - 任意维度 < 90% → 进入下一轮追问
 - 全部 ≥ 90% → 返回主理人，标注"信息完整度达标，可进入 ALIGN"
 
-**检查点机制（v2.0）**：每轮追问结束**必须**向主理人发送 `STATUS` 同步消息，形成可审计的轮次检查点：
+**检查点机制（v2.0）**：每轮追问结束**必须**向主理人发送 `STATUS` 同步消息，形成可审计的轮次检查点（信封字段对齐协议 §2 必填项）：
 ```yaml
 envelope:
+  v: "2.0"
+  msg_id: "msg-{seq}-socratic"
+  from: "socratic-questioner"
+  to: "research-orchestration-team-team-lead"
   type: STATUS
-  payload:
-    round: 1-5
-    completeness: {background: %, goal: %, constraint: %, criteria: %}
-    min_dimension: %
-    next_action: next_round | freeze | ready_for_align
+  trace_id: "trace-{task}-{seq}"
+  status: SUCCESS
+  confidence: 0-100        # 本轮完整度评估的自评置信度
+  context_ref:
+    mode: ref              # 指向 CLARIFY 检查点，不拷贝全文
+    pointer: "state://cp-{round}"
+payload:
+  round: 1-5
+  completeness: {background: %, goal: %, constraint: %, criteria: %}
+  min_dimension: %
+  next_action: next_round | freeze | ready_for_align
 ```
 **检查点规则**：
 - `min_dimension < 90%` → 下一轮（最多 5 轮）
