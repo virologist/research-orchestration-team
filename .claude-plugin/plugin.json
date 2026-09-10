@@ -1,22 +1,17 @@
 {
   "name": "research-orchestration-team",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "Six-agent cross-disciplinary research orchestration team with ACP communication protocol, five-role matrix (orchestrator/analyzer/executor/reviewer/integrator), L1-L5 conflict arbitration, and harness-compliant 12-component runtime. For Claude Code / WorkBuddy / Claude Desktop.",
   "author": {
     "name": "TZUVet",
     "email": "yzuvet@outlook.com"
   },
-  "agents": [
-    "./agents/research-orchestration-team-team-lead.md",
-    "./agents/socratic-questioner.md",
-    "./agents/meta-architect.md",
-    "./agents/domain-expert.md",
-    "./agents/methodological-reviewer.md",
-    "./agents/synthesis-integrator.md"
-  ],
-  "skills": [
-    "./skills/research-orchestration-workflow/SKILL.md"
-  ],
+  "homepage": "https://github.com/virologist/research-orchestration-team",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/virologist/research-orchestration-team.git"
+  },
+  "license": "MIT",
   "keywords": [
     "research-planning",
     "multi-agent",
@@ -27,9 +22,13 @@
     "topic-selection",
     "deep-investigation"
   ],
-  "homepage": "https://github.com/virologist/research-orchestration-team",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/virologist/research-orchestration-team.git"
-  }
+  "agents": [
+    "./agents/research-orchestration-team-team-lead.md",
+    "./agents/socratic-questioner.md",
+    "./agents/meta-architect.md",
+    "./agents/domain-expert.md",
+    "./agents/methodological-reviewer.md",
+    "./agents/synthesis-integrator.md"
+  ],
+  "skills": "./skills"
 }

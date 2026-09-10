@@ -1,6 +1,0 @@
-﻿timestamp	commit	asset	old_score	new_score	status	dimension	note	eval_mode
-2026-08-29T06:30	e3d7cf4	team-lead	84.8	89.2	keep	D1+D3+D5+D7+D9+D10	Harness运行时6组件注入（TAO/三级记忆/上下文治理/提示装配/护栏/验证）+通信协议引用	full_test
-2026-08-29T06:30	e3d7cf4	agent-protocol.md	NEW	88.0	keep	D2+D6+D7+D8+D11+D12	新增9节协议：角色矩阵/信封/状态/上下文/任务分配/冲突仲裁/错误四分类/生命周期	full_test
-2026-08-29T06:30	HEAD	T1 script bench	-	all 4 passed	full_test	D7+D10	脚本层：avg=41-46ms, sd≤3.2ms, 10/10 稳定	full_test
-2026-08-29T06:30	HEAD	T3 protocol unit	-	12 envelope + 4 conflict	full_test	D2+D6+D7+D8	协议合规单测：12信封(3正向+9负向拦截)，4冲突仲裁全通过	full_test
-2026-08-29T06:30	HEAD	T2/T4 integration	-	all passed	full_test	D11	真实spawn：111s跑完8阶段, 10/10上下文回引保持, 仲裁正确	full_test

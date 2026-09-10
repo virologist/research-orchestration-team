@@ -1,11 +1,27 @@
 {
   "name": "research-orchestration-team",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "Six-agent cross-disciplinary research orchestration team with ACP communication protocol, five-role matrix (orchestrator/analyzer/executor/reviewer/integrator), L1-L5 conflict arbitration, and harness-compliant 12-component runtime. v2.0: added synthesis-integrator, unified message envelopes, task dispatch primitives.",
   "author": {
     "name": "TZUVet",
-    "email": "tzuvet@example.com"
+    "email": "yzuvet@outlook.com"
   },
+  "homepage": "https://github.com/virologist/research-orchestration-team",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/virologist/research-orchestration-team.git"
+  },
+  "license": "MIT",
+  "keywords": [
+    "research-planning",
+    "multi-agent",
+    "academic-research",
+    "socratic-questioning",
+    "conflict-arbitration",
+    "evidence-grading",
+    "topic-selection",
+    "deep-investigation"
+  ],
   "agents": [
     "./agents/research-orchestration-team-team-lead.md",
     "./agents/socratic-questioner.md",
@@ -14,7 +30,7 @@
     "./agents/methodological-reviewer.md",
     "./agents/synthesis-integrator.md"
   ],
-  "skills": ["./skills/research-orchestration-workflow"],
+  "skills": "./skills",
 
   "expertType": "team",
   "agentName": "research-orchestration-team-team-lead",
@@ -39,7 +55,7 @@
   },
   "displayDescription": {
     "en": "Six-agent research orchestration team with ACP protocol and L1-L5 conflict arbitration: orchestrator, analyzer (questioner + architect), executor, reviewer, and integrator for topic selection, deep investigation, and decision support.",
-    "zh": "六角色科研编排团，含ACP通信协议与三级冲突仲裁，覆盖编排、追问、架构、领域、复评、整合全链路。"
+    "zh": "六角色科研编排团，含 ACP 通信协议与五级冲突仲裁，覆盖编排、追问、架构、领域、复评、整合全链路。"
   },
   "avatar": "avatars/team.png",
   "categoryId": "12-IndustryConsultant",
@@ -59,12 +75,12 @@
       "zh": "我是沈知枢，科研编排团（六人制 v2.0）主理人。告诉我你的研究目标或当前卡点，我会先用 FREEZE 协议评估信息完整度，再决定直接执行还是先做苏格拉底澄清；多方产出冲突时由整合者顾合璧执行五级仲裁。"
     },
     {
-      "en": "I have a research idea — run the 5-task orchestration (identify / collapse / clarify / execute / evolve) on it.",
-      "zh": "我已经有了一个研究idea，请用五项核心任务帮我做深度调研编排。"
+      "en": "I have a research idea — run the full workflow on it: topic selection (8-dimension scoring, S/A/B/C grading, stop-loss lines) plus deep investigation (skeleton design, cross-domain comparison, GRADE rating).",
+      "zh": "我已经有了一个研究 idea，请用完整工作流帮我做选题评估（8 维评分 / S-A-B-C 分档 / 止损线）与深度调研编排。"
     },
     {
       "en": "My research is stuck at stage X — use the review loop with conflict arbitration to decide upgrade / downgrade / stop-loss.",
-      "zh": "我的研究卡在XX阶段，请用复评闭环（含冲突仲裁）帮我决定升档、降档还是止损。"
+      "zh": "我的研究卡在 XX 阶段，请用复评闭环（含冲突仲裁）帮我决定升档、降档还是止损。"
     }
   ],
   "members": [
