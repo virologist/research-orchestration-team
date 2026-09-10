@@ -130,10 +130,10 @@ def review_decision(scores_old: dict, scores_new: dict, risks: list = None) -> t
             f"关键评分退步（min={min_old}→{min_new}）或新增 ≥1 项高风险",
             "收缩研究范围；降低预期产出；增加月度复评频率",
         )
-    if avg_delta >= 1 and sum(1 for d in deltas.values() if d >= 1) >= 3:
+    if sum(1 for d in deltas.values() if d >= 1) >= 3:
         return (
             "升档",
-            f"前 3 项评分进步（avg_delta={avg_delta:.1f}），≥3 维提升",
+            f"≥3 维各进步 ≥1 分（avg_delta={avg_delta:.1f}）",
             "增加资源投入；扩大研究规模；考虑多团队并行",
         )
     return (

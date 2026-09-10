@@ -24,13 +24,21 @@ import sys
 from pathlib import Path
 
 # ─────────────────────────────────────────────────────────────────────
-# 默认记忆目录：优先取 --memory-dir，其次取工作区 .workbuddy/memory
+# 默认记忆目录：按优先级解析——显式 env > 当前工作区探测 > 用户级 fallback
 # ─────────────────────────────────────────────────────────────────────
 
-DEFAULT_MEMORY_ROOT = (
-    Path(os.environ.get("WORKBUDDY_WORKSPACE", "~")).expanduser()
-    / ".workbuddy" / "memory"
-)
+def _default_memory_root() -> Path:
+    """解析记忆目录（项目工作区 .workbuddy/memory 优先，避免误写用户级）。"""
+    ws = os.environ.get("WORKBUDDY_WORKSPACE")
+    if ws:
+        return Path(ws).expanduser() / ".workbuddy" / "memory"
+    # 当前工作目录若是工作区（含 .workbuddy 目录），就地写入项目记忆
+    if (Path.cwd() / ".workbuddy").is_dir():
+        return Path.cwd() / ".workbuddy" / "memory"
+    # 最后手段：用户级记忆（跨项目），告警提示调用方
+    print("⚠️ 未检测到 WORKBUDDY_WORKSPACE 且当前目录无 .workbuddy，回退到用户级记忆目录",
+          file=sys.stderr)
+    return Path.home() / ".workbuddy" / "memory"
 
 TYPE_LABELS = {
     "decision": "🔀 决策",
@@ -44,7 +52,7 @@ def resolve_memory_dir(override: str | None) -> Path:
     if override:
         d = Path(override).expanduser()
     else:
-        d = DEFAULT_MEMORY_ROOT
+        d = _default_memory_root()
     d.mkdir(parents=True, exist_ok=True)
     return d
 
@@ -82,11 +90,11 @@ def append_longterm(memory_dir: Path, note: str, mtype: str, dry_run: bool) -> t
     if not content.startswith("#"):
         content = "# 长期项目记忆\n\n" + content
 
-    # 归一化：去掉括号内差异（如"（重复测试）"），取前 15 字符作 key
+    # 归一化：去掉括号内差异（如"（重复测试）"），用完整归一化内容作 key
+    # （前 N 字前缀会误判——前 15 字相同但第 16 字不同的不同条目会被误去重）
     normalized = re.sub(r"[（(].*?[)）]", "", note).strip()
-    key = normalized[:15]
-    if key and key in content:
-        print(f"⏭️  跳过重复条目（key={key!r}）")
+    if normalized and normalized in content:
+        print(f"⏭️  跳过重复条目（key={normalized!r}）")
         return f, False
     content += build_entry(note, mtype, None)
     if not dry_run:
@@ -106,6 +114,13 @@ def main():
 
     memory_dir = resolve_memory_dir(args.memory_dir)
     entry = build_entry(args.note, args.type, args.trace_id)
+
+    # 落到用户级 fallback 时提示（项目级记忆应显式传 --memory-dir 或设置 WORKBUDDY_WORKSPACE）
+    if (args.memory_dir is None
+            and not os.environ.get("WORKBUDDY_WORKSPACE")
+            and not (Path.cwd() / ".workbuddy").is_dir()):
+        print("⚠️  未检测到项目工作区，已落到用户级记忆（~/.workbuddy/memory）。"
+              "如需写入项目记忆，请传 --memory-dir 或设置 WORKBUDDY_WORKSPACE")
 
     print(f"📂 记忆目录: {memory_dir}")
     print(f"📝 待写入: {entry.rstrip()}")

@@ -1,7 +1,7 @@
 {
   "name": "research-orchestration-team",
   "version": "2.0.0",
-  "description": "Six-role cross-disciplinary research orchestration team with ACP communication protocol, five-role matrix (orchestrator/analyzer/executor/reviewer/integrator), L1-L3 conflict arbitration, and harness-compliant 12-component runtime. v2.0: added synthesis-integrator, unified message envelopes, task dispatch primitives.",
+  "description": "Six-agent cross-disciplinary research orchestration team with ACP communication protocol, five-role matrix (orchestrator/analyzer/executor/reviewer/integrator), L1-L5 conflict arbitration, and harness-compliant 12-component runtime. v2.0: added synthesis-integrator, unified message envelopes, task dispatch primitives.",
   "author": {
     "name": "TZUVet",
     "email": "tzuvet@example.com"
@@ -38,14 +38,14 @@
     "zh": "科研价值驱动研究编排团"
   },
   "displayDescription": {
-    "en": "Six-role research orchestration team with ACP protocol and L1-L3 conflict arbitration: orchestrator, analyzer, architect, executor, reviewer, and integrator for topic selection, deep investigation, and decision support.",
+    "en": "Six-agent research orchestration team with ACP protocol and L1-L5 conflict arbitration: orchestrator, analyzer (questioner + architect), executor, reviewer, and integrator for topic selection, deep investigation, and decision support.",
     "zh": "六角色科研编排团，含ACP通信协议与三级冲突仲裁，覆盖编排、追问、架构、领域、复评、整合全链路。"
   },
   "avatar": "avatars/team.png",
   "categoryId": "12-IndustryConsultant",
   "defaultInitPrompt": {
-    "zh": "我是沈知枢，科研编排团（六人制 v2.0）主理人。告诉我你的研究目标或当前卡点，我会先用 FREEZE 协议评估信息完整度，再决定直接执行还是先做苏格拉底澄清；多方产出冲突时由整合者顾合璧执行三级仲裁。",
-    "en": "I'm Shen, lead of the six-role research orchestration team (v2.0). Tell me your research goal or blocker — I'll run FREEZE completeness assessment first, then execute or trigger Socratic clarification; multi-agent conflicts go through three-level arbitration by our integrator."
+    "zh": "我是沈知枢，科研编排团（六人制 v2.0）主理人。告诉我你的研究目标或当前卡点，我会先用 FREEZE 协议评估信息完整度，再决定直接执行还是先做苏格拉底澄清；多方产出冲突时由整合者顾合璧执行五级仲裁。",
+    "en": "I'm Shen, lead of the six-agent research orchestration team (v2.0). Tell me your research goal or blocker — I'll run FREEZE completeness assessment first, then execute or trigger Socratic clarification; multi-agent conflicts go through five-level arbitration by our integrator."
   },
   "plugin": "research-orchestration-team",
   "tags": [
@@ -55,8 +55,8 @@
   ],
   "quickPrompts": [
     {
-      "en": "I'm Shen, lead of the six-role research orchestration team (v2.0). Tell me your research goal or blocker — I'll run FREEZE completeness assessment first, then execute or trigger Socratic clarification; multi-agent conflicts go through three-level arbitration by our integrator.",
-      "zh": "我是沈知枢，科研编排团（六人制 v2.0）主理人。告诉我你的研究目标或当前卡点，我会先用 FREEZE 协议评估信息完整度，再决定直接执行还是先做苏格拉底澄清；多方产出冲突时由整合者顾合璧执行三级仲裁。"
+      "en": "I'm Shen, lead of the six-agent research orchestration team (v2.0). Tell me your research goal or blocker — I'll run FREEZE completeness assessment first, then execute or trigger Socratic clarification; multi-agent conflicts go through five-level arbitration by our integrator.",
+      "zh": "我是沈知枢，科研编排团（六人制 v2.0）主理人。告诉我你的研究目标或当前卡点，我会先用 FREEZE 协议评估信息完整度，再决定直接执行还是先做苏格拉底澄清；多方产出冲突时由整合者顾合璧执行五级仲裁。"
     },
     {
       "en": "I have a research idea — run the 5-task orchestration (identify / collapse / clarify / execute / evolve) on it.",

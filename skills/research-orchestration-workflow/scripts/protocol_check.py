@@ -19,7 +19,7 @@ from typing import Any
 # 信封校验：模拟 agent-protocol.md §2
 # ─────────────────────────────────────────────────────────────────────
 
-REQUIRED_FIELDS = ["v", "msg_id", "from", "to", "type", "trace_id",
+REQUIRED_FIELDS = ["v", "msg_id", "ts", "from", "to", "type", "trace_id",
                    "status", "confidence", "context_ref", "payload"]
 VALID_TYPES = {"TASK", "RESULT", "CLARIFY", "REVIEW", "ERROR", "STATUS", "HANDOFF"}
 VALID_STATUS = {"PENDING", "RUNNING", "SUCCESS", "FAILED", "BLOCKED"}

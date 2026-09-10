@@ -1,9 +1,9 @@
 # 科研价值驱动研究编排团
 
 > **团队名称**：科研价值驱动研究编排团 / Research Value-Driven Research Orchestration Team
-> **专家类型**：Team 型（5 人协作团）
+> **专家类型**：Team 型（6 人协作团）
 > **行业分类**：12-IndustryConsultant（跨学科咨询）
-> **版本**：1.0.0
+> **版本**：2.0.0
 
 ## 团队定位
 
@@ -23,8 +23,9 @@
 | 元架构师 | 梁构局（Liang Gouju）| 问题分解、跨域节点、骨架设计 |
 | 跨学科领域专家 | 博域闻（Bo Yuwen）| 跨学科知识调用、可行性核查、前沿扫描 |
 | 方法学复评官 | 严复回（Yan Fuhui）| 证据等级审查、复评闭环决策 |
+| 整合者 | 顾合璧（Gu Hebi）| 多源融合、冲突五级仲裁、综合汇编 |
 
-## 核心工作流：六阶段状态机
+## 核心工作流：八阶段状态机
 
 ```
 FREEZE → IDENTIFY → COLLAPSE → CLARIFY → ALIGN → EXECUTE_ONE_STEP → REVIEW → NEXT
@@ -41,16 +42,20 @@ research-orchestration-team/
 │   ├── socratic-questioner.md                      # 团员1：问清源
 │   ├── meta-architect.md                           # 团员2：梁构局
 │   ├── domain-expert.md                            # 团员3：博域闻
-│   └── methodological-reviewer.md                  # 团员4：严复回
+│   ├── methodological-reviewer.md                  # 团员4：严复回
+│   └── synthesis-integrator.md                     # 团员5：顾合璧（整合者）
 ├── skills/
 │   └── research-orchestration-workflow/
 │       ├── SKILL.md                                # 强制工作流模块
-│       ├── scripts/
-│       │   └── topic_scoring.py                    # 选题评分卡生成器
 │       ├── references/
+│       │   └── agent-protocol.md                   # 多代理通信协议 v2.0
+│       ├── scripts/
+│       │   ├── topic_scoring.py                    # 选题评分卡生成器
+│       │   ├── protocol_check.py                   # 协议合规单元测试
+│       │   └── memory_log.py                       # 持久记忆自动写入
 │       └── templates/
 │           └── topic-scoring-card.md               # 选题评分卡模板
-├── avatars/                                         # 头像（待生成）
+├── avatars/                                         # 头像
 ├── settings.json                                    # 主理人 Agent ID 配置
 └── README.md
 ```
@@ -80,3 +85,4 @@ research-orchestration-team/
 ## 版本历史
 
 - **v1.0.0** (2026-08-28)：初始版本，5 人团队 + 选题评分卡 Skill
+- **v2.0.0** (2026-09)：六人团队（新增整合者顾合璧）+ 八阶段状态机 + ACP 通信协议（9 节）+ 冲突五级仲裁 + harness 12 组件运行时
