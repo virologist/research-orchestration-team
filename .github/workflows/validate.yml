@@ -74,24 +74,27 @@ jobs:
 
       - name: Topic scoring edge cases
         run: |
+          set +e  # GitHub Actions bash -e 默认开启，关掉避免 Python rc=1 终止 step
           cd skills/research-orchestration-workflow/scripts
           # 越界必须 rc=1
           python3 topic_scoring.py --topic bad --originality 11 --feasibility 7 \
             --value-density 9 --data-availability 7 --competition 6 \
             --cognition 8 --resource-fit 7 --sustainability 7
-          if [ $? -ne 1 ]; then
-            echo "❌ 越界应退出码 1，实际未拒绝"
+          rc=$?
+          if [ $rc -ne 1 ]; then
+            echo "❌ 越界应退出码 1，实际 rc=$rc"
             exit 1
           fi
-          echo "✅ 越界输入被正确拒绝"
+          echo "✅ 越界输入被正确拒绝 (rc=1)"
 
-          # 缺维必须报错
+          # 缺维必须 rc=2（argparse 错误）
           python3 topic_scoring.py --topic miss --originality 8
-          if [ $? -ne 1 ]; then
-            echo "❌ 缺维应退出码 1"
+          rc=$?
+          if [ $rc -ne 2 ]; then
+            echo "❌ 缺维应退出码 2，实际 rc=$rc"
             exit 1
           fi
-          echo "✅ 缺维被正确拒绝"
+          echo "✅ 缺维被正确拒绝 (rc=2)"
 
       - name: Cross-file consistency scan
         run: |
