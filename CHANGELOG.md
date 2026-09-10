@@ -2,6 +2,35 @@
 
 所有重要变更按版本倒序记录。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [2.0.2] - 2026-09-10
+
+修复 v2.0.1 未覆盖的一个**用户可见功能缺陷**：README 把「Marketplace 一键添加」列为**推荐**安装方式，但该命令**实际会失败**。协议与运行时行为无变更。
+
+### Fixed（修复）
+
+| # | 级别 | 缺陷 | 根因 | 修复 |
+|---|------|------|------|------|
+| D19 | **P0** | README「方式 1 · Marketplace 一键添加（推荐）」**不工作**。仓库根既没有 `.claude-plugin/marketplace.json`，也没有 `.codebuddy-plugin/marketplace.json`；而 `/plugin marketplace add owner/repo` 要求前者必须存在于仓库根。三种安装方式里只有「git clone + 拷贝」与实际相符 | 打包时把仓库当作「单个插件仓库」处理，未意识到 marketplace 协议要求一份**市场清单**。平台侧之所以能正常安装，是因为本地市场 `my-experts` 自带 `.codebuddy-plugin/marketplace.json` 并以 `./plugins/research-orchestration-team` 指向本包 —— 这个本地清单掩盖了「GitHub 仓库本身缺文件」的事实 | 补入两份市场清单，用 **`"source": "./"` 让仓库自我托管**：仓库根同时作为市场根与插件根。**无需重构目录**，`git clone` 路径与 tarball 结构与 v2.0.1 完全一致，向后兼容 |
+| D20 | P1 | 该缺陷此前**完全无自动化保护** | 既有校验项只覆盖 `plugin.json` 与资产完整性，没有覆盖「文档承诺的安装路径是否真的可用」 | `manifest_check.py` 新增 **C10**：两份市场清单存在且 JSON 合法、含 `name`/`owner`/`plugins`、收录本插件、`source` 可解析、两份市场名与插件列表一致 |
+
+### Changed（变更）
+
+- README 安装说明修正：市场名为 `tzuvet-experts`，安装命令为 `/plugin install research-orchestration-team@tzuvet-experts`；兼容性表补列 `marketplace.json` 并说明其必要性；结构树补入两份市场清单。
+- 版本号 2.0.1 → 2.0.2，三方同步（两份 `plugin.json` + README 头部）。
+- `manifest_check.py` 由 C1–C9（42 项）扩展为 **C1–C10（46 项）**。
+- **新增 `scripts/manifest_check_selftest.py`（注入式负例套件，17 条）并接入 CI**：把此前只存在于一次会话中的负例固化为可复跑的资产。动机是「只测正向无法区分『校验器真的在检查』与『它永远返回 0』」——这正是本项目假绿的成因。用例同时断言**退出码**与**命中的检查项文案**，避免「碰巧因别的原因失败」也算通过。
+
+### 回归证据
+
+- `manifest_check.py` 正向：**46/46**（`rc=0`）
+- `manifest_check_selftest.py` 负例（注入式，已入库）：**17/17** —— 在 v2.0.1 的 11 条之上新增 6 条市场清单负例（Claude 侧文件缺失 / WorkBuddy 侧文件缺失 / 未收录本插件 / source 无法解析 / 两份市场名不一致 / JSON 非法），并含 1 条**反向用例**（换用等价契约命名时应放行，`rc=0`）
+- `protocol_check.py`：信封 12/12、冲突仲裁 5/5、集成仿真 8/8 检查点回引
+- `topic_scoring.py` 退出码契约：正常 `rc=0` / 越界 `rc=1` / 缺维 `rc=2`
+
+### 说明
+
+v2.0.2 之后，本仓库既是「一个可被 `/plugin marketplace add` 添加的市场」，也是「该市场中唯一的插件」。这属于官方文档支持的写法（市场条目的 `source` 可用 `"./"` 指向市场根，使仓库自身成为插件源），因此**无需**把插件挪进 `plugins/<name>/` 子目录 —— 后者会让所有既有 `git clone` 用户与 tarball 使用者被迫改路径，收益不足以抵消破坏性。
+
 ## [2.0.1] - 2026-09-10
 
 发布卫生补丁。**协议与运行时行为无变更**，全部为打包层 / 文档层修复，不影响已安装实例的编排逻辑，无需重装即可继续使用。

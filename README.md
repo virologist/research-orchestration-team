@@ -3,7 +3,7 @@
 > **团队名称**：科研价值驱动研究编排团 / Research Value-Driven Research Orchestration Team
 > **专家类型**：Team 型（6 人协作团）
 > **行业分类**：12-IndustryConsultant（跨学科咨询）
-> **版本**：2.0.1
+> **版本**：2.0.2
 > **许可证**：MIT
 > **仓库**：[github.com/virologist/research-orchestration-team](https://github.com/virologist/research-orchestration-team)
 
@@ -38,9 +38,11 @@ FREEZE → IDENTIFY → COLLAPSE → CLARIFY → ALIGN → EXECUTE_ONE_STEP → 
 ```
 research-orchestration-team/
 ├── .claude-plugin/
-│   └── plugin.json          # Claude Code 标准 manifest
+│   ├── plugin.json          # Claude Code 插件清单
+│   └── marketplace.json     # Claude Code 市场清单（本仓库自我托管）
 ├── .codebuddy-plugin/
-│   └── plugin.json          # WorkBuddy manifest（与上一份同步维护）
+│   ├── plugin.json          # WorkBuddy 插件清单（与上一份同步维护）
+│   └── marketplace.json     # WorkBuddy 市场清单（与上一份同步维护）
 ├── .github/
 │   └── workflows/
 │       └── validate.yml     # CI：双 manifest 校验 + 协议单测 + 一致性扫描
@@ -63,7 +65,8 @@ research-orchestration-team/
 │       └── templates/
 │           └── topic-scoring-card.md               # 选题评分卡模板
 ├── scripts/
-│   └── manifest_check.py                            # 包一致性校验（双 manifest 对等 / 资产 / 版本 / 废弃表述）
+│   ├── manifest_check.py                            # 包一致性校验 C1–C10（双清单对等 / 市场 / 资产 / 版本 / 废弃表述 / 契约章节）
+│   └── manifest_check_selftest.py                   # 注入式负例自测（17 条），证明校验器没有退化成摆设
 ├── avatars/                                         # 6 名成员头像 + 团队头像（随 git 分发）
 ├── docs/
 │   ├── REDTEAM-REPORT.md                           # 红队审查报告（5 维度 · 缺陷 · 回归证据）
@@ -105,22 +108,25 @@ research-orchestration-team/
 - **v1.0.0** (2026-08-28)：初始版本，5 人团队 + 选题评分卡 Skill
 - **v2.0.0** (2026-09-10)：六人团队（新增整合者顾合璧）+ 八阶段状态机 + ACP 通信协议（9 节）+ 冲突五级仲裁 + harness 12 组件运行时
 - **v2.0.1** (2026-09-10)：发布卫生修复（清理误提交的编辑备份、加固 `.gitignore`、头像纳入 git 分发以统一 clone/tarball 产物、修复文档悬空链接与结构树）。协议与运行时**行为无变更**，属纯打包层补丁。
+- **v2.0.2** (2026-09-10)：修复**一键安装失效**——补入缺失的市场清单 `marketplace.json`（两份），使 `/plugin marketplace add` 真正可用；`scripts/manifest_check.py` 增至 C1–C10（46 项）。协议与运行时**行为无变更**。
 
 ## 安装方式（三套并存）
 
 ### 方式 1 · Marketplace 一键添加（推荐）
 
-适用于 **Claude Code** 与 **WorkBuddy**（两者共用同一 marketplace 协议）：
+本仓库**自我托管为一个市场**：仓库根同时是市场根（`.claude-plugin/marketplace.json` / `.codebuddy-plugin/marketplace.json`）
+与插件根（`plugin.json`），市场条目用 `"source": "./"` 指回仓库自身。
+
+适用于 **Claude Code** 与 **WorkBuddy**（两者共用同一套 marketplace 协议）：
 
 ```bash
-# Claude Code
+# Claude Code 与 WorkBuddy 命令相同
 /plugin marketplace add virologist/research-orchestration-team
-/plugin install research-orchestration-team
-
-# WorkBuddy（同一组命令）
-/plugin marketplace add virologist/research-orchestration-team
-/plugin install research-orchestration-team
+/plugin install research-orchestration-team@tzuvet-experts
 ```
+
+> 市场名为 `tzuvet-experts`（定义在市场清单的 `name` 字段），因此安装命令须写成
+> `<插件名>@<市场名>`。若省略 `@tzuvet-experts`，在只注册了一个市场的环境下通常也能解析。
 
 ### 方式 2 · 手动 git clone + 拷贝
 
@@ -138,7 +144,7 @@ cp -r research-orchestration-team ~/.claude/skills/research-orchestration-team
 
 ### 方式 3 · GitHub Release tarball
 
-下载 [v2.0.1 release](https://github.com/virologist/research-orchestration-team/releases/tag/v2.0.1) 的 `research-orchestration-team-2.0.1.tar.gz` → 解压 → 按方式 2 拷贝。
+下载 [v2.0.2 release](https://github.com/virologist/research-orchestration-team/releases/tag/v2.0.2) 的 `research-orchestration-team-2.0.2.tar.gz` → 解压 → 按方式 2 拷贝。
 
 > tarball 内容与 `git clone` 一致（含 `avatars/`），已剔除编辑备份等本地产物。
 
@@ -151,11 +157,15 @@ claude --plugin-dir ./research-orchestration-team
 
 ## 三种 agent 工具的兼容性
 
-| 工具 | manifest | marketplace 命令 | 加载路径 |
+| 工具 | 清单文件 | marketplace 命令 | 加载路径 |
 |------|---------|-----------------|---------|
-| **Claude Code** | `.claude-plugin/plugin.json` | `/plugin marketplace add` | `~/.claude/skills/` 或 `--plugin-dir` |
-| **WorkBuddy** | `.codebuddy-plugin/plugin.json` | `/plugin marketplace add` | `~/.workbuddy/plugins/marketplaces/my-experts/plugins/` |
+| **Claude Code** | `.claude-plugin/plugin.json` + `marketplace.json` | `/plugin marketplace add` | `~/.claude/skills/` 或 `--plugin-dir` |
+| **WorkBuddy** | `.codebuddy-plugin/plugin.json` + `marketplace.json` | `/plugin marketplace add` | `~/.workbuddy/plugins/marketplaces/my-experts/plugins/` |
 | **Claude Desktop** | 通过 MCP bridge 包装 | 暂不支持 marketplace，需手动装 | 桥接方案尚未落地（计划 v2.1），当前请按方式 2 手动安装 |
+
+> **为什么需要 `marketplace.json`**：`/plugin marketplace add owner/repo` 要求仓库根存在
+> `.claude-plugin/marketplace.json`。仅有 `plugin.json` 的裸插件仓库无法通过该命令添加
+> —— v2.0.1 及更早版本的 README 曾把「一键添加」写成推荐方式，但实际会失败，v2.0.2 已修复。
 
 > 本仓库双 manifest 共存：`.claude-plugin/` 与 `.codebuddy-plugin/` 指向同一组组件。两份元数据保持同步（每次改 agent 必须 review 两份 manifest）。
 

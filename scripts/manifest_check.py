@@ -23,6 +23,7 @@
   C7 README 头部声明的版本号与 manifest 的 version 一致
   C8 仓库内不得残留已废弃表述（比 CI 的 grep 更严格，支持跨字符匹配）
   C9 团队每个 agent 的 MD 都声明了契约章节（新成员不得裸奔入场）
+  C10 市场描述文件 marketplace.json 存在且指向本插件（缺它则一键安装失效）
 
 ## 用法
 
@@ -52,6 +53,8 @@ from pathlib import Path
 # ── 路径常量（相对仓库根；禁止散落在函数内的字面量）────────────────────────
 CLAUDE_MANIFEST = ".claude-plugin/plugin.json"
 CODEBUDDY_MANIFEST = ".codebuddy-plugin/plugin.json"
+CLAUDE_MARKETPLACE = ".claude-plugin/marketplace.json"
+CODEBUDDY_MARKETPLACE = ".codebuddy-plugin/marketplace.json"
 README = "README.md"
 
 # 两份 manifest 必须逐项一致的字段
@@ -78,10 +81,12 @@ SKIP_DIRS = {".git", "__pycache__", ".backups", "node_modules", ".venv", "dist",
 # 扫描豁免：以下文件需要「引用」已废弃术语本身，不能算违规
 #   - 审计文档：用于记录「曾经用过、现已修复」的术语
 #   - 规则定义文件：本脚本自身就是术语清单的宿主，必然包含这些字面量
+#   - 自测文件：负例用例必须真的写出违规文本才能验证校验器有效
 SCAN_EXEMPT = {
-    "CHANGELOG.md",               # 审计：记录历次修复涉及的术语
-    "docs/REDTEAM-REPORT.md",     # 审计：报告中引用被修复的术语
-    "scripts/manifest_check.py",  # 规则宿主：FORBIDDEN_PATTERNS 字面量所在文件
+    "CHANGELOG.md",                          # 审计：记录历次修复涉及的术语
+    "docs/REDTEAM-REPORT.md",                # 审计：报告中引用被修复的术语
+    "scripts/manifest_check.py",             # 规则宿主：FORBIDDEN_PATTERNS 字面量所在文件
+    "scripts/manifest_check_selftest.py",    # 自测宿主：负例需构造违规文本
 }
 
 # 已废弃表述（正则）。这些是历史版本用语，正文中出现即为回归。# 注意：用宽松模式而非精确串，避免「三级冲突仲裁」这类插入词导致漏检。
@@ -401,6 +406,73 @@ def check_c9_contracts(chk: Checker, manifests: dict) -> None:
             )
 
 
+def check_c10_marketplace(chk: Checker, manifests: dict) -> None:
+    """C10 市场描述文件存在且与插件自洽。
+
+    动机：本仓库是「自我托管市场」——仓库根既是市场根（放 marketplace.json），
+    又是插件根（放 plugin.json），市场条目用 source "./" 指回仓库自身。
+    如果没有 marketplace.json，`/plugin marketplace add owner/repo` 无法工作，
+    而 README 却把它写成推荐安装方式 —— 这正是 v2.0.1 之后才发现的问题。
+    此校验确保市场文件存在、可解析、且指向本插件。
+    """
+    chk.section("C10 市场描述文件（marketplace.json）")
+    plugin_name = (manifests.get("Claude Code") or {}).get("name")
+
+    loaded = {}
+    for label, rel_path in (
+        ("Claude Code", CLAUDE_MARKETPLACE),
+        ("WorkBuddy", CODEBUDDY_MARKETPLACE),
+    ):
+        path = chk.root / rel_path
+        if not path.exists():
+            chk.fail(
+                f"{label} 市场文件缺失: {rel_path} —— "
+                f"缺它时 `/plugin marketplace add` 无法工作，README 的推荐安装方式会失败"
+            )
+            loaded[label] = None
+            continue
+        data = chk.load_json(path)
+        if data is None:
+            chk.fail(f"{label} 市场文件 JSON 非法: {rel_path}")
+            loaded[label] = None
+            continue
+        loaded[label] = data
+        for field in ("name", "owner", "plugins"):
+            if not data.get(field):
+                chk.fail(f"{rel_path} 缺少字段: {field}")
+        entries = data.get("plugins") or []
+        if not isinstance(entries, list) or not entries:
+            chk.fail(f"{rel_path} 的 plugins 应为非空数组")
+            continue
+        names = [e.get("name") for e in entries]
+        if plugin_name and plugin_name not in names:
+            chk.fail(f"{rel_path} 未收录本插件 {plugin_name}；当前收录 {names}")
+            continue
+        entry = next(e for e in entries if e.get("name") == plugin_name)
+        source = entry.get("source")
+        if source in ("./", ".", None):
+            chk.ok(f"{label} 市场条目指向仓库自身: {plugin_name} ← source={source or './'}")
+        else:
+            target = chk.rel(source)
+            if target.is_dir():
+                chk.ok(f"{label} 市场条目 source 可解析: {source}")
+            else:
+                chk.fail(f"{rel_path} 的 source 无法解析为目录: {source}")
+
+    left, right = loaded.get("Claude Code"), loaded.get("WorkBuddy")
+    if left and right:
+        if left.get("name") == right.get("name"):
+            chk.ok(f"两份市场名一致: {left.get('name')}")
+        else:
+            chk.fail(f"两份市场名不一致: {left.get('name')} vs {right.get('name')}")
+        if [p.get("name") for p in left.get("plugins", [])] == [
+            p.get("name") for p in right.get("plugins", [])
+        ]:
+            chk.ok("两份市场的 plugins 列表一致")
+        else:
+            chk.fail("两份市场的 plugins 列表不一致")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="专家包一致性校验：manifest 对等 / 资产完整性 / 版本一致 / 废弃表述",
@@ -428,6 +500,7 @@ def main() -> int:
     check_c7_version(chk, manifests)
     check_c8_forbidden(chk)
     check_c9_contracts(chk, manifests)
+    check_c10_marketplace(chk, manifests)
 
     print("\n" + "=" * 72)
     if chk.failures:

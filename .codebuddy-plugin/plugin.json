@@ -1,6 +1,6 @@
 {
   "name": "research-orchestration-team",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "description": "Six-agent cross-disciplinary research orchestration team with ACP communication protocol, five-role matrix (orchestrator/analyzer/executor/reviewer/integrator), L1-L5 conflict arbitration, and harness-compliant 12-component runtime. v2.0: added synthesis-integrator, unified message envelopes, task dispatch primitives.",
   "author": {
     "name": "TZUVet",

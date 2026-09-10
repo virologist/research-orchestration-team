@@ -11,21 +11,24 @@
 ## 提交前必跑（强制 CI）
 
 ```bash
-# 1. 包一致性校验（双 manifest 对等 / agents 与头像资产 / teamInfo 自洽 /
-#    README 版本一致 / 废弃表述 / 契约章节完整性）—— 单一事实来源，共 42 项
+# 1. 包一致性校验（双 manifest 对等 / 市场清单 / agents 与头像资产 / teamInfo 自洽 /
+#    README 版本一致 / 废弃表述 / 契约章节完整性）—— 单一事实来源，共 46 项
 python3 scripts/manifest_check.py -v
 
-# 2. 协议合规单元测试
+# 2. 校验器自测（注入式负例 17 条）：证明上面的校验器真的会失败，而不是永远返回 0
+python3 scripts/manifest_check_selftest.py
+
+# 3. 协议合规单元测试
 python3 skills/research-orchestration-workflow/scripts/protocol_check.py
 
-# 3. 选题评分脚本边界测试
+# 4. 选题评分脚本边界测试
 python3 skills/research-orchestration-workflow/scripts/topic_scoring.py \
   --topic test --originality 11 --feasibility 7 --value-density 9 \
   --data-availability 7 --competition 6 --cognition 8 --resource-fit 7 --sustainability 7
 # 期望：退出码 1 + "评分超出有效范围"
 ```
 
-> `scripts/manifest_check.py` 的校验项为 C1–C9，全部为**硬失败**（`rc=1`）。
+> `scripts/manifest_check.py` 的校验项为 C1–C10，全部为**硬失败**（`rc=1`）。
 > 其中 C8 的废弃术语清单是本仓库的**单一事实来源**，请勿在 workflow 或别处另抄一份
 > —— 历史上正是因为另抄了一份「精确串」清单，某个在关键词中间插了字的旧表述逃过匹配，
 > 造成了 CI 假绿。
@@ -39,15 +42,19 @@ python3 skills/research-orchestration-workflow/scripts/topic_scoring.py \
    （`name` / `version` / `license` / `homepage` / `repository` / `agents` / `skills`）
    必须逐项一致，由 `manifest_check.py` 的 C2 强制校验。
    注意 `skills` 的取值是**字符串** `"./skills"`（WorkBuddy 第一方约定），不是文件路径数组。
-4. 若涉及协议改动（消息信封/仲裁/错误分类），**必须**同步更新：
+4. **市场清单同样要同步两份**：`.claude-plugin/marketplace.json` 与 `.codebuddy-plugin/marketplace.json`。
+   本仓库是「自我托管市场」——仓库根既是市场根也是插件根，市场条目用 `"source": "./"` 指回自身。
+   **删掉或改坏它们会让 README 首推的 `/plugin marketplace add` 失效**（v2.0.1 之前就是这个状态），
+   由 `manifest_check.py` 的 C10 守护。
+5. 若涉及协议改动（消息信封/仲裁/错误分类），**必须**同步更新：
    - 5 个执行/分析/审查型 agent MD 的「v2.0 协议合规契约」章节
      （整合者用「接口契约」、主理人用「Harness 运行时规范 v2.0」，命名不同但语义等价，
      由 `manifest_check.py` 的 C9 统一校验「每个成员都必须有契约章节」）
    - `protocol_check.py` 对应单元测试
    - `CHANGELOG.md` 标注 BREAKING
-5. 版本号三处同步：两份 manifest 的 `version` + README 头部的「版本」（由 C7 校验）
-6. 跑完整 CI（见上）→ 通过后提 PR
-7. PR 描述须含：变更动机 + 影响范围 + 红队/回归证据
+6. 版本号三处同步：两份 `plugin.json` 的 `version` + README 头部的「版本」（由 C7 校验）
+7. 跑完整 CI（见上）→ 通过后提 PR
+8. PR 描述须含：变更动机 + 影响范围 + 红队/回归证据
 
 ## 角色修改规范
 
