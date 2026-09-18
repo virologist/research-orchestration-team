@@ -133,6 +133,18 @@ envelope:
 
 `ERROR` 消息 payload 必含：`category`（四选一）、`detail`、`recovery_action`、`retry_count`。
 
+### v2.1.0 增补 · Per-step Verification（每个步骤都校验）
+
+> v2.0 仅 final-output 校验（整合者顾合璧统一 verify）；v2.1.0 改为 **per-step verification**（每个 step 输出都过 verification gate，避免单点失败累积）。
+
+- **每个 step 输出**：必过 verification gate（不是只 verify final-output）
+- **错误路径三件套**：
+  - `root_cause_hint`：人话版"为什么错"（非 stack trace）
+  - `safe_retry_instruction`：什么前提下可重试、不要改什么
+  - `explicit_stop_condition`：什么情况下必须停，不自己硬撞
+- **失败回流为 harness 新规则**：每次失败回流都写成 registry / protocol 的新增规则（Hashimoto 模式）
+- **circuit_breaker**：同一 task 失败 5 次 → 自动熔断 + 升级用户（详见 `references/agent-registry.md` §Loop 终止硬上限）
+
 ---
 
 ## 7. 冲突检测与仲裁（Conflict Resolution）

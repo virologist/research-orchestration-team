@@ -1,7 +1,7 @@
 {
   "name": "research-orchestration-team",
-  "version": "2.0.2",
-  "description": "Six-agent cross-disciplinary research orchestration team with ACP communication protocol, five-role matrix (orchestrator/analyzer/executor/reviewer/integrator), L1-L5 conflict arbitration, and harness-compliant 12-component runtime. v2.0: added synthesis-integrator, unified message envelopes, task dispatch primitives.",
+  "version": "2.1.0",
+  "description": "Eight-agent cross-disciplinary research orchestration team with ACP communication protocol, five-role matrix (orchestrator/analyzer/executor/reviewer/integrator), L1-L5 conflict arbitration, harness-compliant runtime, Orchestrator Pattern routing, Loop hard-stop (max_turns/time/token), per-step verification, atomic subagent split (biomed/ai/general), and Ralph Loop cross-session memory. v2.1.0: harness_eval.py with 12 design checks, agent-registry.md as routing SSOT.",
   "author": {
     "name": "TZUVet",
     "email": "yzuvet@outlook.com"
@@ -20,13 +20,18 @@
     "conflict-arbitration",
     "evidence-grading",
     "topic-selection",
-    "deep-investigation"
+    "deep-investigation",
+    "harness-engineering",
+    "orchestrator-pattern",
+    "atomic-subagent"
   ],
   "agents": [
     "./agents/research-orchestration-team-team-lead.md",
     "./agents/socratic-questioner.md",
     "./agents/meta-architect.md",
-    "./agents/domain-expert.md",
+    "./agents/domain-expert-biomed.md",
+    "./agents/domain-expert-ai.md",
+    "./agents/domain-expert-general.md",
     "./agents/methodological-reviewer.md",
     "./agents/synthesis-integrator.md"
   ],
@@ -39,7 +44,9 @@
     "memberAgents": [
       "socratic-questioner",
       "meta-architect",
-      "domain-expert",
+      "domain-expert-biomed",
+      "domain-expert-ai",
+      "domain-expert-general",
       "methodological-reviewer",
       "synthesis-integrator"
     ]
@@ -54,33 +61,34 @@
     "zh": "科研价值驱动研究编排团"
   },
   "displayDescription": {
-    "en": "Six-agent research orchestration team with ACP protocol and L1-L5 conflict arbitration: orchestrator, analyzer (questioner + architect), executor, reviewer, and integrator for topic selection, deep investigation, and decision support.",
-    "zh": "六角色科研编排团，含 ACP 通信协议与五级冲突仲裁，覆盖编排、追问、架构、领域、复评、整合全链路。"
+    "en": "Eight-agent research orchestration team (v2.1.0 Harness Engineering): orchestrator + analyzer (questioner + architect) + 3 atomic executors (biomed/ai/general) + reviewer + integrator. Features ACP protocol, L1-L5 conflict arbitration, Orchestrator Pattern routing, Loop hard-stop, per-step verification, and Ralph Loop cross-session memory.",
+    "zh": "八人科研编排团（v2.1.0 Harness Engineering）：主理人 + 分析者（追问 + 架构）+ 3 个 atomic 执行者（生医/AI/通识）+ 审查者 + 整合者。ACP 协议 + 五级冲突仲裁 + Orchestrator Pattern 路由 + Loop 硬停止 + per-step verification + Ralph Loop 跨会话记忆。"
   },
   "avatar": "avatars/team.png",
   "categoryId": "12-IndustryConsultant",
   "defaultInitPrompt": {
-    "zh": "我是沈知枢，科研编排团（六人制 v2.0）主理人。告诉我你的研究目标或当前卡点，我会先用 FREEZE 协议评估信息完整度，再决定直接执行还是先做苏格拉底澄清；多方产出冲突时由整合者顾合璧执行五级仲裁。",
-    "en": "I'm Shen, lead of the six-agent research orchestration team (v2.0). Tell me your research goal or blocker — I'll run FREEZE completeness assessment first, then execute or trigger Socratic clarification; multi-agent conflicts go through five-level arbitration by our integrator."
+    "zh": "我是沈知枢，科研编排团（v2.1.0 八人制 Harness Engineering 升级）主理人。告诉我你的研究目标或当前卡点——我会先做 FREEZE 评估 + 阶段边界 compact + Orchestrator Pattern 路由，再决定直接执行还是先做苏格拉底澄清；多方冲突时由整合者顾合璧执行五级仲裁 + per-step verification。",
+    "en": "I'm Shen, lead of the eight-agent research orchestration team (v2.1.0 Harness Engineering). Tell me your research goal or blocker — I'll run FREEZE assessment with stage-boundary compact and Orchestrator Pattern routing, then execute or trigger Socratic clarification; multi-agent conflicts go through L1-L5 arbitration by our integrator with per-step verification."
   },
   "plugin": "research-orchestration-team",
   "tags": [
     { "en": "Research Planning", "zh": "科研规划" },
     { "en": "Multi-Agent Orchestration", "zh": "多代理编排" },
-    { "en": "Deep Investigation", "zh": "深度调研" }
+    { "en": "Deep Investigation", "zh": "深度调研" },
+    { "en": "Harness Engineering", "zh": "工程化执行" }
   ],
   "quickPrompts": [
     {
-      "en": "I'm Shen, lead of the six-agent research orchestration team (v2.0). Tell me your research goal or blocker — I'll run FREEZE completeness assessment first, then execute or trigger Socratic clarification; multi-agent conflicts go through five-level arbitration by our integrator.",
-      "zh": "我是沈知枢，科研编排团（六人制 v2.0）主理人。告诉我你的研究目标或当前卡点，我会先用 FREEZE 协议评估信息完整度，再决定直接执行还是先做苏格拉底澄清；多方产出冲突时由整合者顾合璧执行五级仲裁。"
+      "en": "I'm Shen, lead of the eight-agent research orchestration team (v2.1.0 Harness Engineering). Tell me your research goal or blocker — I'll run FREEZE assessment with stage-boundary compact and Orchestrator Pattern routing, then execute or trigger Socratic clarification; multi-agent conflicts go through L1-L5 arbitration with per-step verification.",
+      "zh": "我是沈知枢，科研编排团（v2.1.0 八人制 Harness Engineering 升级）主理人。告诉我你的研究目标或当前卡点——我会先做 FREEZE 评估 + 阶段边界 compact + Orchestrator Pattern 路由，再决定直接执行还是先做苏格拉底澄清；多方冲突时由整合者顾合璧执行五级仲裁 + per-step verification。"
     },
     {
-      "en": "I have a research idea — run the full workflow on it: topic selection (8-dimension scoring, S/A/B/C grading, stop-loss lines) plus deep investigation (skeleton design, cross-domain comparison, GRADE rating).",
-      "zh": "我已经有了一个研究 idea，请用完整工作流帮我做选题评估（8 维评分 / S-A-B-C 分档 / 止损线）与深度调研编排。"
+      "en": "I have a research idea — run the full workflow on it: topic selection (8-dimension scoring, S/A/B/C grading, stop-loss lines) plus deep investigation (skeleton design, cross-domain comparison, GRADE rating). v2.1.0 adds stage-boundary compact and 4 observability metrics.",
+      "zh": "我已经有了一个研究 idea，请用完整工作流帮我做选题评估（8 维评分 / S-A-B-C 分档 / 止损线）与深度调研编排。v2.1.0 新增阶段边界 compact 与 4 项可观测指标。"
     },
     {
-      "en": "My research is stuck at stage X — use the review loop with conflict arbitration to decide upgrade / downgrade / stop-loss.",
-      "zh": "我的研究卡在 XX 阶段，请用复评闭环（含冲突仲裁）帮我决定升档、降档还是止损。"
+      "en": "My research is stuck at stage X — use the review loop with conflict arbitration to decide upgrade / downgrade / stop-loss. v2.1.0 adds per-step verification (catches failures earlier).",
+      "zh": "我的研究卡在 XX 阶段，请用复评闭环（含冲突仲裁）帮我决定升档、降档还是止损。v2.1.0 新增 per-step verification（更早捕获失败）。"
     }
   ],
   "members": [
@@ -106,10 +114,24 @@
       "role": "member"
     },
     {
-      "id": "domain-expert",
-      "displayName": { "en": "Bo Yuwen", "zh": "博域闻" },
-      "profession": { "en": "Domain Expert", "zh": "跨学科领域专家" },
-      "avatar": "avatars/domain-expert.png",
+      "id": "domain-expert-biomed",
+      "displayName": { "en": "Bo Yuwen · Biomed", "zh": "博域闻·生医" },
+      "profession": { "en": "Domain Expert · Biomedicine (atomic)", "zh": "生物医药领域专家（atomic）" },
+      "avatar": "avatars/domain-expert-biomed.png",
+      "role": "member"
+    },
+    {
+      "id": "domain-expert-ai",
+      "displayName": { "en": "Bo Yuwen · AI", "zh": "博域闻·AI" },
+      "profession": { "en": "Domain Expert · AI & Data Science (atomic)", "zh": "AI 与数据科学领域专家（atomic）" },
+      "avatar": "avatars/domain-expert-ai.png",
+      "role": "member"
+    },
+    {
+      "id": "domain-expert-general",
+      "displayName": { "en": "Bo Yuwen · General", "zh": "博域闻·通识" },
+      "profession": { "en": "Domain Expert · General Methods (atomic)", "zh": "通用研究方法学专家（atomic）" },
+      "avatar": "avatars/domain-expert-general.png",
       "role": "member"
     },
     {

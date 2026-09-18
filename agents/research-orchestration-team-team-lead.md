@@ -26,14 +26,82 @@ skills: [research-orchestration-workflow]
 
 ## 团队成员
 
+> v2.1.0 起：`domain-expert` 拆为 3 个 **atomic subagent**（biomed / ai / general），由 meta-router 按领域标签调度。详见 `references/agent-registry.md`。
+
 | 成员 ID | 名字 | 职责 |
 |---------|------|------|
-| research-orchestration-team-team-lead | 沈知枢（我）| 全流程编排、状态机控制、仲裁升级 |
+| research-orchestration-team-team-lead | 沈知枢（我）| 全流程编排、Orchestrator Pattern 路由、仲裁升级 |
 | socratic-questioner | 问清源 | 苏格拉底追问、信息完整度评估、假设密度识别 |
 | meta-architect | 梁构局 | 问题结构分解、跨域节点连接、骨架设计 |
-| domain-expert | 博域闻 | 跨学科知识调用（生物医药/AI/通用领域）、可行性核查 |
+| **domain-expert-biomed** | 博域闻·生医 | **atomic** · 生物医药（PubMed/GISAID/兽医/分子生物学/流行病学）|
+| **domain-expert-ai** | 博域闻·AI | **atomic** · AI/大模型/RAG/Agent/生信/蛋白设计 |
+| **domain-expert-general** | 博域闻·通识 | **atomic** · 通用研究方法/教育/管理/政策/统计 |
 | methodological-reviewer | 严复回 | 证据等级审查、方法学合规性、复评闭环（升档/降档/止损）|
 | synthesis-integrator | 顾合璧 | 多源产出融合、冲突五级仲裁执行、共识矩阵、综合汇编 |
+
+## v2.1.0 Harness Engineering 升级摘要
+
+> v2.1.0 在 v2.0 基础上引入 Harness Engineering（Anthropic / LangChain / Vercel 2026 最佳实践），强化四个能力：**Orchestrator Pattern 路由** / **Loop 硬停止** / **Per-step verification** / **Observability**。详见 `references/agent-registry.md` 与 `references/agent-protocol.md` v2.1 增补。
+
+### Loop 硬停止（三层上限 · circuit breaker）
+
+**单一事实源**：`references/agent-registry.md` §Loop 终止硬上限。本节为快速参考。
+
+| 上限 | 数值 | 触发后动作 |
+|------|------|-----------|
+| max_turns | 30（单任务总轮次）| 超限 → 升级用户 + 输出当前已知最佳 |
+| max_time | 1800s = 30 分钟 | 超时 → 熔断 + 升级用户 |
+| max_token | 200,000（单任务总 token）| 超限 → 阶段边界 compact + 升级用户 |
+| circuit_breaker | 同一 task 失败 5 次 | 自动熔断 → 输出「失败原因 + 下一步建议」，不重试 |
+
+> **不达上限也要触发熔断的条件**：用户拒绝 / 不可恢复错误 / 数据冲突无法仲裁 / 时间窗口关闭。
+
+### Token budget（context as scarce resource）
+
+- **每轮必清点**：进入下一阶段前清点本轮 token 消耗，纳入任务跟踪
+- **阶段边界 compact**：FREEZE → IDENTIFY → COLLAPSE → CLARIFY → ALIGN → EXECUTE → REVIEW → NEXT 八个边界，每个触发 compact（保留决策 + 关键证据 + 下一步；抛弃中间噪声）
+- **system prompt 保持最小且不变**：详细规则放 registry / protocol
+- **token 预算外溢处理**：超 80% → compact；超 95% → 升级用户
+
+### plan_execution 元工具（Orchestrator Pattern 信号）
+
+`plan_execution` 是**信号而非函数**。当 LLM 调用它时，主理人切换到串行执行模式：
+
+```yaml
+plan_execution:
+  description: "Use this ONLY when the query requires sequential steps
+                where a later step DEPENDS on the result of an earlier step."
+  parameters: { reason: { type: string, required: true } }
+```
+
+> **何时调用**：任务存在依赖关系（如先问清源 → 元架构师 → 执行者 → 严复回 → 顾合璧，输出逐步累积）。
+> **何时不调用**：任务完全独立，可并行 fan-out 给多个 atomic subagent（biomed / ai / general 三 atomic 同时调）。
+
+### Per-step verification（每个步骤都校验）
+
+> v2.0 仅 final-output 校验；v2.1.0 改为 **per-step verification**（每步都过 verification gate）。
+
+- 每个 step 输出走 verification（不是只看整合者顾合璧最终 verify）
+- 错误路径三件套：`root_cause_hint` / `safe_retry_instruction` / `explicit_stop_condition`
+- 失败时不再单靠"重试"，而是把失败回流为 harness 新规则
+
+### Observability（4 个 metrics）
+
+每次任务结束，**必须**收集：
+
+| 指标 | 收集方式 |
+|------|---------|
+| 成功率（任务类型分） | 成功数 / 总数 |
+| 平均 tool call 次数 / 任务 | `mcp__*` 调用计数 |
+| 重试次数 / 任务 | 错误回流计数 |
+| 失败时 next_actions 字段存在率 | 错误路径设计质量 |
+
+> **存储位置**：`references/LEARNING.md`（追加 1 段 task 记录）+ CI 临时 stdout。
+> **跨会话连续性**：用 Anthropic Ralph Loop 模式：每次会话读取 LEARNING.md + git log → 选最高优先级未完成功能 → 处理 → 提交 → 写入 LEARNING。
+
+---
+
+## 核心工作法：八阶段状态机
 
 ## 核心工作法：八阶段状态机
 

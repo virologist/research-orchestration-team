@@ -1,7 +1,7 @@
 {
   "name": "research-orchestration-team",
-  "version": "2.0.2",
-  "description": "Six-agent cross-disciplinary research orchestration team with ACP communication protocol, five-role matrix (orchestrator/analyzer/executor/reviewer/integrator), L1-L5 conflict arbitration, and harness-compliant 12-component runtime. For Claude Code / WorkBuddy / Claude Desktop.",
+  "version": "2.1.0",
+  "description": "Eight-agent cross-disciplinary research orchestration team (v2.1.0 Harness Engineering). ACP protocol + L1-L5 conflict arbitration + Orchestrator Pattern routing + Loop hard-stop (max_turns/time/token) + per-step verification + atomic subagent split (biomed/ai/general) + Ralph Loop cross-session memory. For Claude Code / WorkBuddy / Claude Desktop.",
   "author": {
     "name": "TZUVet",
     "email": "yzuvet@outlook.com"
@@ -20,13 +20,18 @@
     "conflict-arbitration",
     "evidence-grading",
     "topic-selection",
-    "deep-investigation"
+    "deep-investigation",
+    "harness-engineering",
+    "orchestrator-pattern",
+    "atomic-subagent"
   ],
   "agents": [
     "./agents/research-orchestration-team-team-lead.md",
     "./agents/socratic-questioner.md",
     "./agents/meta-architect.md",
-    "./agents/domain-expert.md",
+    "./agents/domain-expert-biomed.md",
+    "./agents/domain-expert-ai.md",
+    "./agents/domain-expert-general.md",
     "./agents/methodological-reviewer.md",
     "./agents/synthesis-integrator.md"
   ],

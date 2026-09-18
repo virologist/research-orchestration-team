@@ -146,12 +146,14 @@ case("N9", "整合者契约章节被移除", "synthesis-integrator 未找到契�
 
 
 def n10(root):
-    path = root / "agents/domain-expert.md"
+    """v2.1.0 起：domain-expert 拆为 3 个 atomic（biomed/ai/general）。
+    测试契约章节被改名时，仍选一个存在的 atomic 验证 C9 漏报。"""
+    path = root / "agents/domain-expert-biomed.md"
     path.write_text(
-        path.read_text(encoding="utf-8").replace("## v2.0 协议合规契约", "## 无关章节"),
+        path.read_text(encoding="utf-8").replace("## v2.1.0 协议合规契约", "## 无关章节"),
         encoding="utf-8",
     )
-case("N10", "成员契约章节被改名", "domain-expert 未找到契约章节", n10)
+case("N10", "atomic 成员契约章节被改名", "domain-expert-biomed 未找到契约章节", n10)
 
 
 def n11(root):

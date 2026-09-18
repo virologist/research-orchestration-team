@@ -23,9 +23,28 @@ description: "科研编排团 v2.0 强制工作流：科研选题（8维评分+S
 
 **产出**：《选题评分卡》（`templates/topic-scoring-card.md`，由 `scripts/topic_scoring.py` 生成）、《止损线矩阵》。
 
+### v2.1.0 增补 · 阶段边界 compact（context as scarce resource）
+
+> 主理人八阶段状态机（FREEZE → IDENTIFY → COLLAPSE → CLARIFY → ALIGN → EXECUTE → REVIEW → NEXT）的**每个阶段边界**都触发一次 compact（不是 token 阈值触发）。这是 2026 Harness Engineering 主流做法（参考 Anthropic / LangChain / Vercel）。
+
+**保留**：本阶段决策 + 关键证据 + 下一步行动
+**抛弃**：中间追问噪声 + 探索过程 + 重复读取
+
+| 边界 | compact 保留 | compact 抛弃 |
+|------|-------------|--------------|
+| FREEZE → IDENTIFY | 信息完整度判定、风险分量化 | 任务原文 |
+| IDENTIFY → COLLAPSE | 领域标签、跨域节点 | 内部分诊过程 |
+| COLLAPSE → CLARIFY | 团员组合方案、Pre-flight Contract | 路由决策过程 |
+| CLARIFY → ALIGN | 追问得到的缺口、对齐结论 | 追问历史 |
+| ALIGN → EXECUTE | 执行者选定、执行指令 | 对齐讨论 |
+| EXECUTE → REVIEW | 执行结果、证据等级 | 工具调用日志 |
+| REVIEW → NEXT | 复评决策、下一步建议 | 审查过程 |
+
+> 阶段边界 compact 由主理人在 Orchestrator Pattern 中自动执行（详见 `agents/research-orchestration-team-team-lead.md` v2.1.0 §Loop 硬停止）。
+
 ## 模块 2：深度调研（4 步）
 
-骨架设计（meta-architect）→ 多领域对照（domain-expert，3-5 领域最优方法）→ GRADE 评级（methodological-reviewer）→ 盲点识别（遗漏变量/替代解释）。
+骨架设计（meta-architect）→ 多领域对照（domain-expert-biomed / domain-expert-ai / domain-expert-general atomic subagent，按领域标签 fan-out）→ GRADE 评级（methodological-reviewer）→ 盲点识别（遗漏变量/替代解释）。
 
 **产出**：《深度调研路线图》、《关键文献清单》（含证据等级+时效）、《盲点清单》。
 
@@ -113,7 +132,7 @@ m.review_decision(old, new, risks=["中"])  # → (维持/升档/降档/止损, 
 | 分档落边界 | 报告写明「边界案例，±1 分即升降档」 |
 | C 档但 min≥5 | 文案须写「未达 B 档门槛：最高分仅 X 分」，禁套用「任一维<5分」 |
 | 证据不足无法评级 | 标「证据等级 5」+ 计入风险触发复评，禁跳过评级 |
-| 跨界选题维度失配 | domain-expert 复核该维，报告标注「⚠️ 经专家复核」 |
+| 跨界选题维度失配 | 由 meta-router 调度 domain-expert-biomed / domain-expert-ai / domain-expert-general 复核该维，报告标注「⚠️ 经 atomic subagent 复核」 |
 
 **三处用户确认检查点**（高风险动作必停）：CK1 打分前展示 8 维判断依据｜CK2 判 C 档/止损后必问「接受/转向/重评」，禁直接结案｜CK3 升档前必列增量资源清单获 ACK。用户已授权「直接给结论」时 CK1 可跳，CK2/CK3 不可跳。
 

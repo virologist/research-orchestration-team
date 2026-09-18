@@ -2,6 +2,67 @@
 
 所有重要变更按版本倒序记录。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [2.1.0] - 2026-09-18
+
+### Harness Engineering 升级（基于 2026-09 检索的 Anthropic / LangChain / Vercel 最佳实践）
+
+> 协议与运行时行为**有变更**：主理人路由机制、Loop 硬停止、阶段边界 compact、跨会话连续性。已安装实例从 v2.0.x 升级需重启会话。
+
+#### Added（新增）
+
+- **`scripts/harness_eval.py`**：12 项 Harness Engineering 注入式正向校验（H1-H12）
+- **`scripts/research-orchestration-workflow/references/agent-registry.md`**：单一事实源（SSOT），含 trigger / tools / safe/moderate/dangerous 三档权限分级
+- **`scripts/research-orchestration-workflow/references/LEARNING.md`**：跨会话连续性（Anthropic Ralph Loop 模式），每次任务必追加 task 记录
+- **`agents/domain-expert-biomed.md`**：生物医药 atomic（PubMed / GISAID / 兽医 / 分子生物学 / 流行病学 / 病原）
+- **`agents/domain-expert-ai.md`**：AI atomic（大模型 / RAG / Agent / 生信 / 蛋白设计）
+- **`agents/domain-expert-general.md`**：通用研究方法学 atomic（统计 / 教育 / 管理 / 政策）
+- **`avatars/domain-expert-{biomed,ai,general}.png`**：3 个 atomic 头像（从原 domain-expert.png 派生）
+
+#### Changed（变更）
+
+- **`agents/research-orchestration-team-team-lead.md`**：v2.1.0 Harness Engineering 升级摘要
+  - 新增 Loop 硬停止（三层上限：max_turns=30 / max_time=1800s / max_token=200000 / circuit_breaker=5 次失败熔断）
+  - 新增 Token budget 跟踪 + 阶段边界 compact
+  - 新增 plan_execution 元工具（Orchestrator Pattern 信号触发串行模式）
+  - 新增 Per-step verification（每步走 verification，非仅 final-output）
+  - 新增 Observability 4 metrics（成功率 / 平均 tool call / 重试次数 / next_actions 字段存在率）
+  - 团队成员表更新：domain-expert 拆为 3 atomic
+- **`skills/.../references/agent-protocol.md`**：§6 增补 Per-step verification 子节（root_cause_hint / safe_retry_instruction / explicit_stop_condition）
+- **`skills/.../SKILL.md`**：模块 1 增补阶段边界 compact 表（8 个阶段边界 × 保留 / 抛弃字段）
+- **`skills/.../SKILL.md`**：模块 2 + 边界条件提及 atomic subagent（替代原 domain-expert 单点引用）
+- **`.codebuddy-plugin/plugin.json` + `.claude-plugin/plugin.json`**：版本 2.0.2 → 2.1.0；agents 字段 6 项 → 8 项（atomic 拆分）；description / keywords / members / displayDescription 全部同步更新
+- **`README.md`**：版本号 2.0.2 → 2.1.0；团队人数 6 → 8
+
+#### Removed（删除）
+
+- **`agents/domain-expert.md`**：已被 3 个 atomic subagent（biomed / ai / general）取代
+- **`avatars/domain-expert.png`**（不再被引用，但保留文件以防历史引用）
+- **SKILL.md 模块 2 + 边界条件中的"domain-expert 单一引用"**：改为 atomic fan-out
+
+### Fixed（修复）
+
+- **Claude manifest skills 字段**：从数组 `["./skills/.../SKILL.md"]` 改为字符串 `"./skills"`（第一方约定，WorkBuddy 一致）
+- **3 个 atomic MD 的 profession 字段与 manifest members[].profession 不一致**：统一为"Domain Expert · {X} (atomic)"格式
+- **README 头部版本号 2.0.2 → 2.1.0 + 6 人 → 8 人**
+
+### Regression evidence（回归证据）
+
+| 套件 | v2.0.2 | v2.1.0 |
+|------|--------|--------|
+| `harness_eval.py` | 0/12 ❌ | **12/12 ✅** |
+| `manifest_check.py` | 53/53 ✅ | **63/63 ✅**（新增 10 项因 3 atomic）|
+| `manifest_check_selftest.py` | 17/17 ✅ | 17/17 ✅（未破坏）|
+| `protocol_check.py` | 信封 12/12 + 仲裁 5/5 + 集成 8/8 ✅ | 同左 ✅ |
+| `topic_scoring.py` 退出码契约 | rc=0/1/2 ✅ | 同左 ✅ |
+| 双 manifest + 双 marketplace.json + GitHub Actions CI | ✅ | ✅ |
+
+### Known issues（已知）
+
+- harness_eval.py 暂无 selftest（v2.1.1 待补）
+- 3 个 atomic subagent 共享原 domain-expert.png 头像（视觉上相同）；后续可用 icon 区分
+
+---
+
 ## [Unreleased] - 2026-09-10
 
 **docs patch**：仅文档变更，不发新 release。协议、运行时、CI 校验均无变化。
