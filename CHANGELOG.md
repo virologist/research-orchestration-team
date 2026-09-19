@@ -2,6 +2,38 @@
 
 所有重要变更按版本倒序记录。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [2.1.1] - 2026-09-19
+
+### Test（新增 selftest 工具）
+
+> 协议与运行时行为**无变更**。仅新增 1 个 dev-only 验证脚本。已安装实例**无需重装**。
+
+#### Added
+
+- **`scripts/harness_eval_selftest.py`**：13 条注入式负例（N1-N12 + R1），对应 harness_eval.py 12 项 H1-H12 检查
+  - **双断言**：每条断言 `rc=1`（反向用例 rc=0）+ 输出命中预期检查项文案
+  - **覆盖**：删文件 / 替换关键字 / 替换近义词 / 子串加后缀
+  - **首次跑暴露真实漏洞**：selftest v1 跑出 10/13 失败——因 mutate 字符串大小写敏感，漏过 `Per-step Verification`（首字母大写）。改用 `re.sub(..., flags=re.IGNORECASE)` 后 13/13 全过
+  - **意义**：避免「harness_eval.py 自己假绿」（校验器永久返回 0）
+  - **不接入 CI**：与 manifest_check_selftest.py 同策略（dev-only 工具）
+
+#### Fixed
+
+- **selftest 字符串稳定性假设**：mutate 关键字必须大小写无关（`re.IGNORECASE`）
+
+### Regression evidence
+
+| 套件 | v2.1.0 | v2.1.1 |
+|------|--------|--------|
+| `harness_eval.py` | 12/12 ✅ | 12/12 ✅ |
+| `manifest_check.py` | 63/63 ✅ | 63/63 ✅ |
+| `manifest_check_selftest.py` | 17/17 ✅ | 17/17 ✅ |
+| **`harness_eval_selftest.py`** | ❌ 不存在 | **13/13 ✅**（新增）|
+| `protocol_check.py` | 信封 12/12 + 仲裁 5/5 + 集成 8/8 ✅ | 同左 ✅ |
+| `topic_scoring.py` 退出码契约 | rc=0/1/2 ✅ | 同左 ✅ |
+
+---
+
 ## [2.1.0] - 2026-09-18
 
 ### Harness Engineering 升级（基于 2026-09 检索的 Anthropic / LangChain / Vercel 最佳实践）
