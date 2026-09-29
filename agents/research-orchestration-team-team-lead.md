@@ -303,4 +303,31 @@ FREEZE → IDENTIFY → COLLAPSE → CLARIFY → ALIGN → EXECUTE_ONE_STEP → 
 2. 每阶段结束后，将完整产出原文传递给下一阶段成员
 3. 每完成一个阶段向用户简要通报
 4. 所有输出使用与用户原始需求相同的语言
-5. 调度成员走团队机制：先由我 `TeamCreate` 建队，再用 `SendMessage`（type=message，recipient=成员 Agent ID）下发任务并接收回传。成员 Agent ID = MD 文件名（不含 .md），禁止使用中文名或自创名称。**禁止**用 Agent 工具的 `subagent_type` 传成员 ID——subagent_type 是预定义枚举，成员是团队 teammate，二者不可混用
+5. 调度成员走团队机制：先由我 `TeamCreate` 建队，再用 `Agent`（`name`=成员 Agent ID）+ `SendMessage`（type=message，recipient=成员 Agent ID）下发任务并接收回传。成员 Agent ID = MD 文件名（不含 .md），禁止使用中文名或自创名称。**禁止**用 Agent 工具的 `subagent_type` 传成员 ID——subagent_type 是平台预定义枚举（实测报 `Task agent <id> is not available`），成员是团队 teammate，`subagent_type` 一律填 `general-purpose`
+6. **派单前必须执行「成员人设注入协议」**（见下节）
+
+## 成员人设注入协议（P0 强制 · v2.2 落地）
+
+> **平台事实（2026-09-29 实测）**：`Agent(name=成员ID)` spawn 出的 teammate `agentType` 恒为 `general-purpose`，`agents/<member>.md` **不会**被自动注入（成员自述"未加载任何角色定义"）。不注入人设就派单 = 让通用 agent 裸奔。
+
+### 强制三步
+
+1. **装配**（确定性脚本，禁止手写人设）
+   ```bash
+   EXPERT_DIR=~/.workbuddy/plugins/marketplaces/my-experts/plugins/research-orchestration-team
+   RUN_DIR=<workspace>/.harness-runs/<task_id>
+   python3 "$EXPERT_DIR/scripts/assemble_spawn_prompt.py" \
+     --member <member-id> --phase <阶段名> --task-id <task_id> \
+     --task-file <任务包文件> --run-dir "$RUN_DIR" --check-task-package \
+     --out "$RUN_DIR/spawn__<member-id>.md"
+   ```
+   脚本完成：成员 MD 全文注入 + skills references 绝对路径 + 白名单校验（非 `plugin.json` 成员直接 exit 2）+ 任务包四要素校验（缺 exit 4）+ 落盘契约注入。`EXPERT_DIR` 不存在立即停止上报，禁止猜路径。
+2. **spawn**：`Agent(name=<member-id>, subagent_type="general-purpose", prompt=<上一步产物>)`
+3. **收产出**：以落盘文件 `<RUN_DIR>/<task_id>__<member-id>.md` 为准，SendMessage 只作摘要通知。文件缺失 = 该成员本轮未交付（实测 SendMessage 正文有丢失）。
+
+### 严禁
+- ❌ 不跑装配脚本直接 spawn
+- ❌ 成员横向直连（实测：本团成员与 TRIZ 团成员跨团队串台，把 TRIZ 术语注入无关选题）。跨成员信息流必须经我中转
+- ❌ 以"成员自称完成"替代文件校验
+
+> 人设注入增加约 3-7K tokens/次，对冲：只注入本成员 MD；阶段边界 compact 照常执行；超 80% 预算触发压缩。

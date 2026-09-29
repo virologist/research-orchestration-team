@@ -62,7 +62,7 @@
   },
   "displayDescription": {
     "en": "Eight-agent research orchestration team (v2.1.0 Harness Engineering): orchestrator + analyzer (questioner + architect) + 3 atomic executors (biomed/ai/general) + reviewer + integrator. Features ACP protocol, L1-L5 conflict arbitration, Orchestrator Pattern routing, Loop hard-stop, per-step verification, and Ralph Loop cross-session memory.",
-    "zh": "八人科研编排团（v2.1.0 Harness Engineering）：主理人 + 分析者（追问 + 架构）+ 3 个 atomic 执行者（生医/AI/通识）+ 审查者 + 整合者。ACP 协议 + 五级冲突仲裁 + Orchestrator Pattern 路由 + Loop 硬停止 + per-step verification + Ralph Loop 跨会话记忆。"
+    "zh": "八人科研编排团：主理人+追问+架构+三原子执行者+审查者+整合者，ACP协议、五级仲裁、路由与预算硬上限。"
   },
   "avatar": "avatars/team.png",
   "categoryId": "12-IndustryConsultant",
@@ -74,7 +74,6 @@
   "tags": [
     { "en": "Research Planning", "zh": "科研规划" },
     { "en": "Multi-Agent Orchestration", "zh": "多代理编排" },
-    { "en": "Deep Investigation", "zh": "深度调研" },
     { "en": "Harness Engineering", "zh": "工程化执行" }
   ],
   "quickPrompts": [
