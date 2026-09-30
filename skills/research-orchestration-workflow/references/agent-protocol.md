@@ -22,43 +22,44 @@
 
 ---
 
-## 2. 消息信封（Message Envelope）
+## 2. 消息信封（Message Envelope · 统一协议 result_envelope v2.4）
 
-所有跨代理通信使用统一结构化信封。**禁止纯自然语言传参**——自然语言只放在 `payload.body`。
+所有跨代理通信使用统一结构化信封。**禁止纯自然语言传参**——自然语言只放在 `payload` 内。
 
-```yaml
-envelope:
-  v: "2.0"                      # 协议版本
-  msg_id: "msg-{seq}-{from}"    # 消息唯一 ID
-  ts: "2026-08-29T06:30:00+08:00"
-  from: "socratic-questioner"   # 发送方 Agent ID
-  to: "research-orchestration-team-team-lead"   # 接收方，"user" 表示用户
-  type: TASK | RESULT | CLARIFY | REVIEW | ERROR | STATUS | HANDOFF
-  trace_id: "trace-{task}-{seq}"    # 贯穿整个任务的追踪链
-  parent_msg_id: "msg-003-lead"     # 形成调用树，便于回放
-  status: PENDING | RUNNING | SUCCESS | FAILED | BLOCKED
-  confidence: 0-100                 # 发送方自评置信度
-  context_ref:                      # 上下文引用（非拷贝，见 §4）
-    mode: full | summary | ref
-    pointer: "state://phase2/structure-d"
-  evidence:                         # 每条结论必带（执行者/审查者强制）
-    - claim: "HA 糖基化改变受体结合偏好"
-      grade: "2b"                   # GRADE: 1a/1b/2a/2b/3a/3b/4/5
-      source: "PMID 39884273"
-      consistent: true | false | partial
-  payload:
-    task: {...}      # type=TASK 时
-    result: {...}    # type=RESULT 时
-    error: {...}     # type=ERROR 时，见 §6
-  token_budget: 2000               # 本次产出 token 上限（Context 治理）
+> **跨团队统一（2026-09-30）**：6必填字段对齐 triz-invention-team / viral-evo-lab / vet-med-ppt-team。
+> 原 ACP v2.0 的 `envelope:` YAML 格式**已废弃**；其高级能力（evidence GRADE分级 / trace_id 追踪链 / payload 角色定制）保留为扩展字段，能力不降级。
+
+```json
+{
+  "agent_id": "<成员ID>",
+  "task_id": "<任务ID·与trace_id对应>",
+  "phase": "<阶段·如 CLARIFY/ALIGN/EXECUTE 或阶段号>",
+  "status": "success|partial|failed|blocked",
+  "confidence": 0-100,
+  "deliverable_summary": "<一句话摘要>",
+  "evidence": [
+    {"type": "source|skill_ref|prior_artifact", "ref": "<PMID|DOI|URL|路径>",
+     "used_for": "<该证据支撑的结论>", "grade": "<GRADE 1a-1b-2a-2b-3a-3b-4-5>", "recency": "<近6月|近12月|>12月>"}
+  ],
+  "issues": ["<自评发现的问题>"],
+  "next_agent_hint": "<建议下游成员>",
+  "metrics": {"duration_ms": 0, "retry_count": 0},
+  "trace_id": "trace-<task>-<seq>",
+  "msg_id": "msg-<seq>-<from>",
+  "parent_msg_id": "msg-<seq>-<parent>",
+  "type": "TASK|RESULT|CLARIFY|REVIEW|ERROR|STATUS|HANDOFF",
+  "context_ref": {"mode": "full|summary|ref", "pointer": "state://phase2/..."},
+  "payload": { "<按角色定制·见各成员MD>" }
+}
 ```
 
 **字段强制规则**：
-- `evidence[]`：执行者、审查者**必填**；分析者、整合者可为空（分析者不产出事实性结论；整合者不产生新知识，证据强度由 `quality.evidence_level` 承载）
+- **6必填**（agent_id / task_id / phase / status / confidence / deliverable_summary）：跨团队统一强制，缺一即判 `partial`
+- `evidence[]`：执行者、审查者**必填**；分析者、整合者可为空（分析者不产出事实性结论；整合者不产生新知识）
 - `confidence`：**必填**，用于冲突仲裁（§7）
-- `context_ref`：**必填**，禁止在消息内全量拷贝上游产出
-
----
+- `context_ref`：**推荐**，禁止在消息内全量拷贝上游产出（对抗 context rot）
+- `status` 取值：`success` / `partial` / `failed` / `blocked`（**原 ACP `SUCCESS`/`FAILED`/`BLOCKED` UPPERCASE 已弃用**）
+- `trace_id` / `msg_id` / `parent_msg_id` / `type` / `context_ref`：**扩展字段**（保留 ACP 追踪与审计能力）
 
 ## 3. 状态同步（State Sync）
 

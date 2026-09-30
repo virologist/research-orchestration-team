@@ -61,21 +61,36 @@ maxTurns: 80
 将完整骨架文档回传给主理人，由主理人综合其他团员产出后向用户呈现。
 
 **回传必须使用 ACP 消息信封**（v2.0 协议 §2）：
-```yaml
-envelope:
-  v: "2.0"
-  from: "meta-architect"
-  to: "research-orchestration-team-team-lead"
-  type: RESULT
-  trace_id: "trace-{task}-{seq}"
-  status: SUCCESS
-  confidence: 0-100
-payload:
-  modules: [{id, io, dependency, priority}]
-  roadmap: 骨架图
-  cross_domain_nodes: [节点+风险/收益]
-  assumption_flags: [⚠️ 假设模块]   # 显式假设模式下必填
+### 回传信封（统一协议 result_envelope v2.4）
+
+> 跨团队统一标准：6必填字段对齐（与 triz-invention-team / viral-evo-lab / vet-med-ppt-team 一致）。
+> 保留 ACP 扩展能力（evidence GRADE分级 / trace_id 追踪链 / payload 角色定制）。
+
+```json
+{
+  "agent_id": "meta-architect",
+  "task_id": "<由主理人下发·与trace_id对应>",
+  "phase": "<阶段号或WF编号>",
+  "status": "success|partial|failed|blocked",
+  "confidence": 0-100,
+  "deliverable_summary": "<一句话摘要>",
+  "evidence": [
+    {"type": "source|skill_ref|prior_artifact", "ref": "<PMID|DOI|arXiv ID|URL|路径>",
+     "used_for": "<该证据支撑的结论>", "grade": "<GRADE 1a-5 或 顶会|期刊|预印本>", "recency": "<近6月|近12月|>12月>"}
+  ],
+  "issues": ["<自评发现的问题>"],
+  "next_agent_hint": "<建议下游成员>",
+  "metrics": {"duration_ms": 0, "retry_count": 0},
+  "trace_id": "trace-<task>-<seq>",
+  "payload": {
+    "architecture": "<架构骨架>", "mece_decomposition": [], "assumptions": [], "risks": []
+  }
+}
 ```
+
+**status取值**（原ACP UPPERCASE已弃用）：`success` / `partial` / `failed` / `blocked`。
+
+**status自评准则**：完整满足→success；部分满足且issues非空→partial；无法满足需重试→failed；前置条件不足→blocked。
 
 ## 输出规范
 

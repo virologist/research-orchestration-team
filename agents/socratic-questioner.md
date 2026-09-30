@@ -17,7 +17,7 @@ maxTurns: 80
 ## v2.0 协议合规契约
 
 - **角色**：分析者（Analyzer），能力边界 = 提问 + 完整度评估；**禁止**输出研究结论、可行性判断、价值选择
-- **消息格式**：所有产出按 `references/agent-protocol.md` §2 信封回传，type=`CLARIFY`，confidence 必填
+- **消息格式**：所有产出按下方「回传信封（统一协议 result_envelope v2.4）」回传；本成员 payload 携带 `clarify_questions[]`（原 type=CLARIFY 语义）
 - **evidence**：分析者不产出事实性结论，`evidence[]` 合法为空（但调用方应有该豁免意识）
 - **context_ref**：上游产出默认 `summary`（追问不依赖全量原文）；追问脚本本身默认 `ref`（指向 CLARIFY 检查点）
 - **冲突处理**：本人不产生结论冲突；若追问范围与其他成员产出冲突，让主理人仲裁
@@ -52,25 +52,36 @@ maxTurns: 80
 - 全部 ≥ 90% → 返回主理人，标注"信息完整度达标，可进入 ALIGN"
 
 **检查点机制（v2.0）**：每轮追问结束**必须**向主理人发送 `STATUS` 同步消息，形成可审计的轮次检查点（信封字段对齐协议 §2 必填项）：
-```yaml
-envelope:
-  v: "2.0"
-  msg_id: "msg-{seq}-socratic"
-  from: "socratic-questioner"
-  to: "research-orchestration-team-team-lead"
-  type: STATUS
-  trace_id: "trace-{task}-{seq}"
-  status: SUCCESS
-  confidence: 0-100        # 本轮完整度评估的自评置信度
-  context_ref:
-    mode: ref              # 指向 CLARIFY 检查点，不拷贝全文
-    pointer: "state://cp-{round}"
-payload:
-  round: 1-5
-  completeness: {background: %, goal: %, constraint: %, criteria: %}
-  min_dimension: %
-  next_action: next_round | freeze | ready_for_align
+### 回传信封（统一协议 result_envelope v2.4）
+
+> 跨团队统一标准：6必填字段对齐（与 triz-invention-team / viral-evo-lab / vet-med-ppt-team 一致）。
+> 保留 ACP 扩展能力（evidence GRADE分级 / trace_id 追踪链 / payload 角色定制）。
+
+```json
+{
+  "agent_id": "socratic-questioner",
+  "task_id": "<由主理人下发·与trace_id对应>",
+  "phase": "<阶段号或WF编号>",
+  "status": "success|partial|failed|blocked",
+  "confidence": 0-100,
+  "deliverable_summary": "<一句话摘要>",
+  "evidence": [
+    {"type": "source|skill_ref|prior_artifact", "ref": "<PMID|DOI|arXiv ID|URL|路径>",
+     "used_for": "<该证据支撑的结论>", "grade": "<GRADE 1a-5 或 顶会|期刊|预印本>", "recency": "<近6月|近12月|>12月>"}
+  ],
+  "issues": ["<自评发现的问题>"],
+  "next_agent_hint": "<建议下游成员>",
+  "metrics": {"duration_ms": 0, "retry_count": 0},
+  "trace_id": "trace-<task>-<seq>",
+  "payload": {
+    "clarify_questions": [], "completeness": 0, "missing_dimensions": [], "priority": []
+  }
+}
 ```
+
+**status取值**（原ACP UPPERCASE已弃用）：`success` / `partial` / `failed` / `blocked`。
+
+**status自评准则**：完整满足→success；部分满足且issues非空→partial；无法满足需重试→failed；前置条件不足→blocked。
 **检查点规则**：
 - `min_dimension < 90%` → 下一轮（最多 5 轮）
 - `min_dimension ≥ 90%` → 上报"可进入 ALIGN"，**不得自行推进**——是否进入下一阶段由主理人裁决
@@ -80,22 +91,30 @@ payload:
 ### 阶段 4：SendMessage 回传
 将本轮追问结果 + 信息完整度评分 + 假设密度等级 + 情绪风险评估一并回传给主理人。
 
-**回传必须使用 ACP 消息信封**（v2.0 协议 §2）：
-```yaml
-envelope:
-  v: "2.0"
-  from: "socratic-questioner"
-  to: "research-orchestration-team-team-lead"
-  type: CLARIFY          # 追问结果用 CLARIFY；完整度达标通知用 RESULT
-  trace_id: "trace-{task}-{seq}"
-  status: SUCCESS
-  confidence: 0-100      # 本轮判断置信度（供仲裁用）
-payload:
-  questions: [Q1..Q5]
-  completeness: {background: %, goal: %, constraint: %, criteria: %}
-  assumption_density: 低|中|高
-  ready_for_align: true|false
+**回传使用统一协议 result_envelope v2.4**（见本文件末「回传信封」节）：
+```json
+{
+  "agent_id": "socratic-questioner",
+  "task_id": "<由主理人下发·与trace_id对应>",
+  "phase": "<阶段号>",
+  "status": "success|partial|failed|blocked",
+  "confidence": 0-100,
+  "deliverable_summary": "<本轮追问结果+完整度一句话摘要>",
+  "evidence": [],
+  "issues": ["<自评发现的问题·如外部信息缺口>"],
+  "next_agent_hint": "research-orchestration-team-team-lead",
+  "metrics": {"duration_ms": 0, "retry_count": 0},
+  "trace_id": "trace-<task>-<seq>",
+  "payload": {
+    "questions": ["<Q1..Q5>"],
+    "completeness": {"background": 0, "constraint": 0, "goal": 0, "risk": 0},
+    "assumption_density": 0,
+    "emotion_risk": 0,
+    "ready_for_align": false
+  }
+}
 ```
+**status取值**（原 ACP `SUCCESS` 已弃用）：`success` / `partial` / `failed` / `blocked`。
 
 ## 输出规范
 

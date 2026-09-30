@@ -35,20 +35,34 @@ maxTurns: 100
 }
 ```
 
-### 输出（SendMessage 回传编排者）
+### 输出（SendMessage 回传编排者·统一协议 result_envelope v2.4）
+
 ```json
 {
-  "type": "RESULT",
+  "agent_id": "synthesis-integrator",
+  "task_id": "<由主理人下发·与trace_id对应>",
+  "phase": "<阶段号>",
+  "status": "success|partial|failed|blocked",
   "confidence": 0-100,
+  "deliverable_summary": "<综合结论一句话摘要>",
+  "evidence": [
+    {"type": "prior_artifact", "ref": "<上游成员产出路径或msg_id>", "used_for": "<该产出支撑的结论>",
+     "grade": "<GRADE 1a-5>", "recency": "<近6月|近12月|>12月>"}
+  ],
+  "issues": ["<自评发现的问题·含未解决分歧>"],
+  "next_agent_hint": "<建议下游·通常返回主理人>",
+  "metrics": {"duration_ms": 0, "retry_count": 0},
+  "trace_id": "trace-<task>-<seq>",
   "payload": {
     "synthesis": "综合结论（每条附来源）",
     "consensus_matrix": "结论×来源×证据等级×置信度",
-    "conflicts_detected": [{"topic": "…", "level": "L1|L2|L3|L4|L5", "resolution": "…"}],
-    "open_questions": ["…"]
-  },
-  "quality": { "evidence_level": "…", "sources": ["msg_id…"] }
+    "conflicts_detected": [{"topic": "...", "level": "L1|L2|L3|L4|L5", "resolution": "..."}],
+    "open_questions": []
+  }
 }
 ```
+
+**status取值**（原 ACP UPPERCASE 已弃用）：`success` / `partial` / `failed` / `blocked`。
 
 ## 工作流程
 

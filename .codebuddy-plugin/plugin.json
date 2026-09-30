@@ -36,7 +36,6 @@
     "./agents/synthesis-integrator.md"
   ],
   "skills": "./skills",
-
   "expertType": "team",
   "agentName": "research-orchestration-team-team-lead",
   "teamInfo": {
@@ -51,7 +50,6 @@
       "synthesis-integrator"
     ]
   },
-
   "displayName": {
     "en": "Research Orchestration Team",
     "zh": "科研价值驱动研究编排团"
@@ -72,9 +70,18 @@
   },
   "plugin": "research-orchestration-team",
   "tags": [
-    { "en": "Research Planning", "zh": "科研规划" },
-    { "en": "Multi-Agent Orchestration", "zh": "多代理编排" },
-    { "en": "Harness Engineering", "zh": "工程化执行" }
+    {
+      "en": "Research Planning",
+      "zh": "科研规划"
+    },
+    {
+      "en": "Multi-Agent Orchestration",
+      "zh": "多代理编排"
+    },
+    {
+      "en": "Harness Engineering",
+      "zh": "工程化执行"
+    }
   ],
   "quickPrompts": [
     {
@@ -93,57 +100,105 @@
   "members": [
     {
       "id": "research-orchestration-team-team-lead",
-      "displayName": { "en": "Shen Zhishu", "zh": "沈知枢" },
-      "profession": { "en": "Chief Research Orchestrator", "zh": "首席研究编排官" },
+      "displayName": {
+        "en": "Shen Zhishu",
+        "zh": "沈知枢"
+      },
+      "profession": {
+        "en": "Chief Research Orchestrator",
+        "zh": "首席研究编排官"
+      },
       "avatar": "avatars/research-orchestration-team-team-lead.png",
       "role": "lead"
     },
     {
       "id": "socratic-questioner",
-      "displayName": { "en": "Wen Qingyuan", "zh": "问清源" },
-      "profession": { "en": "Socratic Questioner", "zh": "苏格拉底追问者" },
+      "displayName": {
+        "en": "Wen Qingyuan",
+        "zh": "问清源"
+      },
+      "profession": {
+        "en": "Socratic Questioner",
+        "zh": "苏格拉底追问者"
+      },
       "avatar": "avatars/socratic-questioner.png",
       "role": "member"
     },
     {
       "id": "meta-architect",
-      "displayName": { "en": "Liang Gouju", "zh": "梁构局" },
-      "profession": { "en": "Meta-Architect", "zh": "元架构师" },
+      "displayName": {
+        "en": "Liang Gouju",
+        "zh": "梁构局"
+      },
+      "profession": {
+        "en": "Meta-Architect",
+        "zh": "元架构师"
+      },
       "avatar": "avatars/meta-architect.png",
       "role": "member"
     },
     {
       "id": "domain-expert-biomed",
-      "displayName": { "en": "Bo Yuwen · Biomed", "zh": "博域闻·生医" },
-      "profession": { "en": "Domain Expert · Biomedicine (atomic)", "zh": "生物医药领域专家（atomic）" },
+      "displayName": {
+        "en": "Bo Yuwen · Biomed",
+        "zh": "博域闻·生医"
+      },
+      "profession": {
+        "en": "Domain Expert · Biomedicine (atomic)",
+        "zh": "生物医药领域专家（atomic）"
+      },
       "avatar": "avatars/domain-expert-biomed.png",
       "role": "member"
     },
     {
       "id": "domain-expert-ai",
-      "displayName": { "en": "Bo Yuwen · AI", "zh": "博域闻·AI" },
-      "profession": { "en": "Domain Expert · AI & Data Science (atomic)", "zh": "AI 与数据科学领域专家（atomic）" },
+      "displayName": {
+        "en": "Bo Yuwen · AI",
+        "zh": "博域闻·AI"
+      },
+      "profession": {
+        "en": "Domain Expert · AI & Data Science (atomic)",
+        "zh": "AI 与数据科学领域专家（atomic）"
+      },
       "avatar": "avatars/domain-expert-ai.png",
       "role": "member"
     },
     {
       "id": "domain-expert-general",
-      "displayName": { "en": "Bo Yuwen · General", "zh": "博域闻·通识" },
-      "profession": { "en": "Domain Expert · General Methods (atomic)", "zh": "通用研究方法学专家（atomic）" },
+      "displayName": {
+        "en": "Bo Yuwen · General",
+        "zh": "博域闻·通识"
+      },
+      "profession": {
+        "en": "Domain Expert · General Methods (atomic)",
+        "zh": "通用研究方法学专家（atomic）"
+      },
       "avatar": "avatars/domain-expert-general.png",
       "role": "member"
     },
     {
       "id": "methodological-reviewer",
-      "displayName": { "en": "Yan Fuhui", "zh": "严复回" },
-      "profession": { "en": "Methodological Reviewer", "zh": "方法学复评官" },
+      "displayName": {
+        "en": "Yan Fuhui",
+        "zh": "严复回"
+      },
+      "profession": {
+        "en": "Methodological Reviewer",
+        "zh": "方法学复评官"
+      },
       "avatar": "avatars/methodological-reviewer.png",
       "role": "member"
     },
     {
       "id": "synthesis-integrator",
-      "displayName": { "en": "Gu Hebi", "zh": "顾合璧" },
-      "profession": { "en": "Synthesis Integrator", "zh": "整合者" },
+      "displayName": {
+        "en": "Gu Hebi",
+        "zh": "顾合璧"
+      },
+      "profession": {
+        "en": "Synthesis Integrator",
+        "zh": "整合者"
+      },
       "avatar": "avatars/synthesis-integrator.png",
       "role": "member"
     }

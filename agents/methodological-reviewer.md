@@ -66,26 +66,36 @@ maxTurns: 80
 将完整的复评报告 + 决策建议 + 偏差追踪记录回传给主理人。
 
 **回传必须使用 ACP 消息信封**（v2.0 协议 §2）：
-```yaml
-envelope:
-  v: "2.0"
-  from: "methodological-reviewer"
-  to: "research-orchestration-team-team-lead"
-  type: REVIEW
-  trace_id: "trace-{task}-{seq}"
-  status: SUCCESS
-  confidence: 0-100
-  evidence:
-    - claim: "..."
-      grade: "..."
-      source: "..."
-payload:
-  evidence_grades: [{claim, grade, consistency, timeliness}]
-  compliance: {sample_size: ✓|✗, statistics: ✓|✗, confounding: ✓|✗, bias: ✓|✗, sensitivity: ✓|✗}
-  decision: 维持|升档|降档|止损      # 必填，禁待定
-  decision_basis: "..."
-  deviation_log: [初始判断 vs 新证据]
+### 回传信封（统一协议 result_envelope v2.4）
+
+> 跨团队统一标准：6必填字段对齐（与 triz-invention-team / viral-evo-lab / vet-med-ppt-team 一致）。
+> 保留 ACP 扩展能力（evidence GRADE分级 / trace_id 追踪链 / payload 角色定制）。
+
+```json
+{
+  "agent_id": "methodological-reviewer",
+  "task_id": "<由主理人下发·与trace_id对应>",
+  "phase": "<阶段号或WF编号>",
+  "status": "success|partial|failed|blocked",
+  "confidence": 0-100,
+  "deliverable_summary": "<一句话摘要>",
+  "evidence": [
+    {"type": "source|skill_ref|prior_artifact", "ref": "<PMID|DOI|arXiv ID|URL|路径>",
+     "used_for": "<该证据支撑的结论>", "grade": "<GRADE 1a-5 或 顶会|期刊|预印本>", "recency": "<近6月|近12月|>12月>"}
+  ],
+  "issues": ["<自评发现的问题>"],
+  "next_agent_hint": "<建议下游成员>",
+  "metrics": {"duration_ms": 0, "retry_count": 0},
+  "trace_id": "trace-<task>-<seq>",
+  "payload": {
+    "decision": "<通过|打回|升级>", "evidence_review": [], "method_compliance": {}, "loop_closure": {}
+  }
+}
 ```
+
+**status取值**（原ACP UPPERCASE已弃用）：`success` / `partial` / `failed` / `blocked`。
+
+**status自评准则**：完整满足→success；部分满足且issues非空→partial；无法满足需重试→failed；前置条件不足→blocked。
 
 ## 输出规范
 
