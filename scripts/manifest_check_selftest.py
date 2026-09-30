@@ -79,11 +79,12 @@ case("N1", "双 manifest 版本漂移", "字段不一致: version", n1)
 
 
 def n2(root):
+    # 2026-09-30 教训：replace 若找不到目标串会静默空转（displayDescription 文案
+    # 曾从「五级冲突仲裁」改为「五级仲裁」，第三次踩精确串匹配脆弱的坑）。
+    # 改为 append 式注入：无论现文案如何，都保证出现废弃表述 → 校验器必被触发。
     path = root / ".codebuddy-plugin/plugin.json"
     data = json.loads(path.read_text(encoding="utf-8"))
-    data["displayDescription"]["zh"] = data["displayDescription"]["zh"].replace(
-        "五级冲突仲裁", "三级冲突仲裁"
-    )
+    data["displayDescription"]["zh"] = data["displayDescription"]["zh"] + "（旧三级仲裁遗留）"
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 case("N2", "废弃术语回归（旧仲裁层级表述）", "旧仲裁层级表述", n2)
 

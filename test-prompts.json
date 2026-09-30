@@ -5,7 +5,14 @@
     "prompt": "我想做一个研究：用机器学习预测禽流感HA蛋白糖基化位点与宿主适应的关系。我有2543条HA序列和2365条NA序列，数据截止2021年，目标投CAS 1区virology期刊。帮我评估这个选题值不值得做，值多少资源投入。",
     "expected": "走 ALIGN → EXECUTE_ONE_STEP，输出《选题评分卡》+ S/A/B/C 分档 + 3条止损线（数据/时间/资源）",
     "tests": "happy path · Workflow A · 选题评分卡生成 · 脚本调用",
-    "target_agents": ["team-lead", "meta-architect", "domain-expert", "methodological-reviewer"]
+    "target_agents": [
+      "team-lead",
+      "meta-architect",
+      "domain-expert-biomed",
+      "domain-expert-ai",
+      "domain-expert-general",
+      "methodological-reviewer"
+    ]
   },
   {
     "id": 2,
@@ -13,7 +20,10 @@
     "prompt": "我想做AI相关的研究，帮我规划一下。",
     "expected": "触发 FREEZE → IDENTIFY → CLARIFY，问清源输出 Round 1 五个宏观追问，**严禁直接给方案**",
     "tests": "核心防御机制 · 不跳过澄清 · 5轮×5问结构",
-    "target_agents": ["team-lead", "socratic-questioner"]
+    "target_agents": [
+      "team-lead",
+      "socratic-questioner"
+    ]
   },
   {
     "id": 3,
@@ -21,6 +31,10 @@
     "prompt": "我的H10禽流感研究卡在数据分析阶段，做了8个月，发现关键样本量不够，统计功效达不到，数据补全成本很高。要不要继续？还是换方向？",
     "expected": "复评闭环，严复回必给四项决策之一（维持/升档/降档/止损），**禁止「待定/观察」**",
     "tests": "决策闭环 · GRADE评级 · 必给决策",
-    "target_agents": ["team-lead", "socratic-questioner", "methodological-reviewer"]
+    "target_agents": [
+      "team-lead",
+      "socratic-questioner",
+      "methodological-reviewer"
+    ]
   }
 ]

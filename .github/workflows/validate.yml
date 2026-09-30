@@ -54,6 +54,14 @@ jobs:
           python3 protocol_check.py conflict
           python3 protocol_check.py integration
 
+      # v2.1.2 起 CI 纳入 Harness Engineering 12 项设计检查 + 13 条注入式负例。
+      # 此前仅本地手动跑，改一行文档即可无声破坏（Step 4 对标发现的执行层缺口）。
+      - name: Harness design checks (H1-H12)
+        run: python3 scripts/harness_eval.py
+
+      - name: Harness eval self-test (mutation-based)
+        run: python3 scripts/harness_eval_selftest.py
+
       - name: Topic scoring edge cases
         run: |
           set +e  # GitHub Actions bash -e 默认开启，关掉避免 Python rc=1 终止 step

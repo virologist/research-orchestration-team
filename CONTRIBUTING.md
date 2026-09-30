@@ -63,7 +63,7 @@ python3 skills/research-orchestration-workflow/scripts/topic_scoring.py \
 | 角色类型 | agent | 契约章节 |
 |---------|-------|---------|
 | 主理人 | `research-orchestration-team-team-lead` | `## Harness 运行时规范 v2.0` |
-| 分析/执行/审查型成员 | `socratic-questioner` / `meta-architect` / `domain-expert` / `methodological-reviewer` | `## v2.0 协议合规契约` |
+| 分析/执行/审查型成员 | `socratic-questioner` / `meta-architect` / `domain-expert-biomed`（atomic 三元之一）/ `methodological-reviewer` | `## v2.0 协议合规契约` |
 | 整合型成员 | `synthesis-integrator` | `## 接口契约` |
 
 **修改任何契约约束必须**：

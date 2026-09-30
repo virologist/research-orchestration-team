@@ -2,6 +2,45 @@
 
 所有重要变更按版本倒序记录。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [2.1.2] - 2026-09-30
+
+> v2.1.0 的一次**补全重构**：修复 atomic 拆分后调用点未同步的全部残留，并把 Harness 校验纳入 CI。
+> 根因：v2.1.0 拆了 agent MD 但 team-lead 路由表/协议文档/CI 均未跟随更新（Step 3 诊断 5 P0）。
+
+### Fixed
+
+- **`agents/research-orchestration-team-team-lead.md`**：
+  - L186 单 Agent 直调路由表 / L197 Workflow A Phase3 / L203 Workflow B Phase1 / L211 Workflow C Phase2 的 4 处 `domain-expert` 死引用 → 改为 `domain-expert-biomed / -ai / -general` 按领域标签 fan-out
+  - 删除重复标题行「## 核心工作法：八阶段状态机」（原 L104/L106）
+  - **maxTurns 消歧义**：新增「两套上限分工」说明——frontmatter `maxTurns: 180` = 平台层会话兜底；registry `max_turns: 30` = 编排层任务自控预算。两者不冲突
+- **`skills/.../references/agent-protocol.md` §1**：「现有 6 名成员」→「现有 8 名成员（v2.1.0 起 domain-expert 拆为 biomed/ai/general 三个 atomic）」
+- **`test-prompts.json` #1**：target_agents 中死引用 `domain-expert` → 3 个 atomic
+- **`CONTRIBUTING.md`**：契约章节示例 `domain-expert` → `domain-expert-biomed`（atomic 三元之一）
+- **`scripts/manifest_check_selftest.py` N2**：replace 精确串匹配第三次踩坑（displayDescription 文案从「五级冲突仲裁」改为「五级仲裁」后 mutation 空转 → 假绿）。改为 **append 式注入**废弃表述，无论现文案如何都保证触发校验器
+
+### Added
+
+- **`.github/workflows/validate.yml`**：新增 2 个 step——`Harness design checks (H1-H12)` 与 `Harness eval self-test`。此前 harness_eval 系列 12+13 项检查仅在本地手动跑，改一行文档即可无声破坏（Step 4 对标「可评估性」执行层缺口）
+
+### Changed
+
+- 双 manifest `version` 2.1.0 → 2.1.2（含 2026-09-30 晨 darwin-skill 提交的通信协议 v2.4 统一 + spawn 装配器，两项此前未发布）
+
+### Regression evidence
+
+| 套件 | v2.1.2 |
+|------|--------|
+| `harness_eval.py` | 12/12 ✅ |
+| `manifest_check.py` | 63/63 ✅ |
+| `manifest_check_selftest.py` | 17/17 ✅（N2 修复后）|
+| `harness_eval_selftest.py` | 13/13 ✅ |
+| `protocol_check.py` | envelope 12 + conflict 4 + integration ✅ |
+
+### Skipped（有意不做）
+
+- `avatars/domain-expert.png` 孤儿清理：按 v2.1.0 CHANGELOG 既定决策保留（防历史引用）
+- Claude Code 式 hooks 拦截：专家包为跨平台分发物，hooks 属 Claude Code 专有；dangerous 拦截由 `assemble_spawn_prompt.py` 白名单 + registry 三档权限承载（P0-4 降级 P2）
+
 ## [2.1.1] - 2026-09-19
 
 ### Test（新增 selftest 工具）

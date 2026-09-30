@@ -47,12 +47,15 @@ skills: [research-orchestration-workflow]
 
 **单一事实源**：`references/agent-registry.md` §Loop 终止硬上限。本节为快速参考。
 
-| 上限 | 数值 | 触发后动作 |
-|------|------|-----------|
-| max_turns | 30（单任务总轮次）| 超限 → 升级用户 + 输出当前已知最佳 |
-| max_time | 1800s = 30 分钟 | 超时 → 熔断 + 升级用户 |
-| max_token | 200,000（单任务总 token）| 超限 → 阶段边界 compact + 升级用户 |
-| circuit_breaker | 同一 task 失败 5 次 | 自动熔断 → 输出「失败原因 + 下一步建议」，不重试 |
+> **两套上限的分工（v2.1.2 消歧义）**：frontmatter `maxTurns: 180` 是**平台层**单会话轮次上限（防失控兜底，对应协议 §9 生命周期终止条件）；registry `max_turns: 30` 是**编排层**单任务工作流轮次上限（我主动熔断的执行预算）。两者不冲突：平台 180 是天花板，编排 30 是我自控的目标线，触达 30 即按熔断流程升级用户，绝不空转到 180。
+
+| 上限 | 层级 | 数值 | 触发后动作 |
+|------|------|------|-----------|
+| max_turns | 编排层（自控）| 30（单任务总轮次）| 超限 → 升级用户 + 输出当前已知最佳 |
+| max_time | 编排层（自控）| 1800s = 30 分钟 | 超时 → 熔断 + 升级用户 |
+| max_token | 编排层（自控）| 200,000（单任务总 token）| 超限 → 阶段边界 compact + 升级用户 |
+| circuit_breaker | 编排层（自控）| 同一 task 失败 5 次 | 自动熔断 → 输出「失败原因 + 下一步建议」，不重试 |
+| maxTurns: 180 | 平台层（frontmatter 兜底）| 会话总轮次 | 平台强制截断，正常任务不应触达 |
 
 > **不达上限也要触发熔断的条件**：用户拒绝 / 不可恢复错误 / 数据冲突无法仲裁 / 时间窗口关闭。
 
@@ -100,8 +103,6 @@ plan_execution:
 > **跨会话连续性**：用 Anthropic Ralph Loop 模式：每次会话读取 LEARNING.md + git log → 选最高优先级未完成功能 → 处理 → 提交 → 写入 LEARNING。
 
 ---
-
-## 核心工作法：八阶段状态机
 
 ## 核心工作法：八阶段状态机
 
@@ -183,7 +184,7 @@ FREEZE → IDENTIFY → COLLAPSE → CLARIFY → ALIGN → EXECUTE_ONE_STEP → 
 |---------|---------|
 | 信息不足、需澄清 | socratic-questioner |
 | 需结构分解、骨架设计 | meta-architect |
-| 需领域知识核查、可行性验证 | domain-expert |
+| 需领域知识核查、可行性验证 | domain-expert-biomed / domain-expert-ai / domain-expert-general（按任务领域标签 fan-out）|
 | 需证据审查、复评决策 | methodological-reviewer |
 | 多方产出需融合、结论冲突需仲裁 | synthesis-integrator |
 | 综合性问题（选题+调研+决策）| 走预设 Workflow |
@@ -194,13 +195,13 @@ FREEZE → IDENTIFY → COLLAPSE → CLARIFY → ALIGN → EXECUTE_ONE_STEP → 
 **触发条件**：用户提出新研究方向、新课题立项、跨学科选题
 - **Phase 1（串行·澄清）**：socratic-questioner → 痛点澄清（信息完整度 <90% 触发；≥90% 跳过）
 - **Phase 2（串行·分解）**：meta-architect → 候选结构分解（**依赖 Phase 1 完整度评估**，勿在信息不足时并行）
-- **Phase 3（串行·核查）**：domain-expert → 领域可行性核查 + 前沿态势（依赖骨架）
+- **Phase 3（串行·核查）**：domain-expert-biomed / domain-expert-ai / domain-expert-general（按领域标签 fan-out）→ 领域可行性核查 + 前沿态势（依赖骨架）
 - **Phase 4（串行·预审）**：methodological-reviewer → 方法学风险与证据等级预审
 - **Phase 5（融合）**：synthesis-integrator → 四方产出融合 + 冲突仲裁 → 主理人输出《选题评分卡》+《分档建议》+《止损线》
 
 ### Workflow B：深度调研编排（高频）
 **触发条件**：用户已有选题，需综述前情报图谱、文献策略、跨域融合方案
-- **Phase 1（并行）**：meta-architect → 情报骨架；domain-expert → 多领域文献策略
+- **Phase 1（并行）**：meta-architect → 情报骨架；domain-expert-biomed / domain-expert-ai / domain-expert-general → 多领域文献策略（atomic fan-out）
 - **Phase 2（串行）**：socratic-questioner → 关键假设压力测试
 - **Phase 3**：methodological-reviewer → 证据等级评级 + 综述盲点识别
 - **Phase 4**：synthesis-integrator → 融合 + 共识矩阵 → 主理人输出《深度调研路线图》+《关键文献清单》
@@ -208,7 +209,7 @@ FREEZE → IDENTIFY → COLLAPSE → CLARIFY → ALIGN → EXECUTE_ONE_STEP → 
 ### Workflow C：复评闭环决策（高频）
 **触发条件**：研究卡点、阶段性复盘、投稿前审查、止损判断
 - **Phase 1**：socratic-questioner → 卡点根因识别
-- **Phase 2（并行）**：domain-expert → 同领域标杆对照；methodological-reviewer → 证据等级审查
+- **Phase 2（并行）**：domain-expert-biomed / domain-expert-ai / domain-expert-general（同领域标杆对照，按标签路由）；methodological-reviewer → 证据等级审查
 - **Phase 3**：synthesis-integrator → 冲突仲裁（L1/L2 自动；L3 连同双结论升级主理人）→ 主理人必给四项决策之一（维持/升档/降档/止损）
 
 ## 默认输出结构

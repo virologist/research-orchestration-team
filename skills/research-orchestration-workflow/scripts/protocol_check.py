@@ -23,7 +23,9 @@ REQUIRED_FIELDS = ["v", "msg_id", "ts", "from", "to", "type", "trace_id",
                    "status", "confidence", "context_ref", "payload"]
 VALID_TYPES = {"TASK", "RESULT", "CLARIFY", "REVIEW", "ERROR", "STATUS", "HANDOFF"}
 VALID_STATUS = {"PENDING", "RUNNING", "SUCCESS", "FAILED", "BLOCKED"}
-EVIDENCE_PRODUCERS = {"domain-expert", "methodological-reviewer"}
+# v2.1.2：domain-expert 拆为 3 atomic 后执行者集合扩容（超集，兼容历史 fixture）
+_ATOMIC_EXECUTORS = {"domain-expert-biomed", "domain-expert-ai", "domain-expert-general"}
+EVIDENCE_PRODUCERS = {"domain-expert", "methodological-reviewer"} | _ATOMIC_EXECUTORS
 
 
 def check_envelope(env: dict, *, producer_must_have_evidence: bool = False) -> list:
@@ -83,15 +85,21 @@ GRADE_RANK = {"1a": 8, "1b": 7, "2a": 6, "2b": 5, "3a": 4, "3b": 3, "4": 2, "5":
 
 SUBJECT_AUTHORITY = {
     "methodology": {"methodological-reviewer": 5, "domain-expert": 3,
-                    "meta-architect": 2, "socratic-questioner": 1, "synthesis-integrator": 1},
+                    "meta-architect": 2, "socratic-questioner": 1, "synthesis-integrator": 1,
+                    # v2.1.2 atomic 继承原 domain-expert 权重
+                    "domain-expert-biomed": 3, "domain-expert-ai": 3, "domain-expert-general": 3},
     "domain_fact": {"domain-expert": 5, "methodological-reviewer": 4,
-                    "meta-architect": 2, "socratic-questioner": 1, "synthesis-integrator": 1},
+                    "meta-architect": 2, "socratic-questioner": 1, "synthesis-integrator": 1,
+                    "domain-expert-biomed": 5, "domain-expert-ai": 5, "domain-expert-general": 5},
     "structure":    {"meta-architect": 5, "socratic-questioner": 3,
-                    "domain-expert": 2, "methodological-reviewer": 2, "synthesis-integrator": 1},
+                    "domain-expert": 2, "methodological-reviewer": 2, "synthesis-integrator": 1,
+                    "domain-expert-biomed": 2, "domain-expert-ai": 2, "domain-expert-general": 2},
 }
 
 DEFAULT_AUTHORITY = {"methodological-reviewer": 5, "domain-expert": 4,
-                     "meta-architect": 3, "socratic-questioner": 2, "synthesis-integrator": 1}
+                     "meta-architect": 3, "socratic-questioner": 2, "synthesis-integrator": 1,
+                     # v2.1.2 atomic 继承原 domain-expert 默认权重
+                     "domain-expert-biomed": 4, "domain-expert-ai": 4, "domain-expert-general": 4}
 
 
 def _authority(agent: str, subject: str | None) -> int:
