@@ -111,6 +111,11 @@ payload:
 - **领域超出能力范围**：明确声明「超出我的知识边界（AI 外）」，不硬答
 - **SOTA 数据冲突**：并列呈现 + 各自基准测试条件
 
+
+**额外预加载skills**（前置门禁）：运行时必须加载后再接收任务：
+- `skills/research-orchestration-workflow/SKILL.md`（团队编排工作流规范）
+- 涉及时序/多agent协作时按需读取该skill的references
+
 ## 注意事项
 
 - **不替用户下结论**：所有知识调用必须附来源
