@@ -32,7 +32,7 @@ import subprocess
 import sys
 import tempfile
 
-_PKG_NAME = "research-orchestration-team"
+_PKG_NAME = "triz-invention-team"
 _INSTALL_DIR = os.path.expanduser(
     "~/.workbuddy/plugins/marketplaces/my-experts/plugins/" + _PKG_NAME
 )
@@ -46,12 +46,12 @@ DEFAULT_EXPERT_DIR = (
 CORE_REL = os.path.join("vendor", "shared-core", "assemble_spawn_prompt.py")
 MANIFEST_REL = os.path.join("vendor", "shared-core", "VENDOR.json")
 MEMBER_IDS = [
-    "domain-expert-ai",
-    "domain-expert-biomed",
-    "domain-expert-general",
-    "meta-architect",
-    "methodological-reviewer",
     "socratic-questioner",
+    "meta-architect",
+    "domain-expert-biomed",
+    "domain-expert-ai",
+    "domain-expert-general",
+    "methodological-reviewer",
     "synthesis-integrator",
 ]
 
@@ -148,7 +148,7 @@ def run_checks(expert_dir):
         r.add("V5", "安装态冒烟 --list-members 退出码 0 且含全部成员", "FAIL", str(e))
 
     # V6 git-clone 态冒烟：拷到临时目录（其父目录无 shared-core）→ 必须走 vendor 兜底
-    tmp_root = tempfile.mkdtemp(prefix="rot-clone-sim-")
+    tmp_root = tempfile.mkdtemp(prefix="trot-clone-sim-")
     try:
         tmp_pkg = os.path.join(tmp_root, _PKG_NAME)
         shutil.copytree(expert_dir, tmp_pkg,
@@ -194,7 +194,7 @@ def main():
                          ensure_ascii=False, indent=2))
     else:
         print("=" * 62)
-        print("shared-core 分发与防漂移门禁（research-orchestration-team）")
+        print("shared-core 分发与防漂移门禁（triz-invention-team）")
         print("=" * 62)
         for cid, desc, status, detail in r.items:
             mark = {"PASS": "✓", "FAIL": "✗", "SKIP": "-"}[status]
