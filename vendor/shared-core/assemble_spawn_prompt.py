@@ -62,6 +62,17 @@ LOG_PREFIX = "[assemble_spawn_prompt]"
 # 任务包四要素（Anthropic 委派协议；缺一即补齐再 spawn）
 TASK_PACKAGE_FIELDS = ["objective", "output_format", "constraints", "task_boundary"]
 
+# ── B21（vet-med-ppt-team 第四轮诊断 F1）：第五要素与结构化校验 ──────────────
+# 验收标准三件套（check / judge_mode / threshold）——v3.17.0 起为文档级契约，
+# 本批起为代码级契约（JSON 结构解析，不再是子串包含判断）。
+TASK_PACKAGE_FIELDS_V5 = TASK_PACKAGE_FIELDS + ["acceptance_criteria"]
+ACCEPTANCE_TRIPLET = ("check", "judge_mode", "threshold")
+# 判定方式枚举（唯一源对齐 vet-med-ppt-team references/diagnosis-report-schema.yaml
+# #enums.judge_mode；联邦件不自立新枚举——跨包新增枚举值须回写该唯一源）
+JUDGE_MODE_ENUM = ("机", "人", "机+人")
+# 占位值黑名单：这些「值」在结构解析通过后仍判为未填（防 "x"/空串糊弄）
+_PLACEHOLDER_VALUES = {"", "x", "xx", "xxx", "todo", "tbd", "n/a", "待填", "占位", "?"}
+
 
 def log(msg: str) -> None:
     """统一日志输出到 stderr，避免污染 stdout 的 prompt 正文。"""
@@ -123,6 +134,96 @@ def load_member_ids(plugin: dict) -> list[str]:
     if not ids:
         ids = [m.get("id") for m in plugin.get("members", []) if m.get("id")]
     return [i for i in ids if i]
+
+
+# ---------------------------------------------------------------- 动态成员层
+
+def load_dynamic_members(work_root: str | None) -> dict[str, dict]:
+    """读取 WORK_ROOT 级动态成员注册表（运行态/dynamic-members.yaml）。
+
+    返回 {member_id: entry}；注册表不存在 → 空表（动态层是可选能力，缺失不是错误）。
+    **闸门（安全关键）**：只收录 `confirmed_by_user: true` 的条目——
+    未过用户闸门的提案成员绝不允许进入 spawn 白名单（team-generation skill §1）。
+    解析顺序依赖安全：先判确认标志、后收成员（2026-10-30 首版状态机解析器有顺序 bug
+    导致闸门失效，已改用「解析全量 + 按标志过滤」的确定性两段式）。
+    """
+    if not work_root:
+        return {}
+    reg = Path(work_root) / "运行态" / "dynamic-members.yaml"
+    if not reg.is_file():
+        return {}
+    text = reg.read_text(encoding="utf-8")
+
+    confirmed = False
+    m = re.search(r"^confirmed_by_user\s*:\s*(\S+)", text, re.M)
+    if m:
+        confirmed = m.group(1).lower() in ("true", "yes", "1")
+    if not confirmed:
+        log("⛔ 动态成员注册表 confirmed_by_user 非 true —— 未过用户闸门，动态层不生效")
+        return {}
+
+    members: dict[str, dict] = {}
+    try:
+        import yaml  # PyYAML；缺失时降级为「拒收整个动态层」而不是半解析
+        data = yaml.safe_load(text)
+    except ImportError:
+        log("⛔ PyYAML 不可用，无法安全解析动态成员注册表 —— 动态层不生效（宁可拒绝不猜）")
+        return {}
+    except Exception as e:
+        log(f"⚠️ 动态成员注册表解析失败（按空表处理）：{e}")
+        return {}
+
+    if not isinstance(data, dict):
+        log("⚠️ 注册表顶层不是映射，按空表处理")
+        return {}
+    for entry in data.get("members") or []:
+        if not isinstance(entry, dict):
+            continue
+        mid = entry.get("member_id")
+        if not mid or not re.fullmatch(r"[a-z0-9\-]+", str(mid)):
+            log(f"⚠️ 跳过非法 member_id: {mid!r}（须 kebab-case）")
+            continue
+        members[str(mid)] = entry
+    return members
+
+
+def build_dynamic_member_md(entry: dict, member_id: str) -> str:
+    """由注册表条目即时合成动态成员的「角色定义 MD」（人设注入主体）。
+
+    动态成员没有 agents/*.md 静态文件——这正是「运行时真生成」的实现方式：
+    通用专家骨架 + 注册表声明的 role_name/domain/examines 合成完整角色定义。
+    """
+    role_name = entry.get("role_name", member_id)
+    domain = entry.get("domain", "通用")
+    examines = entry.get("examines", [])
+    ex_lines = "\n".join(f"  - {e}" for e in examines) or "  - 术语精确性"
+    return f"""---
+name: {member_id}
+version: 1.0.0
+description: "动态生成专家成员：{role_name}（{domain}）。来源：运行时团队生成（skills/team-generation）。"
+displayName:
+  zh: "{role_name}"
+---
+
+# {role_name}（动态成员）
+
+> 你是本团队按本章主题**运行时生成**的领域专家成员，聚焦知识域「{domain}」。
+> 与常驻成员同责同权：受 harness 协议全量约束（boundary filter / token budget /
+> 收尾三件套 / 落盘契约），产出仅限你的职责边界。
+
+## 职责（examines——你盯什么）
+{ex_lines}
+
+## 输出要求
+1. 产出以「{domain}」领域专家视角审读与撰写，术语与本学科 profile 的权威源一致
+2. 遵守任务包的 output_format / constraints / task_boundary，缺任一要素回问主理人
+3. 结论附证据位置；不确定处标 [待核实]，禁止编造
+4. 不代行其他成员职责（尤其不代 quality-examiner 审查——生成者与审查者分离）
+
+## 收尾三件套（强制）
+结束时依次：① patch 黑板 ② `python3 scripts/record_trace.py ...` ③ `python3 scripts/progress.py update ...`
+三项缺一 = 任务未完成。
+"""
 
 
 # ---------------------------------------------------------------- 成员 MD 解析
@@ -211,10 +312,138 @@ def check_task_package(task_text: str) -> tuple[bool, list[str]]:
     """
     校验任务包四要素是否齐全（objective / output_format / constraints / task_boundary）。
     这是**结构性校验**（字段存在性），属确定性范畴；内容质量由主理人判断。
+
+    ⚠ B21 前的旧实现是**子串包含判断**（`f not in low`）——「字段名出现在
+    正文散文里」也算已填，且无第五要素。保留仅为兼容既有单测；**生产路径
+    请用 check_task_package_v5**（JSON 结构解析 + 五要素 + 三件套 + 占位值拒收）。
     """
     low = task_text.lower()
     missing = [f for f in TASK_PACKAGE_FIELDS if f not in low]
     return (not missing), missing
+
+
+def _extract_task_json(task_text: str):
+    """从任务包文本提取 JSON 对象——三种形态按序尝试：
+    ① 整体即 JSON；② ```json 围栏块；③ 首个 {...} 平衡段。找不到返回 None。"""
+    import json as _json
+    text = (task_text or "").strip()
+    if not text:
+        return None
+    # ① 整体
+    try:
+        obj = _json.loads(text)
+        return obj if isinstance(obj, dict) else None
+    except Exception:
+        pass
+    # ② 围栏块
+    import re as _re
+    m = _re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, _re.S)
+    if m:
+        try:
+            obj = _json.loads(m.group(1))
+            return obj if isinstance(obj, dict) else None
+        except Exception:
+            pass
+    # ③ 平衡花括号段（从首个 { 起做括号配平，容忍字符串内花括号）
+    start = text.find("{")
+    while start != -1:
+        depth, in_str, esc = 0, False, False
+        for i in range(start, len(text)):
+            c = text[i]
+            if esc:
+                esc = False
+                continue
+            if c == "\\":
+                esc = True
+                continue
+            if c == '"':
+                in_str = not in_str
+                continue
+            if in_str:
+                continue
+            if c == "{":
+                depth += 1
+            elif c == "}":
+                depth -= 1
+                if depth == 0:
+                    try:
+                        obj = _json.loads(text[start:i + 1])
+                        return obj if isinstance(obj, dict) else None
+                    except Exception:
+                        break
+        start = text.find("{", start + 1)
+    return None
+
+
+def check_task_package_v5(task_text: str) -> tuple[bool, list[str]]:
+    """
+    B21：任务包五要素的**结构化校验**（替代子串包含判断）。
+
+    判什么（全部确定性可判）：
+      ① 任务包文本可解析出 JSON 对象（整体/围栏/平衡段三形态）；
+      ② 五要素齐全：objective / output_format / constraints / task_boundary /
+         acceptance_criteria；
+      ③ 四个基础要素非空非占位（constraints 允许空数组——「无约束」是合法声明，
+         但须显式写 []，不是字段缺失）；
+      ④ acceptance_criteria 是数组且非空；每条是对象且三件套齐全
+         （check / judge_mode / threshold）；
+      ⑤ judge_mode ∈ {机, 人, 机+人}；threshold 含「源 」引用格式（阈值必须
+         指向唯一源，不得在任务包里另写一份裸数值——spawn-protocol.md §一纪律）。
+
+    不判什么：验收标准的内容对不对、阈值数值合不合理——那是主理人与
+    评审人的语义判断，脚本不介入（三件事分工宪法）。
+
+    返回 (ok, problems)；problems 为人读问题清单（空列表 = 通过）。
+    """
+    import json as _json
+    problems: list[str] = []
+    obj = _extract_task_json(task_text)
+    if obj is None:
+        return False, ["任务包未解析出 JSON 对象（三种形态均未命中）——"
+                       "五要素须以 JSON 形态给出（整体/```json 围栏/平衡花括号段）"]
+
+    # ② 五要素存在性
+    for f in TASK_PACKAGE_FIELDS_V5:
+        if f not in obj:
+            problems.append(f"缺要素：{f}")
+    if problems:
+        return False, problems
+
+    # ③ 基础要素非空非占位
+    for f in TASK_PACKAGE_FIELDS:
+        v = obj.get(f)
+        s = str(v).strip() if not isinstance(v, (list, dict)) else (
+            "" if isinstance(v, list) and not v else "ok")
+        if isinstance(v, str) and s.lower() in _PLACEHOLDER_VALUES:
+            problems.append(f"要素 {f} 是占位值（{s!r}）——不得用占位符糊弄")
+        elif isinstance(v, str) and not s:
+            problems.append(f"要素 {f} 为空串")
+        elif v is None:
+            problems.append(f"要素 {f} 为 null")
+
+    # ④⑤ 验收标准结构与枚举
+    ac = obj.get("acceptance_criteria")
+    if not isinstance(ac, list) or not ac:
+        problems.append("acceptance_criteria 须为非空数组")
+    else:
+        for idx, item in enumerate(ac, 1):
+            if not isinstance(item, dict):
+                problems.append(f"验收项 #{idx} 不是对象")
+                continue
+            for k in ACCEPTANCE_TRIPLET:
+                if k not in item:
+                    problems.append(f"验收项 #{idx} 缺三件套字段：{k}")
+                elif isinstance(item[k], str) and not item[k].strip():
+                    problems.append(f"验收项 #{idx} 字段 {k} 为空串")
+            jm = item.get("judge_mode")
+            if isinstance(jm, str) and jm not in JUDGE_MODE_ENUM:
+                problems.append(f"验收项 #{idx} judge_mode={jm!r} 不在枚举 {JUDGE_MODE_ENUM}")
+            th = item.get("threshold")
+            if isinstance(th, str) and th.strip() and "源" not in th:
+                problems.append(f"验收项 #{idx} threshold 未含「源 」引用格式"
+                                f"（须指向唯一源，如「>= 12.0，源 config/visual-rules.yaml#font.body_min_pt」）")
+
+    return (not problems), problems
 
 
 def resolve_body_skills(expert_dir: Path, body: str) -> list[str]:
@@ -332,17 +561,35 @@ def main() -> int:
     ap.add_argument("--task-id", help="任务 ID，如 T-20260929-001")
     ap.add_argument("--out", help="输出到文件（默认 stdout）")
     ap.add_argument("--check-task-package", action="store_true",
-                    help="校验任务包四要素齐全，缺则 exit 4")
+                    help="校验任务包（B21 起默认五要素结构化校验：JSON 解析+"
+                         "acceptance_criteria 三件套+占位值拒收；缺则 exit 4）")
+    ap.add_argument("--legacy-check", action="store_true",
+                    help="配合 --check-task-package 用旧四要素子串口径"
+                         "（仅为兼容既有脚本；新代码禁用）")
     ap.add_argument("--run-dir", default=None,
                     help="本轮运行目录；传入后会在 prompt 中注入「产出落盘契约」"
                          "（成员必须把产出写入 <run-dir>/<task_id>__<member-id>.md）")
     ap.add_argument("--list-members", action="store_true",
                     help="列出白名单成员 ID 后退出")
+    ap.add_argument("--work-root", default=None,
+                    help="任务工作根目录（含 运行态/dynamic-members.yaml 时启用动态层）")
+    ap.add_argument("--allow-dynamic-members", action="store_true",
+                    help="允许把已确认的动态成员并入白名单（默认关闭，显式开启防误用）")
     args = ap.parse_args()
 
     expert_dir = resolve_expert_dir(args.expert_dir)
     plugin = load_plugin(expert_dir)
     member_ids = load_member_ids(plugin)
+
+    # 动态层（须显式开启 + 注册表 confirmed_by_user: true）
+    dynamic: dict[str, dict] = {}
+    if args.allow_dynamic_members:
+        dynamic = load_dynamic_members(args.work_root)
+        for did in dynamic:
+            if did not in member_ids:
+                member_ids.append(did)
+        if dynamic:
+            log(f"✅ 动态层并入白名单 {len(dynamic)} 个：{sorted(dynamic)}")
 
     if args.list_members:
         print("\n".join(member_ids))
@@ -355,10 +602,19 @@ def main() -> int:
     # 确定性路由白名单校验：非法成员 ID 直接拒绝，不进入 spawn
     if args.member not in member_ids:
         log(f"❌ 成员 ID 不在白名单：{args.member}")
-        log(f"   白名单（来自 plugin.json teamInfo.memberAgents）：{member_ids}")
+        log(f"   静态白名单（plugin.json teamInfo.memberAgents）：{load_member_ids(plugin)}")
+        if dynamic:
+            log(f"   动态白名单（已确认）：{sorted(dynamic)}")
+        else:
+            log("   动态层未启用（需 --allow-dynamic-members + --work-root + 注册表 confirmed_by_user: true）")
         return 2
 
-    md_text = load_member_md(expert_dir, args.member)
+    # 成员 MD：静态层读文件；动态层由注册表条目即时合成
+    if args.member in dynamic:
+        md_text = build_dynamic_member_md(dynamic[args.member], args.member)
+        log(f"✅ 动态成员「{args.member}」角色定义已由注册表合成")
+    else:
+        md_text = load_member_md(expert_dir, args.member)
     fm, body = parse_frontmatter(md_text)
 
     task_text = None
@@ -370,11 +626,23 @@ def main() -> int:
         task_text = tf.read_text(encoding="utf-8")
 
         if args.check_task_package:
-            ok, missing = check_task_package(task_text)
-            if not ok:
-                log(f"❌ 任务包缺要素：{missing}（四要素：{TASK_PACKAGE_FIELDS}）")
-                return 4
-            log(f"✅ 任务包四要素齐全")
+            # B21：默认走 v5 结构化校验（五要素+三件套+占位值拒收）；
+            # --legacy-check 保留旧四要素子串口径（仅为既有脚本兼容，不建议）。
+            if getattr(args, "legacy_check", False):
+                ok, missing = check_task_package(task_text)
+                if not ok:
+                    log(f"❌ 任务包缺要素：{missing}（四要素：{TASK_PACKAGE_FIELDS}）")
+                    return 4
+                log(f"✅ 任务包四要素齐全（legacy 子串口径）")
+            else:
+                ok, problems = check_task_package_v5(task_text)
+                if not ok:
+                    log(f"❌ 任务包未过五要素结构化校验（B21）：")
+                    for p in problems:
+                        log(f"   - {p}")
+                    return 4
+                log(f"✅ 任务包五要素结构化校验通过"
+                    f"（含 acceptance_criteria {len(_extract_task_json(task_text).get('acceptance_criteria', []))} 条）")
 
     run_dir = None
     if args.run_dir:
