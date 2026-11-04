@@ -71,7 +71,6 @@ research-orchestration-team/
 ├── docs/
 │   ├── REDTEAM-REPORT.md                           # 红队审查报告（5 维度 · 缺陷 · 回归证据）
 │   └── arbitration-L4L5-live-test.md               # 冲突仲裁 L4/L5 真实团队实测记录
-├── settings.json                                    # 主理人 Agent ID 配置
 ├── .gitignore
 ├── README.md
 ├── CHANGELOG.md                                     # 版本变更历史
