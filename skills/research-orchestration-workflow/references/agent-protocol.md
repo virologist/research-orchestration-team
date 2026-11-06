@@ -90,6 +90,18 @@
 2. 成员状态由主理人统一维护，成员不得自行改写全局状态
 3. 状态变更必须通过 `STATUS` 消息广播给主理人
 
+### v2.2.0 增补 · 状态落盘（确定性工程层）
+
+§3 的 SSOT 状态 JSON **不是纸面 schema**——由 `scripts/state_io.py` 负责确定性落盘：
+
+- **状态文件**：`<workspace>/.harness-runs/<task_id>/_state.json`（原子写：.tmp + os.replace）
+- **检查点指针**：`state://cp-NNN` ≡ `.harness-runs/<task_id>/checkpoints/cp-NNN.md`
+- **五命令**：`init`（开工，幂等）/ `advance`（阶段收尾）/ `resume`（中断恢复，打印续跑点）/ `finish`（收尾）/ `budget`（轮次与 token 计数）
+- **写入者**：仅主理人（与同步规则 2 一致）；成员只读
+- **退出码**：0 成功 / 1 参数错 / 2 无状态文件 / 3 JSON 损坏（fail fast，禁静默重建）
+
+主理人断点续跑流程与命令示例见 `agents/research-orchestration-team-team-lead.md`「状态初始化与断点续跑」节（本节与该处互为引用，行为以 state_io.py 实现为准）。
+
 ---
 
 ## 4. 上下文传递（Context Passing）

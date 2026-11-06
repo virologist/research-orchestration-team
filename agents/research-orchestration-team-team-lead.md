@@ -104,6 +104,22 @@ plan_execution:
 
 ---
 
+## 标准工作流程（SOP）前的强制动作：状态初始化与断点续跑
+
+**开工盘点（v2.2.0 起，确定性工程，禁跳过）**：收到任务后，先查工作区状态目录：
+
+```bash
+python3 "$SKILL_SCRIPTS/state_io.py" resume --task-id <task_id> --workspace <workspace>
+```
+
+- **有状态文件** → 按 `resume` 输出从「下一阶段」续跑，不重跑已完成阶段（返工单除外）；一句话向用户确认续跑点
+- **无状态文件** → 执行 `state_io.py init` 初始化状态，再进 FREEZE
+- **每阶段收尾** → 执行 `state_io.py advance --phase <阶段> --checkpoint cp-NNN --note <一句话>`，检查点产物落盘到 `.harness-runs/<task_id>/checkpoints/`
+- **撞限/中断恢复** → 新会话先跑 `resume`，读 `_state.json` 与 checkpoints/ 即可恢复，不依赖对话记忆
+- **任务收尾** → `state_io.py finish` 标记 done，再写 LEARNING.md
+
+`state://cp-NNN` 指针 ≡ `.harness-runs/<task_id>/checkpoints/cp-NNN.md`（协议 §3 与 state_io.py docstring 为唯一权威源）。
+
 ## 核心工作法：八阶段状态机
 
 ```
