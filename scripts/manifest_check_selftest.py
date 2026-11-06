@@ -21,6 +21,7 @@ CI 的术语清单写成了精确串，导致真实存在的违规因插入词�
   A 组（N1–N8）  manifest / 资产 / 版本 / 术语
   B 组（N9–N11） 契约章节（C9）
   C 组（N12–N17）市场清单（C10）
+  D 组（N18–N19）Team 型 settings.json（C12）
 
 其中 N11 是**反向用例**：破坏一种契约标记但保留另一种，期望校验器**放行**（rc=0），
 用于确认 C9 接受三种等价命名，而不是只认一种。
@@ -203,6 +204,20 @@ case("N16", "两份市场名不一致", "两份市场名不一致", n16)
 def n17(root):
     (root / ".claude-plugin/marketplace.json").write_text("{ not json", encoding="utf-8")
 case("N17", "市场文件 JSON 非法", "市场文件 JSON 非法", n17)
+
+
+# ── D 组：Team 型 settings.json（C12）────────────────────────────────────
+def n18(root):
+    (root / "settings.json").unlink()
+case("N18", "Team 型包根 settings.json 被删", "包根缺 settings.json", n18)
+
+
+def n19(root):
+    (root / "settings.json").write_text(
+        json.dumps({"agent": "wrong-lead-id"}, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+case("N19", "settings.json agent 与主理人不一致", "与 manifest 主理人", n19)
 
 
 def make_copy(src: Path, dst: Path) -> None:

@@ -25,6 +25,7 @@
   C9 团队每个 agent 的 MD 都声明了契约章节（新成员不得裸奔入场）
   C10 市场描述文件 marketplace.json 存在且指向本插件（缺它则一键安装失效）
   C11 每个 agent 的 MD 具备结构合法的 YAML frontmatter（宿主据此注册代理）
+  C12 Team 型包根 settings.json 存在且单键 agent 指向主理人（官方 validate_expert 硬要求）
 
 ## C11 的动机与解析范围（重要）
 
@@ -788,6 +789,41 @@ def check_c11_frontmatter(chk: Checker, manifests: dict) -> None:
             chk.ok(f"{rel} frontmatter 合法（name={declared}, description {len(desc)} 字符）")
 
 
+def check_c12_settings(chk: Checker, manifests: dict) -> None:
+    """C12 Team 型包根 settings.json 存在且指向主理人。
+
+    动机：官方 validate_expert.py 对 Team 型包硬性要求包根 settings.json
+    （报错原文「Team type must have settings.json」）。v2.1.2 后曾依
+    「宿主启动时必然删除该文件」的假设将其移除，导致官方校验器报 1 error；
+    反证：同类 Team 包 agent-harness-expert 的同格式 settings.json 存活数周。
+    本检查把「settings.json 必须在」固化为发行门禁，防止再次被误删。
+    """
+    chk.section("C12 Team 型包根 settings.json")
+    codebuddy = manifests.get("WorkBuddy")
+    if codebuddy and codebuddy.get("expertType") != "team":
+        chk.ok("非 Team 型包，C12 不适用")
+        return
+    path = chk.root / "settings.json"
+    if not path.exists():
+        chk.fail("包根缺 settings.json（官方 validate_expert 对 Team 型为硬要求）")
+        return
+    data = chk.load_json(path)
+    if data is None:
+        chk.fail("settings.json JSON 非法")
+        return
+    agent = data.get("agent")
+    lead = None
+    if codebuddy:
+        lead = codebuddy.get("agentName") or codebuddy.get("teamInfo", {}).get("leadAgent")
+    if not agent or not isinstance(agent, str):
+        chk.fail("settings.json 缺非空字符串字段 agent")
+        return
+    if lead and agent != lead:
+        chk.fail(f"settings.json agent={agent} 与 manifest 主理人 agentName={lead} 不一致")
+        return
+    chk.ok(f"settings.json 合法（agent={agent}）")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="专家包一致性校验：manifest 对等 / 资产完整性 / 版本一致 / 废弃表述",
@@ -817,6 +853,7 @@ def main() -> int:
     check_c9_contracts(chk, manifests)
     check_c10_marketplace(chk, manifests)
     check_c11_frontmatter(chk, manifests)
+    check_c12_settings(chk, manifests)
 
     print("\n" + "=" * 72)
     if chk.failures:
