@@ -1,9 +1,9 @@
 # 科研价值驱动研究编排团
 
 > **团队名称**：科研价值驱动研究编排团 / Research Value-Driven Research Orchestration Team
-> **专家类型**：Team 型（8 人协作团 · v2.1.2 Harness Engineering 补全重构）
+> **专家类型**：Team 型（8 人协作团 · v2.2.0 状态持久化与断点续跑）
 > **行业分类**：12-IndustryConsultant（跨学科咨询）
-> **版本**：2.1.2
+> **版本**：2.2.0
 > **许可证**：MIT
 > **仓库**：[github.com/virologist/research-orchestration-team](https://github.com/virologist/research-orchestration-team)
 

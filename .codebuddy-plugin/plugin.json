@@ -1,6 +1,6 @@
 {
   "name": "research-orchestration-team",
-  "version": "2.1.2",
+  "version": "2.2.0",
   "description": "Eight-agent cross-disciplinary research orchestration team with ACP communication protocol, five-role matrix (orchestrator/analyzer/executor/reviewer/integrator), L1-L5 conflict arbitration, harness-compliant runtime, Orchestrator Pattern routing, Loop hard-stop (max_turns/time/token), per-step verification, atomic subagent split (biomed/ai/general), and Ralph Loop cross-session memory. v2.1.0: harness_eval.py with 12 design checks, agent-registry.md as routing SSOT.",
   "author": {
     "name": "TZUVet",
@@ -60,7 +60,7 @@
   },
   "displayDescription": {
     "en": "Eight-agent research orchestration team (v2.1.0 Harness Engineering): orchestrator + analyzer (questioner + architect) + 3 atomic executors (biomed/ai/general) + reviewer + integrator. Features ACP protocol, L1-L5 conflict arbitration, Orchestrator Pattern routing, Loop hard-stop, per-step verification, and Ralph Loop cross-session memory.",
-    "zh": "八人科研编排团：主理人+追问+架构+三原子执行者+审查者+整合者，ACP协议、五级仲裁、路由与预算硬上限。"
+    "zh": "八人科研编排团：主理人+追问+架构+三原子执行者+审查者+整合者，五级仲裁与状态持久化断点续跑。"
   },
   "avatar": "avatars/team.png",
   "categoryId": "12-IndustryConsultant",

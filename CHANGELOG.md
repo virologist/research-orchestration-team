@@ -2,6 +2,47 @@
 
 所有重要变更按版本倒序记录。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [2.2.0] - 2026-11-07
+
+> 从零独立诊断（15 项短板亲验）后的补全完善版。主题：**纸面机制 → 确定性工程**。
+> 本条目同时补记 tag v2.1.2（bb05e18）之后 6 个无版本号 commit 的欠账。
+
+### Added（补记 v2.1.2 → 0945fba 欠账，tag 后曾长期未升版——本版起恢复「改必升版」纪律）
+
+- **959dc1e / f746291 / 1eda103**：spawn 装配器 shim v3.4.2 跟升——60 行 R9 → 102 行联邦两级查找（联邦真源优先 + vendor 兜底 + SHIM_DEBUG），配套 `vendor/shared-core/` 副本 + `VENDOR.json` + `tests/test_vendor_core.py` 防漂移门禁（V1-V6 全 PASS，含 git-clone 态隔离冒烟）；适配自 smart-textbook-team 先例
+- **5fc2630 / 688dd92**：移除包根 settings.json（依「宿主启动时必然删除」假设）——**本版已推翻该决策**，见下方 Fixed/Reverted
+
+### Added（本版新能力）
+
+- **状态持久化（P0-2，治协议 §3 纸面 schema）**：新增 `skills/.../scripts/state_io.py`——八阶段状态的确定性落盘层。五命令 init/advance/resume/finish/budget；原子写（.tmp + os.replace，并发 20 路实测无损坏）；`state://cp-NNN` 伪 URI 绑定真实路径 `.harness-runs/<task_id>/checkpoints/cp-NNN.md`；退出码 0/1/2/3（JSON 损坏 fail fast）。team-lead.md 新增「状态初始化与断点续跑」强制条款：开工 resume 盘点、阶段收尾 advance、撞限恢复不依赖对话记忆。协议 §3 增补「状态落盘（确定性工程层）」节，写入者=仅主理人
+- **routing 一致性评估（P2）**：`scripts/routing_eval.py`——registry trigger 词表 vs 成员 MD description 的结构一致性检查 + 注入式负例 selftest（随 P2 commit 落地）
+
+### Fixed
+
+- **恢复包根 settings.json + C12 护栏（P0-1，Reverted 5fc2630 的决策）**：官方 validate_expert 对 Team 型硬要求该文件（报错原文「Team type must have settings.json」），v2.1.2 后删除导致官方校验 1 error。反证：agent-harness-expert 同格式文件存活 3 周未被宿主删除。「宿主必然删除」假设不成立；若未来宿主真的删除，C12 会在下一次发行校验立即报警，而不是等官方校验器
+- **manifest_check.py 63→64 项**：新增 C12（Team 型 settings.json 存在 + 单键 agent 指向主理人）；selftest 17→19 条（N18 删除负例 / N19 篡改负例）
+- **harness_eval.py 根定位修复（P1）**：`Path.cwd()` → `__file__` 上溯（与 manifest_check 一致），任意外部目录调用不再 exit 2；harness_eval_selftest 同步覆盖
+- **README 三处过期同步（P1）**：团队表 6 人→8 人；目录树补 vendor/、tests/、harness_eval.py、state_io.py、routing_eval.py；版本历史补 2.1.0/2.1.1/2.1.2/2.2.0
+- **registry 工具名核验与降级链（P1）**：核验 `mcp__crossref` / `mcp__paper_search_server` 实际可用性；成员 MD 增「源缺席→换源→降置信」三级降级条款
+- **displayDescription.zh 53→48 字**（官方建议 40-50）
+
+### Changed
+
+- 双 manifest version 2.1.2 → **2.2.0**；README 头部同步
+- team-lead.md frontmatter：description 升 8 人 / v2.2 语义；LEARNING.md 补 tag 后 5 条历史记录 + 新增「失败回流规则」落盘节（P1）
+
+### Regression evidence
+
+| 套件 | v2.2.0 |
+|------|--------|
+| `manifest_check.py` | 64/64 ✅ |
+| `manifest_check_selftest.py` | 19/19 ✅（N18/N19 新增）|
+| `harness_eval.py` | 12/12 ✅ |
+| `harness_eval_selftest.py` | 13/13 ✅ |
+| `protocol_check.py` | envelope 12 + conflict 4 + integration ✅ |
+| `test_vendor_core.py` | V1-V6 6/6 ✅ |
+| 官方 `validate_expert.py` | 0 error ✅（原 1 error）|
+
 ## [2.1.2] - 2026-09-30
 
 > v2.1.0 的一次**补全重构**：修复 atomic 拆分后调用点未同步的全部残留，并把 Harness 校验纳入 CI。
