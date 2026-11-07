@@ -55,17 +55,17 @@
 | 套件 | 结果 |
 |------|------|
 | `manifest_check.py` | 64/64 ✅ |
-| `manifest_check_selftest.py` | 20/20 ✅（N18/N19/N20）|
+| `manifest_check_selftest.py` | 21/21 ✅（N18/N19/N20/N21）|
 | `harness_eval.py` | 12/12 ✅ |
-| `harness_eval_selftest.py` | 13/13 ✅ |
-| `routing_eval.py` | 30/30 ✅（R1 4 + R2 8 + R3 15 + R4 3）|
-| `routing_eval_selftest.py` | 7/7 ✅ |
+| `harness_eval_selftest.py` | 14/14 ✅（N13 权限档章节负例）|
+| `routing_eval.py` | 33/33 ✅（R1 4 + R2 8 + R3 15 + R4 3 + R5 3）|
+| `routing_eval_selftest.py` | 10/10 ✅（P1 + N1~N9）|
 | `protocol_check.py` | envelope 16/16(v2.4) + 12/12(legacy) + conflict 5/5 + integration 8/8 ✅ |
 | `test_vendor_core.py` | V1-V6 6/6 ✅；安装态 6/6 PASS，git clone / CI 隔离态 V4 按设计 SKIP（联邦真源不可达），非门禁失败 |
-| `state_io.py` 全链路 | init→advance×8→resume→budget→finish 全 rc=0；8 个 `cp-NNN.md` 真实落盘；异常 rc=1/2/3；并发 20 路原子写无损；幂等 init ✅ |
+| `state_io.py` 全链路 | init→advance×8→resume→budget→finish 全 rc=0；8 个 `cp-NNN.md` 真实落盘；异常 rc=1（非法阶段）/2（无状态）/3（JSON 损坏）逐项核对；并发 20 路 advance rc={0}、turn=20 无丢更新（flock 修复后）；幂等 init ✅ |
 | `topic_scoring.py` 边界 | 越界 rc=1 / 缺维 rc=2 / 正常 rc=0 ✅ |
 | 外部目录调用 | `manifest_check` / `harness_eval` / `routing_eval` 从 `/tmp` 调用均不依赖 cwd ✅ |
-| CI workflow | YAML 可解析，`validate` job 共 11 steps ✅ |
+| CI workflow | YAML 可解析，`validate` job 共 12 steps（含新增 State IO lifecycle smoke test）✅ |
 | 官方 `validate_expert.py` | 0 error / 0 warning ✅（原 1 error + 1 warning）|
 
 ## [2.1.2] - 2026-09-30
