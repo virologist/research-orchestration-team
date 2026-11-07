@@ -19,6 +19,7 @@ CI 的术语清单写成了精确串，导致真实存在的违规因插入词�
 ## 用例分组
 
   N1-N12   H1-H12 各一条破坏型负例（注入破坏 → 期望 rc=1 + 命中预期文案）
+  N13      H6 补充负例（删整个 ### moderate 章节 → 期望 rc=1 + 命中权限分层文案）
   R1       反向用例（H11 加后缀破坏 → 期望 rc=0，子串匹配语义不变）
 
 ## 与 manifest_check_selftest 的关系
@@ -171,6 +172,21 @@ def n12(root):
 case("N12", "H12 agent-registry.md 缺失（另一检查路径）", "agent-registry.md", n12)
 
 
+# N13：H6 删整个 ### moderate 权限档章节（标题 + 正文），复现对抗实验 A4 漏检
+# 旧 H6 用全文子串匹配，第 76 行 / Changelog 的兜底词会让删章节后的仓库仍判 PASS；
+# 新 H6 按 ### 章节标题判定，缺 ### moderate 章节须判 FAIL。
+def n13(root):
+    path = root / "skills/research-orchestration-workflow/references/agent-registry.md"
+    text = path.read_text(encoding="utf-8")
+    start_m = re.search(r"^###\s+moderate\b", text, re.M)
+    if start_m is None:
+        raise RuntimeError("副本中未找到 ### moderate 章节标题，无法注入破坏")
+    next_m = re.search(r"^###\s", text[start_m.end():], re.M)
+    end = start_m.end() + next_m.start() if next_m else len(text)
+    path.write_text(text[:start_m.start()] + text[end:], encoding="utf-8")
+case("N13", "H6 删整个 ### moderate 权限档章节（标题+正文）", "权限分层", n13)
+
+
 # ── R 组：反向用例（保留语义等价 → 应放行）────────────────────────────────
 # R1：H11 plan_execution 加后缀 → 子串匹配仍命中 → 应放行
 def r1(root):
@@ -188,7 +204,15 @@ def run_case(pristine: Path, tmp_root: Path, cid: str, desc: str,
     """复制干净仓库 → mutate → 跑校验器 → 断言 rc + 命中预期文案。"""
     case_dir = tmp_root / cid
     shutil.copytree(pristine, case_dir, ignore=shutil.ignore_patterns(*COPY_EXCLUDE))
-    mutate(case_dir)
+    # 注入破坏可能失败（例如基准副本已被上游改动破坏、unlink 抛
+    # FileNotFoundError）。不能静默吞掉、更不能让整个自测崩溃：报出明确
+    # 中文错误并把该用例判为失败（rc=1 由 main 汇总 failed 后返回）。
+    try:
+        mutate(case_dir)
+    except Exception as exc:
+        print(f"  ❌ {cid} {desc}: 注入破坏失败（副本可能已损坏）"
+              f" → {type(exc).__name__}: {exc}")
+        return False
 
     try:
         proc = subprocess.run(

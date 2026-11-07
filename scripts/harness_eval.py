@@ -145,15 +145,36 @@ def check_h5_atomic_subagent(root: Path) -> tuple[bool, str]:
 
 
 def check_h6_permission_layer(root: Path) -> tuple[bool, str]:
-    """H6: 权限分层 — safe/moderate/dangerous"""
+    """H6: 权限分层 — registry 须有 safe/moderate/dangerous 三个 ### 章节，且正文非空。
+
+    v2.2.0 部署门禁修复：旧实现用 `r not in content` 全文子串匹配，删掉整个
+    `### moderate` 章节后，第 76 行「safe / moderate / dangerous 三档」与
+    Changelog 的兜底词仍让 H6 误判 PASS。现改为按章节标题判定，杜绝兜底词放行。
+    """
     registry = root / REFS_DIR / REGISTRY
     if not registry.exists():
         return False, "无 registry，无法验证权限分层"
-    content = registry.read_text()
-    required = ["safe", "moderate", "dangerous"]
-    missing = [r for r in required if r not in content]
-    if missing:
-        return False, f"权限分级缺: {missing}"
+    reg_text = registry.read_text(encoding="utf-8")
+
+    # 只认 ### 章节标题，不认散落在引言 / Changelog 里的档位词
+    headings = {
+        m.group(1): m
+        for m in re.finditer(r"^###\s+(safe|moderate|dangerous)\b", reg_text, re.M)
+    }
+
+    for tier in ("safe", "moderate", "dangerous"):
+        m = headings.get(tier)
+        if m is None:
+            return False, f"权限分级缺标题: {tier}（registry 未定义 ### {tier} 章节）"
+
+        # 正文 = 标题行结束之后，到下一个 ### / ## 标题之前的区间
+        # （从标题行的行尾起算，排除标题行本身残留的括号说明，避免空正文被误判为有内容）
+        line_end = reg_text.find("\n", m.start())
+        body_start = line_end + 1 if line_end != -1 else len(reg_text)
+        next_heading = re.search(r"^#{2,3}\s", reg_text[body_start:], re.M)
+        body_end = body_start + next_heading.start() if next_heading else len(reg_text)
+        if not reg_text[body_start:body_end].strip():
+            return False, f"权限分级正文为空: {tier}（### {tier} 章节缺实质内容）"
     return True, ""
 
 

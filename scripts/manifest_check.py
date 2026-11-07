@@ -43,7 +43,7 @@ C11 的解析器**不是**通用 YAML 解析器，只覆盖 frontmatter 实际�
   - 缩进序列项（`- 值`）
   - 空行与整行注释
 
-超出该子集的结构会**报错而非放行**（fail-closed）。这是刻意的：本包的 6 个 agent
+超出该子集的结构会**报错而非放行**（fail-closed）。这是刻意的：本包的 8 个 agent
 都用简单结构，遇到解析器不认识的东西应当让人工看一眼，而不是默默判绿。
 选择纯标准库实现而非依赖 PyYAML，是为了维持本脚本「零依赖可直接在 CI 运行」的约定，
 同时避免出现「本地有 PyYAML 更严、CI 没装更松」的双重判定标准。
@@ -116,9 +116,17 @@ SCAN_EXEMPT = {
 FORBIDDEN_PATTERNS = (
     (r"三级[^，。；\n]{0,6}仲裁", "旧仲裁层级表述（现为五级仲裁）"),
     (r"六阶段", "旧状态机表述（现为八阶段）"),
-    (r"5\s*人协作", "旧团队规模表述（现为六人）"),
-    (r"Six-role", "旧英文角色数表述（现为 Six-agent）"),
-    (r"six-role research", "旧英文角色数表述（现为 Six-agent）"),
+    (r"5\s*人协作", "旧团队规模表述（现为八人）"),
+    # v2.2.0：team-lead 的 frontmatter description 曾长期停留在「v2.0 六人编排团」，
+    # 而 v2.1.0 起团队已是 8 人（3 个 atomic domain-expert）。旧串里带「编排团」
+    # 三字，与 README 版本史里合法的历史表述「v2.0.0 六人团队」区分开，避免误伤。
+    (r"六人编排团|6\s*人协作", "旧团队规模表述（现为八人）"),
+    # v2.2.0：两份 marketplace.json 的用户可见描述曾长期停留在「六agent /
+    # Six-agent」（v2.0 六人编制），与 v2.1.0 起 8 人编制矛盾。C8 走 rglob，
+    # 隐藏目录同样覆盖；用带连字符的精确串，避开历史审计文本里的 Six-role。
+    (r"六agent|Six-agent", "旧团队规模表述（现为八agent / Eight-agent）"),
+    (r"Six-role", "旧英文角色数表述（现为 Eight-agent）"),
+    (r"six-role research", "旧英文角色数表述（现为 Eight-agent）"),
     (r"L1-L3\s*conflict", "旧仲裁层级范围（现为 L1-L5）"),
     (r"msg_type", "旧信封字段名（现为 type）"),
     (r"任意一维\s*<\s*90", "旧 FREEZE 量纲表述（现为完整度 0-100% + 风险维 0-10）"),
@@ -417,7 +425,10 @@ def check_c8_forbidden(chk: Checker) -> None:
             continue
         try:
             text = path.read_text(encoding="utf-8")
-        except (UnicodeDecodeError, OSError):
+        except (UnicodeDecodeError, OSError) as exc:
+            # v2.2.0：原实现静默 continue，编码损坏 / IO 失败的文件里的违规
+            # 表述会完全绕过 C8，属静默假绿。改为显式 FAIL，保证扫描覆盖率。
+            chk.fail(f"待扫描文件无法读取，C8 覆盖率不完整：{rel}（{type(exc).__name__}）")
             continue
         for pattern, desc in FORBIDDEN_PATTERNS:
             for hit in re.finditer(pattern, text):
@@ -439,7 +450,7 @@ def check_c8_forbidden(chk: Checker) -> None:
 def check_c9_contracts(chk: Checker, manifests: dict) -> None:
     """C9 团队每个 agent 的 MD 必须声明契约章节。
 
-    动机：本包的 6 个 agent 中，分析/执行/审查型成员使用「v2.0 协议合规契约」，
+    动机：本包的 8 个 agent 中，分析/执行/审查型成员使用「v2.0 协议合规契约」，
     整合者使用「接口契约」，主理人使用「Harness 运行时规范 v2.0」。三者语义等价
     但命名不同，历史上出现过「新增成员未带任何契约章节」的不一致。此校验把
     「新成员不得裸奔入场」固化为不变式。注意 protocol_check.py 只测协议逻辑本身，

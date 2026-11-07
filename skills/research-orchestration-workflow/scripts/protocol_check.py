@@ -4,10 +4,19 @@
 参考 references/agent-protocol.md，对外发消息信封、状态同步、冲突仲裁等
 关键契约做确定性校验。真实模拟协议层，便于集成前发现回归。
 
+信封主套件校验当前 SSOT §2「消息信封（result_envelope v2.4）」：
+6 必填字段（agent_id / task_id / phase / status / confidence /
+deliverable_summary）、小写四值 status、0-100 confidence、type 枚举、
+evidence 数组、context_ref.mode 等。
+已废弃的 ACP v2.0 信封逻辑原样保留为 check_envelope_v20，仅供
+run_legacy_envelope_tests() 的历史 fixture 回归使用，
+**不参与当前协议合规判定**。
+
 Usage:
     python3 protocol_check.py             # 全部用例
-    python3 protocol_check.py envelope    # 仅信封套件
+    python3 protocol_check.py envelope    # 信封套件（v2.4 主套件 + ACP v2.0 历史回归）
     python3 protocol_check.py conflict    # 仅冲突仲裁套件
+    python3 protocol_check.py integration # 仅集成仿真套件
 """
 
 import json
@@ -16,31 +25,48 @@ from typing import Any
 
 
 # ─────────────────────────────────────────────────────────────────────
-# 信封校验：模拟 agent-protocol.md §2
+# 信封校验：主校验 result_envelope v2.4（§2 SSOT）
+#           check_envelope_v20 为已废弃 ACP v2.0 的历史 fixture 回归保留
 # ─────────────────────────────────────────────────────────────────────
 
-REQUIRED_FIELDS = ["v", "msg_id", "ts", "from", "to", "type", "trace_id",
-                   "status", "confidence", "context_ref", "payload"]
+# ── 已废弃 ACP v2.0 常量（仅服务历史 fixture 回归，不代表当前协议）──
+REQUIRED_FIELDS_V20 = ["v", "msg_id", "ts", "from", "to", "type", "trace_id",
+                       "status", "confidence", "context_ref", "payload"]
 VALID_TYPES = {"TASK", "RESULT", "CLARIFY", "REVIEW", "ERROR", "STATUS", "HANDOFF"}
-VALID_STATUS = {"PENDING", "RUNNING", "SUCCESS", "FAILED", "BLOCKED"}
+VALID_STATUS_V20 = {"PENDING", "RUNNING", "SUCCESS", "FAILED", "BLOCKED"}
 # v2.1.2：domain-expert 拆为 3 atomic 后执行者集合扩容（超集，兼容历史 fixture）
 _ATOMIC_EXECUTORS = {"domain-expert-biomed", "domain-expert-ai", "domain-expert-general"}
 EVIDENCE_PRODUCERS = {"domain-expert", "methodological-reviewer"} | _ATOMIC_EXECUTORS
 
+# ── 当前 result_envelope v2.4 常量（SSOT §2）──
+REQUIRED_FIELDS_V24 = ["agent_id", "task_id", "phase", "status", "confidence",
+                       "deliverable_summary"]
+VALID_STATUS_V24 = {"success", "partial", "failed", "blocked"}
+VALID_CONTEXT_MODES = {"full", "summary", "ref"}
+# 执行者/审查者集合（用 agent_id 判定；分析者、整合者不强制 evidence[]）
+EVIDENCE_PRODUCERS_V24 = {
+    "domain-expert-biomed", "domain-expert-ai", "domain-expert-general",
+    "methodological-reviewer",
+}
 
-def check_envelope(env: dict, *, producer_must_have_evidence: bool = False) -> list:
-    """返回失败原因列表，空列表表示通过。"""
+
+def check_envelope_v20(env: dict, *, producer_must_have_evidence: bool = False) -> list:
+    """已废弃 ACP v2.0 信封校验（仅用于历史 fixture 回归）。
+
+    逻辑与原实现逐字一致，常量改名为 *_V20。返回失败原因列表，空列表表示通过。
+    **不要用于当前协议合规判定**。
+    """
     fails = []
     if not isinstance(env, dict):
         return ["envelope 不是字典"]
-    for f in REQUIRED_FIELDS:
+    for f in REQUIRED_FIELDS_V20:
         if f not in env:
             fails.append(f"缺少字段: {f}")
     if env.get("v") != "2.0":
         fails.append(f"协议版本错误: v={env.get('v')!r}（应为 '2.0'）")
     if env.get("type") not in VALID_TYPES:
         fails.append(f"type 非法: {env.get('type')!r}")
-    if env.get("status") not in VALID_STATUS:
+    if env.get("status") not in VALID_STATUS_V20:
         fails.append(f"status 非法: {env.get('status')!r}")
     c = env.get("confidence")
     if not isinstance(c, (int, float)) or not (0 <= c <= 100):
@@ -56,6 +82,44 @@ def check_envelope(env: dict, *, producer_must_have_evidence: bool = False) -> l
     elif isinstance(cr, list):
         for i, r in enumerate(cr):
             if r.get("mode") not in {"full", "summary", "ref"}:
+                fails.append(f"context_ref[{i}].mode 非法: {r.get('mode')!r}")
+    return fails
+
+
+def check_envelope(env: dict, *, producer_must_have_evidence: bool = False) -> list:
+    """result_envelope v2.4 主校验。返回失败原因列表，空列表表示通过。
+
+    §2 SSOT：6 必填字段缺一即判 partial；status 小写四值；
+    confidence 为 0-100 数值；type 若存在须在枚举内；evidence 须为数组；
+    执行者/审查者（用 agent_id 判定）在 producer_must_have_evidence=True
+    且 evidence 为空时强制报错；context_ref 支持 dict 与 list 两种形态。
+    """
+    fails = []
+    if not isinstance(env, dict):
+        return ["envelope 不是字典"]
+    for f in REQUIRED_FIELDS_V24:
+        if f not in env:
+            fails.append(f"缺少字段: {f}")
+    t = env.get("type")
+    if t is not None and t not in VALID_TYPES:
+        fails.append(f"type 非法: {t!r}")
+    if env.get("status") not in VALID_STATUS_V24:
+        fails.append(f"status 非法: {env.get('status')!r}")
+    c = env.get("confidence")
+    if not isinstance(c, (int, float)) or not (0 <= c <= 100):
+        fails.append(f"confidence 非法: {c!r}（应为 0-100）")
+    if not isinstance(env.get("evidence", []), list):
+        fails.append("evidence 必须是数组")
+    if producer_must_have_evidence and not env.get("evidence"):
+        if env.get("agent_id") in EVIDENCE_PRODUCERS_V24:
+            fails.append(f"执行者/审查者产出必带 evidence[]（{env.get('agent_id')}）")
+    cr = env.get("context_ref")
+    if isinstance(cr, dict):
+        if cr.get("mode") not in VALID_CONTEXT_MODES:
+            fails.append(f"context_ref.mode 非法: {cr.get('mode')!r}")
+    elif isinstance(cr, list):
+        for i, r in enumerate(cr):
+            if r.get("mode") not in VALID_CONTEXT_MODES:
                 fails.append(f"context_ref[{i}].mode 非法: {r.get('mode')!r}")
     return fails
 
@@ -149,6 +213,7 @@ def arbitrate(conflict: dict) -> dict:
 # 测试用例
 # ─────────────────────────────────────────────────────────────────────
 
+# 已废弃 ACP v2.0 历史 fixture（仅供 run_legacy_envelope_tests 回归）
 ENVELOPE_OK = {
     "v": "2.0",
     "msg_id": "msg-001-test",
@@ -168,42 +233,151 @@ ENVELOPE_OK = {
     "payload": {"result": "test"},
 }
 
+# 当前 result_envelope v2.4 fixture（6 必填 + 常见扩展字段）
+ENVELOPE_OK_V24 = {
+    "agent_id": "domain-expert-biomed",
+    "task_id": "task-v24-001",
+    "phase": "EXECUTE",
+    "status": "success",
+    "confidence": 88,
+    "deliverable_summary": "完成领域检索与证据评级",
+    "type": "RESULT",
+    "trace_id": "trace-v24-001",
+    "msg_id": "msg-001-domain-expert-biomed",
+    "parent_msg_id": "msg-000",
+    "context_ref": {"mode": "summary", "pointer": "state://cp-006"},
+    "evidence": [
+        {"type": "source", "ref": "PMC11187424",
+         "used_for": "2543 不足以支撑 DL", "grade": "2a", "recency": "近12月"}
+    ],
+    "issues": [],
+    "next_agent_hint": "methodological-reviewer",
+    "metrics": {"duration_ms": 0, "retry_count": 0},
+    "payload": {"result": "test"},
+}
 
-def run_envelope_tests() -> tuple:
-    """返回 (用例列表, 通过数, 失败列表)。"""
+
+def run_envelope_v24_tests() -> tuple:
+    """result_envelope v2.4 主套件。返回 (用例列表, 通过数, 失败列表)。"""
+    cases = []
+
+    # V0：完整 fixture（6 必填 + 常见扩展字段）合规
+    cases.append(("V0 完整 v2.4 fixture 合规",
+                  check_envelope(ENVELOPE_OK_V24, producer_must_have_evidence=True), []))
+
+    # V1：合法 6 字段（无任何扩展字段）→ 空失败列表
+    minimal = {k: ENVELOPE_OK_V24[k] for k in REQUIRED_FIELDS_V24}
+    cases.append(("V1 合法 6 字段（无扩展字段）", check_envelope(minimal), []))
+
+    # V2：原 ACP UPPERCASE SUCCESS 已弃用 → 命中「status 非法」
+    bad = dict(ENVELOPE_OK_V24); bad["status"] = "SUCCESS"
+    cases.append(("V2 status=SUCCESS（大写已弃用）", check_envelope(bad),
+                  ["status 非法: 'SUCCESS'"]))
+
+    # V3：缺 deliverable_summary → 命中「缺少字段」
+    bad = {k: v for k, v in ENVELOPE_OK_V24.items() if k != "deliverable_summary"}
+    cases.append(("V3 缺 deliverable_summary", check_envelope(bad),
+                  ["缺少字段: deliverable_summary"]))
+
+    # V4：confidence 越界 → 命中「confidence 非法」
+    bad = dict(ENVELOPE_OK_V24); bad["confidence"] = 150
+    cases.append(("V4 confidence=150 越界", check_envelope(bad),
+                  ["confidence 非法: 150（应为 0-100）"]))
+
+    # V5：evidence 非数组 → 命中「evidence 必须是数组」
+    bad = dict(ENVELOPE_OK_V24); bad["evidence"] = "not-a-list"
+    cases.append(("V5 evidence 非数组", check_envelope(bad),
+                  ["evidence 必须是数组"]))
+
+    # V6：执行者缺 evidence → 命中（用 agent_id 判定）
+    bad = {k: v for k, v in ENVELOPE_OK_V24.items() if k != "evidence"}
+    cases.append(("V6 执行者缺 evidence", check_envelope(bad, producer_must_have_evidence=True),
+                  ["执行者/审查者产出必带 evidence[]（domain-expert-biomed）"]))
+
+    # V7：分析者 socratic-questioner 的 evidence 合法为空 → 无失败
+    anlz = dict(ENVELOPE_OK_V24)
+    anlz["agent_id"] = "socratic-questioner"
+    anlz["evidence"] = []
+    cases.append(("V7 分析者 evidence 合法为空",
+                  check_envelope(anlz, producer_must_have_evidence=True), []))
+
+    # V8：context_ref.mode 非法 → 命中
+    bad = dict(ENVELOPE_OK_V24); bad["context_ref"] = {"mode": "all", "pointer": "x"}
+    cases.append(("V8 context_ref.mode 非法", check_envelope(bad),
+                  ["context_ref.mode 非法: 'all'"]))
+
+    # V9：type 非法 → 命中
+    bad = dict(ENVELOPE_OK_V24); bad["type"] = "MESSAGE"
+    cases.append(("V9 type 非法", check_envelope(bad),
+                  ["type 非法: 'MESSAGE'"]))
+
+    # V10：context_ref 数组形态且 mode 合法 → 无失败
+    good = dict(ENVELOPE_OK_V24)
+    good["context_ref"] = [
+        {"mode": "full", "pointer": "state://cp-001"},
+        {"mode": "ref", "pointer": "state://cp-002"},
+    ]
+    cases.append(("V10 context_ref 数组形态合法", check_envelope(good), []))
+
+    # V11：confidence 非数值 → 命中
+    bad = dict(ENVELOPE_OK_V24); bad["confidence"] = "high"
+    cases.append(("V11 confidence 非数值", check_envelope(bad),
+                  ["confidence 非法: 'high'（应为 0-100）"]))
+
+    # V12：status 小写四值均合法
+    for s in ("success", "partial", "failed", "blocked"):
+        good = dict(ENVELOPE_OK_V24); good["status"] = s
+        cases.append((f"V12 status={s} 合法", check_envelope(good), []))
+
+    passed = 0
+    failures = []
+    for name, fails, expected in cases:
+        if fails == expected:
+            passed += 1
+        else:
+            failures.append((name, fails, expected))
+    return cases, passed, failures
+
+
+def run_legacy_envelope_tests() -> tuple:
+    """ACP v2.0 历史 fixture 回归（不用于当前协议合规判定）。
+
+    12 个 U1–U12 用例原样迁移，仅把 check_envelope 换成 check_envelope_v20，
+    期望文案一字未改。返回 (用例列表, 通过数, 失败列表)。
+    """
     cases = []
 
     # U1: 标准合规
-    cases.append(("U1 信封合规", check_envelope(ENVELOPE_OK, producer_must_have_evidence=True), []))
+    cases.append(("U1 信封合规", check_envelope_v20(ENVELOPE_OK, producer_must_have_evidence=True), []))
 
     # U2: 执行者（producer）缺 evidence 必报错
     bad = {k: v for k, v in ENVELOPE_OK.items() if k != "evidence"}
-    cases.append(("U2 执行者缺 evidence", check_envelope(bad, producer_must_have_evidence=True),
+    cases.append(("U2 执行者缺 evidence", check_envelope_v20(bad, producer_must_have_evidence=True),
                   ["执行者/审查者产出必带 evidence[]（domain-expert）"]))
 
     # U3: 版本错误
     bad = dict(ENVELOPE_OK); bad["v"] = "1.0"
-    cases.append(("U3 版本非 v2.0", check_envelope(bad),
+    cases.append(("U3 版本非 v2.0", check_envelope_v20(bad),
                   ["协议版本错误: v='1.0'（应为 '2.0'）"]))
 
     # U4: confidence 越界
     bad = dict(ENVELOPE_OK); bad["confidence"] = 150
-    cases.append(("U4 confidence 越界", check_envelope(bad),
+    cases.append(("U4 confidence 越界", check_envelope_v20(bad),
                   ["confidence 非法: 150（应为 0-100）"]))
 
     # U5: evidence 非数组（此前该分支从未被测试覆盖）
     bad = dict(ENVELOPE_OK); bad["evidence"] = "not-a-list"
-    cases.append(("U5 evidence 非数组", check_envelope(bad),
+    cases.append(("U5 evidence 非数组", check_envelope_v20(bad),
                   ["evidence 必须是数组"]))
 
     # U6: context_ref.mode 非法
     bad = dict(ENVELOPE_OK); bad["context_ref"] = {"mode": "all", "pointer": "x"}
-    cases.append(("U6 context_ref.mode 非法", check_envelope(bad),
+    cases.append(("U6 context_ref.mode 非法", check_envelope_v20(bad),
                   ["context_ref.mode 非法: 'all'"]))
 
     # U7: status 非法
     bad = dict(ENVELOPE_OK); bad["status"] = "OK"
-    cases.append(("U7 status 非法", check_envelope(bad),
+    cases.append(("U7 status 非法", check_envelope_v20(bad),
                   ["status 非法: 'OK'"]))
 
     # U8: GRADE 越界
@@ -218,17 +392,17 @@ def run_envelope_tests() -> tuple:
 
     # U10: type 非法
     bad = dict(ENVELOPE_OK); bad["type"] = "MESSAGE"
-    cases.append(("U10 type 非法", check_envelope(bad),
+    cases.append(("U10 type 非法", check_envelope_v20(bad),
                   ["type 非法: 'MESSAGE'"]))
 
     # U11: context_ref 数组模式
     bad = dict(ENVELOPE_OK); bad["context_ref"] = [
         {"mode": "ref", "pointer": "a"}, {"mode": "summary", "pointer": "b"}]
-    cases.append(("U11 context_ref 数组模式", check_envelope(bad), []))
+    cases.append(("U11 context_ref 数组模式", check_envelope_v20(bad), []))
 
     # U12: 分析者 evidence 可空
     anlz = dict(ENVELOPE_OK); anlz["from"] = "socratic-questioner"; anlz["evidence"] = []
-    cases.append(("U12 分析者 evidence 合法为空", check_envelope(anlz), []))
+    cases.append(("U12 分析者 evidence 合法为空", check_envelope_v20(anlz), []))
 
     passed = 0
     failures = []
@@ -328,9 +502,24 @@ def main():
     suite = sys.argv[1] if len(sys.argv) > 1 else "all"
 
     if suite in ("all", "envelope"):
-        cases, passed, failures = run_envelope_tests()
+        # ── 主套件：result_envelope v2.4（当前 SSOT §2）──
+        cases, passed, failures = run_envelope_v24_tests()
         total = len(cases)
-        print(f"\n── 信封套件：{passed}/{total} 通过 ──")
+        print(f"\n── result_envelope v2.4 主套件：{passed}/{total} 通过 ──")
+        for name, fails, expected in cases:
+            mark = "✅" if fails == expected else "❌"
+            print(f"  {mark} {name}")
+            if fails != expected:
+                print(f"      ↳ 实际: {fails}")
+                print(f"      ↳ 期望: {expected}")
+            elif fails:
+                for line in fails:
+                    print(f"      ↳ 已检出: {line}")
+
+        # ── 历史 fixture 回归：已废弃 ACP v2.0，不参与当前协议合规判定 ──
+        cases, passed, failures = run_legacy_envelope_tests()
+        total = len(cases)
+        print(f"\n── ACP v2.0 历史 fixture 回归（不用于当前协议合规判定）：{passed}/{total} 通过 ──")
         for name, fails, expected in cases:
             mark = "✅" if fails == expected else "❌"
             print(f"  {mark} {name}")

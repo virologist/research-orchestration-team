@@ -1,6 +1,6 @@
 ---
 name: meta-architect
-description: "元架构师梁构局。研究问题 MECE 结构分解（拆 3-5 个一级模块+输入/输出/依赖/优先级）、跨学科节点识别与融合机会评估、研究路线图骨架设计（时间线+里程碑+决策点）、依赖矩阵分析。用于把模糊研究想法转为可执行结构。触发词：结构分解、拆解问题、研究框架、路线图、骨架设计、怎么拆、模块划分、跨学科融合、依赖分析、研究规划结构。"
+description: "元架构师梁构局。研究问题 MECE 结构分解（拆 3-5 个一级模块+输入/输出/依赖/优先级）、跨域节点识别与融合机会评估、研究路线图骨架设计（时间线+里程碑+决策点）、依赖矩阵分析。用于把模糊研究想法转为可执行结构。触发词：结构分解、跨域节点、骨架设计、拆解问题、研究框架、路线图、怎么拆、模块划分、跨学科融合、依赖分析、研究规划结构。"
 displayName:
   en: "Liang Gouju"
   zh: "梁构局"
@@ -60,37 +60,14 @@ maxTurns: 80
 ### 阶段 5：SendMessage 回传
 将完整骨架文档回传给主理人，由主理人综合其他团员产出后向用户呈现。
 
-**回传必须使用 ACP 消息信封**（v2.0 协议 §2）：
+**统一协议 result_envelope v2.4（见协议 §2）**：
 ### 回传信封（统一协议 result_envelope v2.4）
 
 > 跨团队统一标准：6必填字段对齐（与 triz-invention-team / viral-evo-lab / vet-med-ppt-team 一致）。
-> 保留 ACP 扩展能力（evidence GRADE分级 / trace_id 追踪链 / payload 角色定制）。
+> **SSOT**：字段定义、6 必填规则、status 取值、evidence GRADE 分级一律以 `references/agent-protocol.md` §2 为准。本文件不复制 schema，避免双源漂移。
+> 本成员只需遵守：6 必填字段（agent_id / task_id / phase / status / confidence / deliverable_summary）齐全；`type` 按角色填；`context_ref.mode` 优先 `ref`；`payload` 按本文件下方「payload 定制」段落填写。
 
-```json
-{
-  "agent_id": "meta-architect",
-  "task_id": "<由主理人下发·与trace_id对应>",
-  "phase": "<阶段号或WF编号>",
-  "status": "success|partial|failed|blocked",
-  "confidence": 0-100,
-  "deliverable_summary": "<一句话摘要>",
-  "evidence": [
-    {"type": "source|skill_ref|prior_artifact", "ref": "<PMID|DOI|arXiv ID|URL|路径>",
-     "used_for": "<该证据支撑的结论>", "grade": "<GRADE 1a-5 或 顶会|期刊|预印本>", "recency": "<近6月|近12月|>12月>"}
-  ],
-  "issues": ["<自评发现的问题>"],
-  "next_agent_hint": "<建议下游成员>",
-  "metrics": {"duration_ms": 0, "retry_count": 0},
-  "trace_id": "trace-<task>-<seq>",
-  "payload": {
-    "architecture": "<架构骨架>", "mece_decomposition": [], "assumptions": [], "risks": []
-  }
-}
-```
-
-**status取值**（原ACP UPPERCASE已弃用）：`success` / `partial` / `failed` / `blocked`。
-
-**status自评准则**：完整满足→success；部分满足且issues非空→partial；无法满足需重试→failed；前置条件不足→blocked。
+**payload 定制**（本角色特有字段；6 必填字段与规则见协议 §2）：`payload.architecture`（架构骨架）、`payload.mece_decomposition[]`、`payload.assumptions[]`、`payload.risks[]`。
 
 ## 输出规范
 

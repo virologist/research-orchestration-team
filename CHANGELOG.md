@@ -9,39 +9,64 @@
 
 ### Added（补记 v2.1.2 → 0945fba 欠账，tag 后曾长期未升版——本版起恢复「改必升版」纪律）
 
-- **959dc1e / f746291 / 1eda103**：spawn 装配器 shim v3.4.2 跟升——60 行 R9 → 102 行联邦两级查找（联邦真源优先 + vendor 兜底 + SHIM_DEBUG），配套 `vendor/shared-core/` 副本 + `VENDOR.json` + `tests/test_vendor_core.py` 防漂移门禁（V1-V6 全 PASS，含 git-clone 态隔离冒烟）；适配自 smart-textbook-team 先例
+- **959dc1e / f746291 / 1eda103**：spawn 装配器 shim v3.4.2 跟升——60 行 R9 → 102 行联邦两级查找（联邦真源优先 + vendor 兜底 + SHIM_DEBUG），配套 `vendor/shared-core/` 副本 + `VENDOR.json` + `tests/test_vendor_core.py` 防漂移门禁——门禁全绿（详见下方 Regression evidence 表；`test_vendor_core.py` 在 git/CI 隔离态 V4 按设计 SKIP）；适配自 smart-textbook-team 先例
 - **5fc2630 / 688dd92**：移除包根 settings.json（依「宿主启动时必然删除」假设）——**本版已推翻该决策**，见下方 Fixed/Reverted
 
 ### Added（本版新能力）
 
 - **状态持久化（P0-2，治协议 §3 纸面 schema）**：新增 `skills/.../scripts/state_io.py`——八阶段状态的确定性落盘层。五命令 init/advance/resume/finish/budget；原子写（.tmp + os.replace，并发 20 路实测无损坏）；`state://cp-NNN` 伪 URI 绑定真实路径 `.harness-runs/<task_id>/checkpoints/cp-NNN.md`；退出码 0/1/2/3（JSON 损坏 fail fast）。team-lead.md 新增「状态初始化与断点续跑」强制条款：开工 resume 盘点、阶段收尾 advance、撞限恢复不依赖对话记忆。协议 §3 增补「状态落盘（确定性工程层）」节，写入者=仅主理人
-- **routing 一致性评估（P2）**：`scripts/routing_eval.py`——registry trigger 词表 vs 成员 MD description 的结构一致性检查 + 注入式负例 selftest（随 P2 commit 落地）
+- **routing 一致性评估（P2，已落地）**：新增 `scripts/routing_eval.py` + `scripts/routing_eval_selftest.py`。R1 三方成员集合 / R2 关键触发词覆盖 / R3 条目结构完整 / R4 工具名形态 / R5 工具集合一致性（比对 3 个 atomic MD description 与 registry tools 行，防伪造与漂移；交叉验证后补），共 33 项；按 `__file__` 上溯定位、支持 `--root`，rc 0/1/2。selftest 10 例注入式负例（P1 正向 + N1~N9，raw_probe 未归一化护栏不计入用例数），与仓库真实状态解耦。补齐 README/CHANGELOG 曾提前引用该文件造成的悬空引用
+- **CI 门禁补齐（P2）**：`.github/workflows/validate.yml` 新增 3 个 step——Routing consistency check (R1-R5) / Routing eval self-test (mutation-based) / Vendor core anti-drift (V1-V6)，把原仅本地手跑的两套校验纳入每次 push；另新增 State IO lifecycle smoke test（v2.2.0，八阶段 + 8 检查点全链路冒烟）
 
 ### Fixed
 
 - **恢复包根 settings.json + C12 护栏（P0-1，Reverted 5fc2630 的决策）**：官方 validate_expert 对 Team 型硬要求该文件（报错原文「Team type must have settings.json」），v2.1.2 后删除导致官方校验 1 error。反证：agent-harness-expert 同格式文件存活 3 周未被宿主删除。「宿主必然删除」假设不成立；若未来宿主真的删除，C12 会在下一次发行校验立即报警，而不是等官方校验器
-- **manifest_check.py 63→64 项**：新增 C12（Team 型 settings.json 存在 + 单键 agent 指向主理人）；selftest 17→19 条（N18 删除负例 / N19 篡改负例）
+- **manifest_check.py 63→64 项**：新增 C12（Team 型 settings.json 存在 + 单键 agent 指向主理人）；selftest 17→21 条（N18 删除负例 / N19 篡改负例 / N20 旧团队规模表述 / N21 marketplace.json Six-agent 护栏）
+- **C8 废弃表述护栏补强**：`5 人协作` 规则的过期描述「现为六人」→「现为八人」；新增 `六人编排团|6 人协作` 规则，刻意避开 README 版本史里合法的「v2.0.0 六人团队」历史描述，并配 N20 注入式负例证明规则有效
 - **harness_eval.py 根定位修复（P1）**：`Path.cwd()` → `__file__` 上溯（与 manifest_check 一致），任意外部目录调用不再 exit 2；harness_eval_selftest 同步覆盖
-- **README 三处过期同步（P1）**：团队表 6 人→8 人；目录树补 vendor/、tests/、harness_eval.py、state_io.py、routing_eval.py；版本历史补 2.1.0/2.1.1/2.1.2/2.2.0
-- **registry 工具名核验与降级链（P1）**：核验 `mcp__crossref` / `mcp__paper_search_server` 实际可用性；成员 MD 增「源缺席→换源→降置信」三级降级条款
+- **README 三处过期同步（P1）**：团队表 6 人→8 人；目录树补 vendor/、tests/、harness_eval.py、state_io.py、routing_eval.py；版本历史补 2.1.0/2.1.1/2.1.2/2.2.0；健康检查命令扩为全量清单
+- **registry 工具名失真修复 + 三级降级链（P1，已落地）**：对照本机 `~/.workbuddy/mcp.json` 的 45 个真实 server 亲验，确认裸名 `mcp__crossref` / `mcp__paper_search_server` / `mcp__consensus` / `mcp__biorxiv` / 「政策文件库」全部无法对应真实 server，已按领域替换为真实名（注意 `biorxiv-mcp-server` 确为真实 server，保留其全名 `mcp__biorxiv-mcp-server` 作为预印本 / 新颖性核查源）——biomed：`mcp__pubmed` / `mcp__biomcp` / `mcp__semantic-scholar` / `mcp__biorxiv-mcp-server`；ai：`mcp__arxiv-mcp-server` / `mcp__semantic-scholar` / `mcp__context7` / `mcp__fetch`；general：`mcp__semantic-scholar` / `mcp__tooluniverse` / `mcp__web-scout`（registry tools 行、权限表与 3 个 atomic 成员 MD description 同步）。新增「工具降级链」节：① 首选源不可用不得静默跳过 → ② 同类换源（三领域首选/次选/兜底映射表）→ ③ 三源全败降置信输出（confidence ≤ 40、`source_unavailable` 标注、禁编造 DOI/PMID/URL、6 必填字段齐全、status 取 partial/blocked、issues 给补检建议）
+- **成员 MD 信封单源化（P2）**：删除 8 处重复的 `result_envelope` JSON schema 与 status 取值复制，统一改为引用 `references/agent-protocol.md` §2；补 `payload 定制` 纯文本行保留各角色特有字段，并把 socratic-questioner 第二处 schema 的 `questions/assumption_density/emotion_risk/ready_for_align` 合并回主节，根治两套 payload 字段互相漂移。team-lead 作为编排者不产出成员式 RESULT 信封，属结构性例外；契约章节标题全部保留
+- **memory_log.py docstring 纠错（P2）**：原写「对应 agent-protocol.md §4 三级记忆」，实际 §4 是上下文传递（Context Passing）；改指 team-lead「Harness 运行时规范 · Memory 三级」并说明与 §4 互补。Usage 中违反「禁代产出」铁律的示例换成合规的根定位修复案例。可执行代码零改动
 - **displayDescription.zh 53→48 字**（官方建议 40-50）
 
 ### Changed
 
 - 双 manifest version 2.1.2 → **2.2.0**；README 头部同步
-- team-lead.md frontmatter：description 升 8 人 / v2.2 语义；LEARNING.md 补 tag 后 5 条历史记录 + 新增「失败回流规则」落盘节（P1）
+- team-lead.md frontmatter：version 2.0.0 → 2.2.0、description 升 8 人 / v2.2 语义；Observability 节把 LEARNING.md 写入从注脚升级为三步强制收尾清单（finish → task 记录 → lesson 回流），写明三步未做完不得报完成
+- LEARNING.md：补 tag v2.1.2 后 5 条真实历史 task 记录（证据均为仓库内 commit/CHANGELOG/README，未采集的 observability 如实标注、不自造数值）+ 新增「失败回流规则落盘」节（五类触发 / 三件套 / 护栏落地判据「未闭环不得写已修复」/ 复跑验证）+ Ralph Loop 协议编号 1,2,4,5,6,7 修正为 1–7 并补入「跑校验脚本确认基线」
+- meta-architect.md：description 术语统一为正文 8 处使用的「跨域节点」，与 registry trigger 的「跨域节点」对齐，消除 SSOT 与成员正文的术语漂移
+- `.gitignore` 增 `.harness-runs/`（state_io.py 运行期状态不入库）
 
-### Regression evidence
+### 交叉验证后修复（部署前）
 
-| 套件 | v2.2.0 |
-|------|--------|
+- **B1 · 协议门禁方向性错误**：`protocol_check.py` 此前按已废弃的 ACP v2.0 信封判定合规，方向反了。重写后 envelope 模式以 **result_envelope v2.4 主套件 16/16** 作为当前合规判定，ACP v2.0 的 12/12 仅保留为历史 fixture 回归（legacy 不参与当前合规判定）。
+- **R3 / H6 · 权限档章节漏检**：改为按 `^### (safe|moderate|dangerous)` 标题识别 + 正文非空判定，堵住「删掉整个权限档章节仍能过门禁」的假绿。
+- **R5 · 工具集合覆盖盲区（新发现阻断项）**：原 R4 只校验 registry 自身 tools 行形态，从不比对 `agents/*.md`，MD 工具名漂移甚至伪造（实测注入 `mcp__GHOST_TOOL` 仍 30/30 全绿）。根治：3 个 atomic MD description 工具枚举单源化（只引用 registry 为 SSOT）+ 新增 R5「MD 出现 token 即须与 registry 集合双向相等（missing/extra/illegal 全 FAIL），零 token 视为已单源化 PASS」+ N8/N9 负例（伪造 `mcp__` 名与非工具名裸词）。
+- **state_io 并发互踩（冻结前亲测实锤）**：20 路并发 advance 原本 19/20 崩溃（read-modify-write 共享 `.tmp` 互踩）；修复为 flock 互斥锁（把协议 §3「写入者=仅主理人」纸面约定固化为工程约束）+ PID 隔离 tmp 兜底，复测 20 路全 rc=0、turn 无丢更新。
+- **routing_eval_selftest 自愈夹具**：新增 raw_probe 未归一化护栏，拒绝自愈夹具把真实缺陷悄悄修回后再判绿（掩盖真实缺陷）。
+- **CI paths 补齐**：`.github/workflows/validate.yml` 触发器补 `tests/**` 与 `vendor/**`，避免改动这两处时不触发 CI。
+- **两份 marketplace.json**：六agent / Six-agent → 八agent / Eight-agent，并去掉过期的 ACP 措辞。
+- **C8 护栏 + N21**：补 `六agent|Six-agent` 规则，并新增 N21 负例——向 `.claude-plugin/marketplace.json` 注入 Six-agent 旧表述，验证 C8 的 `rglob` 覆盖隐藏目录。
+- **全库阶段名统一**：`EXECUTE_ONE_STEP` → `EXECUTE`（与 `state_io.py` 的 `PHASES` 常量及协议 SSOT 一致）；CHANGELOG 历史条目保留原文并加注，以存审计。
+
+### Regression evidence（v2.2.0 部署前逐功能实测）
+
+| 套件 | 结果 |
+|------|------|
 | `manifest_check.py` | 64/64 ✅ |
-| `manifest_check_selftest.py` | 19/19 ✅（N18/N19 新增）|
+| `manifest_check_selftest.py` | 20/20 ✅（N18/N19/N20）|
 | `harness_eval.py` | 12/12 ✅ |
 | `harness_eval_selftest.py` | 13/13 ✅ |
-| `protocol_check.py` | envelope 12 + conflict 4 + integration ✅ |
-| `test_vendor_core.py` | V1-V6 6/6 ✅ |
-| 官方 `validate_expert.py` | 0 error ✅（原 1 error）|
+| `routing_eval.py` | 30/30 ✅（R1 4 + R2 8 + R3 15 + R4 3）|
+| `routing_eval_selftest.py` | 7/7 ✅ |
+| `protocol_check.py` | envelope 16/16(v2.4) + 12/12(legacy) + conflict 5/5 + integration 8/8 ✅ |
+| `test_vendor_core.py` | V1-V6 6/6 ✅；安装态 6/6 PASS，git clone / CI 隔离态 V4 按设计 SKIP（联邦真源不可达），非门禁失败 |
+| `state_io.py` 全链路 | init→advance×8→resume→budget→finish 全 rc=0；8 个 `cp-NNN.md` 真实落盘；异常 rc=1/2/3；并发 20 路原子写无损；幂等 init ✅ |
+| `topic_scoring.py` 边界 | 越界 rc=1 / 缺维 rc=2 / 正常 rc=0 ✅ |
+| 外部目录调用 | `manifest_check` / `harness_eval` / `routing_eval` 从 `/tmp` 调用均不依赖 cwd ✅ |
+| CI workflow | YAML 可解析，`validate` job 共 11 steps ✅ |
+| 官方 `validate_expert.py` | 0 error / 0 warning ✅（原 1 error + 1 warning）|
 
 ## [2.1.2] - 2026-09-30
 
@@ -123,8 +148,8 @@
 #### Added（新增）
 
 - **`scripts/harness_eval.py`**：12 项 Harness Engineering 注入式正向校验（H1-H12）
-- **`scripts/research-orchestration-workflow/references/agent-registry.md`**：单一事实源（SSOT），含 trigger / tools / safe/moderate/dangerous 三档权限分级
-- **`scripts/research-orchestration-workflow/references/LEARNING.md`**：跨会话连续性（Anthropic Ralph Loop 模式），每次任务必追加 task 记录
+- **`scripts/research-orchestration-workflow/references/agent-registry.md`**：单一事实源（SSOT），含 trigger / tools / safe/moderate/dangerous 三档权限分级（早期条目误写为 `scripts/`，实际路径为 `skills/`，此处保留原文以存审计）
+- **`scripts/research-orchestration-workflow/references/LEARNING.md`**：跨会话连续性（Anthropic Ralph Loop 模式），每次任务必追加 task 记录（早期条目误写为 `scripts/`，实际路径为 `skills/`，此处保留原文以存审计）
 - **`agents/domain-expert-biomed.md`**：生物医药 atomic（PubMed / GISAID / 兽医 / 分子生物学 / 流行病学 / 病原）
 - **`agents/domain-expert-ai.md`**：AI atomic（大模型 / RAG / Agent / 生信 / 蛋白设计）
 - **`agents/domain-expert-general.md`**：通用研究方法学 atomic（统计 / 教育 / 管理 / 政策）
@@ -284,7 +309,7 @@ v2.0.2 之后，本仓库既是「一个可被 `/plugin marketplace add` 添加�
 ### Added（新增）
 
 - **整合者顾合璧**（synthesis-integrator）：多源融合、冲突五级仲裁、共识矩阵生成。触发词：整合、融合、汇总、冲突、仲裁、共识、综合报告、多源合并。
-- **八阶段状态机**：FREEZE → IDENTIFY → COLLAPSE → CLARIFY → ALIGN → EXECUTE_ONE_STEP → REVIEW → NEXT。
+- **八阶段状态机**：FREEZE → IDENTIFY → COLLAPSE → CLARIFY → ALIGN → EXECUTE_ONE_STEP → REVIEW → NEXT。（历史原文；v2.2.0 起阶段名统一为 `EXECUTE`，与 `state_io.py` 的 `PHASES` 常量及协议 SSOT 一致）
 - **ACP 通信协议 v2.0**（`skills/research-orchestration-workflow/references/agent-protocol.md`，9 节）：
   - §1 角色矩阵（编排者/分析者/执行者/审查者/整合者 + 能力边界 + 接口契约）
   - §2 消息信封（v2.0 / msg_id / type / trace_id / evidence / context_ref）
@@ -296,9 +321,9 @@ v2.0.2 之后，本仓库既是「一个可被 `/plugin marketplace add` 添加�
   - §8 结果回传（status / confidence / evidence / context_ref / token_budget）
   - §9 生命周期终止条件
 - **Harness 12 组件运行时**：Loop / Tools / Memory / Context / Prompt / Output / State / Error / Guardrails / Verify / Subagent / Lifecycle 全部落地。
-- **评分脚本**（`scripts/topic_scoring.py`）：8 维选题评分 + S/A/B/C 分档 + 3 条止损线 + 复评决策（维持/升档/降档/止损）。
-- **协议校验脚本**（`scripts/protocol_check.py`）：12 信封 + 5 冲突仲裁 + 集成仿真单元测试。
-- **Memory 持久层脚本**（`scripts/memory_log.py`）：4 类（decision/preference/convention/lesson）+ daily/longterm 双目标 + 去重。
+- **评分脚本**（`scripts/topic_scoring.py`）：8 维选题评分 + S/A/B/C 分档 + 3 条止损线 + 复评决策（维持/升档/降档/止损）。（早期条目误写为 `scripts/`，实际路径为 `skills/research-orchestration-workflow/scripts/`）
+- **协议校验脚本**（`scripts/protocol_check.py`）：12 信封（当时口径；v2.2.0 现为 result_envelope v2.4 主套件 16 + ACP v2.0 legacy 回归 12）+ 5 冲突仲裁 + 集成仿真单元测试。（早期条目误写为 `scripts/`，实际路径为 `skills/research-orchestration-workflow/scripts/`）
+- **Memory 持久层脚本**（`scripts/memory_log.py`）：4 类（decision/preference/convention/lesson）+ daily/longterm 双目标 + 去重。（早期条目误写为 `scripts/`，实际路径为 `skills/research-orchestration-workflow/scripts/`）
 - **红队全面审查报告**（`docs/REDTEAM-REPORT.md`）：15 项 bug 分类诊断、修复方案、回归证据。
 - **GitHub Actions CI**（`.github/workflows/validate.yml`）：push 自动跑 validate_expert.py + protocol_check.py。
 - **双 manifest**（`.claude-plugin/` + `.codebuddy-plugin/`）：同时被 Claude Code / WorkBuddy 原生识别。

@@ -2,13 +2,15 @@
 持久记忆自动写入脚本 / Persistent Memory Logger
 
 将团队运行的关键信息（决策、用户偏好、项目约定、经验教训）自动写入
-工作区 `.workbuddy/memory/`，对应 agent-protocol.md §4 三级记忆中的
-「持久记忆（跨会话）」层。主理人在任务收尾时调用，实现记忆自动化。
+工作区 `.workbuddy/memory/`，实现工作区持久记忆层（跨会话），对应
+team-lead「Harness 运行时规范 · Memory 三级」约定；与 agent-protocol.md
+§4 的 full/summary/ref 上下文传递互补（§4 讲的是上下文传递，并非三级记忆）。
+主理人在任务收尾时调用，实现记忆自动化。
 
 Usage:
     python3 memory_log.py --note "用户要求所有输出用中文" --type preference
     python3 memory_log.py --note "H9N2换株决策=降档" --type decision --trace-id trace-h9n2-001
-    python3 memory_log.py --note "测试发现TeamCreate不可用时降级为代产出" --type lesson
+    python3 memory_log.py --note "测试发现 harness_eval 从外部目录调用失败 → 已修根定位" --type lesson
     python3 memory_log.py --dry-run --note "预览将写入的内容"
 
 --type 可选：decision(决策) | preference(用户偏好) | convention(项目约定) | lesson(经验教训)

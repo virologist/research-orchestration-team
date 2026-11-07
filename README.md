@@ -20,17 +20,21 @@
 
 | 角色 | 名字 | 职责 |
 |------|------|------|
-| 首席研究编排官（主理人）| 沈知枢（Shen Zhishu）| 全流程编排、状态机控制、最终汇编 |
-| 苏格拉底追问者 | 问清源（Wen Qingyuan）| 5 轮×5 问澄清、信息完整度评估 |
-| 元架构师 | 梁构局（Liang Gouju）| 问题分解、跨域节点、骨架设计 |
-| 跨学科领域专家 | 博域闻（Bo Yuwen）| 跨学科知识调用、可行性核查、前沿扫描 |
-| 方法学复评官 | 严复回（Yan Fuhui）| 证据等级审查、复评闭环决策 |
-| 整合者 | 顾合璧（Gu Hebi）| 多源融合、冲突五级仲裁、综合汇编 |
+| 首席研究编排官（主理人）| 沈知枢（Shen Zhishu）| 全流程编排、八阶段状态机、Orchestrator Pattern 路由、最终汇编 |
+| 苏格拉底追问者 | 问清源（Wen Qingyuan）| 5 轮×5 问澄清、信息完整度四维评估、假设密度识别 |
+| 元架构师 | 梁构局（Liang Gouju）| MECE 结构分解、跨域节点识别、路线图骨架设计 |
+| 领域专家 · 生医（atomic）| 博域闻·生医 | PubMed/GISAID/兽医/分子生物学/流行病学检索与可行性核查 |
+| 领域专家 · AI（atomic）| 博域闻·AI | 大模型/RAG/Agent/生信/蛋白设计检索与算力可行性核查 |
+| 领域专家 · 通识（atomic）| 博域闻·通识 | 统计/教育/管理/政策/研究设计检索与方法学核查 |
+| 方法学复评官 | 严复回（Yan Fuhui）| GRADE 证据等级审查、方法学合规、复评四项决策 |
+| 整合者 | 顾合璧（Gu Hebi）| 多源融合、L1-L5 冲突仲裁、共识矩阵、综合汇编 |
+
+> v2.1.0 起原单一 `domain-expert` 拆为 3 个 atomic subagent（biomed / ai / general），由主理人按领域标签 fan-out 调度。路由单一事实源见 `skills/research-orchestration-workflow/references/agent-registry.md`。
 
 ## 核心工作流：八阶段状态机
 
 ```
-FREEZE → IDENTIFY → COLLAPSE → CLARIFY → ALIGN → EXECUTE_ONE_STEP → REVIEW → NEXT
+FREEZE → IDENTIFY → COLLAPSE → CLARIFY → ALIGN → EXECUTE → REVIEW → NEXT
 ```
 
 ## 目录结构
@@ -46,35 +50,51 @@ research-orchestration-team/
 ├── .github/
 │   └── workflows/
 │       └── validate.yml     # CI：双 manifest 校验 + 协议单测 + 一致性扫描
-├── agents/
+├── agents/                                          # 8 名成员（主理人 1 + 团员 7）
 │   ├── research-orchestration-team-team-lead.md   # 主理人：沈知枢
-│   ├── socratic-questioner.md                      # 团员1：问清源
-│   ├── meta-architect.md                           # 团员2：梁构局
-│   ├── domain-expert.md                            # 团员3：博域闻
-│   ├── methodological-reviewer.md                  # 团员4：严复回
-│   └── synthesis-integrator.md                     # 团员5：顾合璧（整合者）
+│   ├── socratic-questioner.md                      # 问清源（分析者）
+│   ├── meta-architect.md                           # 梁构局（分析者）
+│   ├── domain-expert-biomed.md                     # 博域闻·生医（atomic 执行者）
+│   ├── domain-expert-ai.md                         # 博域闻·AI（atomic 执行者）
+│   ├── domain-expert-general.md                    # 博域闻·通识（atomic 执行者）
+│   ├── methodological-reviewer.md                  # 严复回（审查者）
+│   └── synthesis-integrator.md                     # 顾合璧（整合者）
 ├── skills/
 │   └── research-orchestration-workflow/
-│       ├── SKILL.md                                # 强制工作流模块
+│       ├── SKILL.md                                # 强制工作流模块（选题/深度调研/复评闭环）
 │       ├── references/
-│       │   └── agent-protocol.md                   # 多代理通信协议 v2.0（9 节）
+│       │   ├── agent-protocol.md                   # 多代理通信协议（9 节 + v2.2.0 状态落盘）
+│       │   ├── agent-registry.md                   # 路由单一事实源（trigger/tools/权限三档）
+│       │   └── LEARNING.md                         # Ralph Loop 跨会话记忆载体
 │       ├── scripts/
 │       │   ├── topic_scoring.py                    # 选题评分卡生成器
 │       │   ├── protocol_check.py                   # 协议合规单元测试
-│       │   └── memory_log.py                       # 持久记忆自动写入
+│       │   ├── memory_log.py                       # 持久记忆自动写入
+│       │   └── state_io.py                         # v2.2.0 状态持久化与断点续跑
 │       └── templates/
 │           └── topic-scoring-card.md               # 选题评分卡模板
 ├── scripts/
-│   ├── manifest_check.py                            # 包一致性校验 C1–C10（双清单对等 / 市场 / 资产 / 版本 / 废弃表述 / 契约章节）
-│   └── manifest_check_selftest.py                   # 注入式负例自测（17 条），证明校验器没有退化成摆设
-├── avatars/                                         # 6 名成员头像 + 团队头像（随 git 分发）
+│   ├── assemble_spawn_prompt.py                    # 成员人设注入装配器（联邦两级查找 shim）
+│   ├── manifest_check.py                           # 包一致性校验 C1–C12（含 Team settings.json）
+│   ├── manifest_check_selftest.py                  # 注入式负例自测（21 条）
+│   ├── harness_eval.py                             # Harness Engineering 12 项设计检查
+│   ├── harness_eval_selftest.py                    # harness 注入式负例自测（14 条）
+│   ├── routing_eval.py                             # v2.2.0 路由结构一致性评估
+│   └── routing_eval_selftest.py                    # v2.2.0 路由注入式负例自测（10 条 · 含 raw_probe 未归一化护栏）
+├── vendor/shared-core/                              # 联邦共享件兜底副本 + VENDOR.json 清单
+├── tests/
+│   └── test_vendor_core.py                         # 防漂移门禁 V1–V6
+├── avatars/                                         # 8 名成员头像 + 团队头像（随 git 分发）
 ├── docs/
 │   ├── REDTEAM-REPORT.md                           # 红队审查报告（5 维度 · 缺陷 · 回归证据）
-│   └── arbitration-L4L5-live-test.md               # 冲突仲裁 L4/L5 真实团队实测记录
+│   ├── arbitration-L4L5-live-test.md               # 冲突仲裁 L4/L5 真实团队实测记录
+│   └── harness-eval-report-v2.0.2.md               # Harness 改造前基线（0/12）
 ├── .gitignore
 ├── README.md
 ├── CHANGELOG.md                                     # 版本变更历史
 ├── CONTRIBUTING.md                                  # 贡献流程与协议变更政策
+├── settings.json                                    # Team 型包根必需（agent 指向主理人）
+├── test-prompts.json
 └── LICENSE                                          # MIT
 ```
 
@@ -108,6 +128,10 @@ research-orchestration-team/
 - **v2.0.0** (2026-09-10)：六人团队（新增整合者顾合璧）+ 八阶段状态机 + ACP 通信协议（9 节）+ 冲突五级仲裁 + harness 12 组件运行时
 - **v2.0.1** (2026-09-10)：发布卫生修复（清理误提交的编辑备份、加固 `.gitignore`、头像纳入 git 分发以统一 clone/tarball 产物、修复文档悬空链接与结构树）。协议与运行时**行为无变更**，属纯打包层补丁。
 - **v2.0.2** (2026-09-10)：修复**一键安装失效**——补入缺失的市场清单 `marketplace.json`（两份），使 `/plugin marketplace add` 真正可用；`scripts/manifest_check.py` 增至 C1–C10（46 项）。协议与运行时**行为无变更**。
+- **v2.1.0** (2026-09-18)：Harness Engineering 升级——`domain-expert` 拆为 3 个 atomic subagent；新增 `agent-registry.md` 路由单一事实源、safe/moderate/dangerous 权限三档、Loop 硬停止、per-step verification、阶段边界 compact、4 项 observability metrics、LEARNING.md 跨会话记忆、harness_eval H1–H12。
+- **v2.1.1** (2026-09-19)：新增 `harness_eval_selftest.py`（dev-only 负例工具），运行时行为无变更。
+- **v2.1.2** (2026-09-30)：atomic 拆分残留补全（4 处死引用、六/八阶段表述、maxTurns 消歧义）；协议统一为 result_envelope v2.4；CI 纳入 harness 校验。回归 12/12 + 63/63 + 17/17 + 13/13。
+- **v2.2.0** (2026-11-07)：从零独立诊断后的补全完善版。恢复包根 `settings.json`（官方校验 0 error）+ manifest C12 护栏；新增 `state_io.py` 状态持久化与断点续跑（治协议 §3 纸面 schema）；harness_eval 根定位修复；routing_eval 结构一致性评估；README/CHANGELOG/LEARNING 历史欠账补齐。两轮独立交叉验证后修复 3 个门禁假绿（R3/H6 权限档章节漏检、routing selftest 自愈夹具掩盖真实缺陷）与 1 个方向性错误（protocol_check 校验废弃 ACP v2.0），并补齐文档计数与两份 marketplace.json 的八agent 描述。详见 [CHANGELOG.md](./CHANGELOG.md)。
 
 ## 安装方式（三套并存）
 
@@ -143,9 +167,9 @@ cp -r research-orchestration-team ~/.claude/skills/research-orchestration-team
 
 ### 方式 3 · GitHub Release tarball
 
-下载 [v2.0.2 release](https://github.com/virologist/research-orchestration-team/releases/tag/v2.0.2) 的 `research-orchestration-team-2.0.2.tar.gz` → 解压 → 按方式 2 拷贝。
+下载 [v2.2.0 release](https://github.com/virologist/research-orchestration-team/releases/tag/v2.2.0) 的 `research-orchestration-team-2.2.0.tar.gz` → 解压 → 按方式 2 拷贝。
 
-> tarball 内容与 `git clone` 一致（含 `avatars/`），已剔除编辑备份等本地产物。
+> tarball 内容与 `git clone` 一致（含 `avatars/` 与包根 `settings.json`），已剔除编辑备份等本地产物。
 
 ### 方式 4 · 开发测试（`--plugin-dir`）
 
@@ -217,14 +241,23 @@ cd ~/Library/CloudStorage/OneDrive-Personal/GPT/Claude/research-orchestration-te
 git pull --ff-only
 git rev-parse HEAD    # 确认与 remote master 一致
 
-# 3. 健康检查（本地跑全部 4 个校验脚本）
+# 3. 健康检查（本地跑全部校验脚本 + 官方校验器）
 cd ~/.workbuddy/plugins/marketplaces/my-experts/plugins/research-orchestration-team
-python3 scripts/manifest_check.py
-python3 scripts/manifest_check_selftest.py
-python3 skills/research-orchestration-workflow/scripts/protocol_check.py
+python3 scripts/manifest_check.py                 # C1–C12，含 Team settings.json
+python3 scripts/manifest_check_selftest.py        # 注入式负例
+python3 scripts/harness_eval.py                   # H1–H12（根定位已改为 __file__，任意目录可调）
+python3 scripts/harness_eval_selftest.py          # harness 注入式负例
+python3 scripts/routing_eval.py                   # 路由结构一致性
+python3 scripts/routing_eval_selftest.py          # 路由注入式负例自测
+python3 tests/test_vendor_core.py                 # 联邦防漂移 V1–V6
+python3 skills/research-orchestration-workflow/scripts/protocol_check.py envelope    # v2.4 主套件 16 + legacy 12
+python3 skills/research-orchestration-workflow/scripts/protocol_check.py conflict    # 冲突仲裁 5/5
+python3 skills/research-orchestration-workflow/scripts/protocol_check.py integration # 集成仿真 8/8
+python3 skills/research-orchestration-workflow/scripts/state_io.py resume --help     # 状态持久化工具存在性自检
 python3 skills/research-orchestration-workflow/scripts/topic_scoring.py --topic probe \
   --originality 8 --feasibility 7 --value-density 9 --data-availability 7 \
   --competition 6 --cognition 8 --resource-fit 7 --sustainability 7
+python3 /Applications/WorkBuddy.app/Contents/Resources/app.asar.unpacked/resources/plugins/workbuddy-builtin/skills/expert-manager/scripts/validate_expert.py .   # 官方校验：0 error
 ```
 
 > **为何不自动化**：OneDrive 是只读云备份，不是 critical path。手写契约比 launchd cron / WebDAV 推送简单可靠，且无凭据泄漏面。若未来团队规模扩大、需要 ≤1 天同步窗口，再考虑 GitHub Action + WebDAV（成本：OAuth + secret 配置）。

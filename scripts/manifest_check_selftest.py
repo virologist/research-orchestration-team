@@ -220,6 +220,30 @@ def n19(root):
 case("N19", "settings.json agent 与主理人不一致", "与 manifest 主理人", n19)
 
 
+# ── E 组：旧团队规模表述（v2.2.0 C8 新增规则）────────────────────────────
+def n20(root):
+    # append 式注入：与 N2 同法，保证无论现文案如何都出现旧规模表述。
+    # 用「六人编排团」而非裸「六人」，验证新规则不会误伤 README 版本史里的
+    # 「v2.0.0 六人团队」这类合法历史描述。
+    path = root / ".codebuddy-plugin/plugin.json"
+    data = json.loads(path.read_text(encoding="utf-8"))
+    data["displayDescription"]["zh"] = data["displayDescription"]["zh"] + "（旧六人编排团遗留）"
+    path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+case("N20", "旧团队规模表述回归（六人编排团）", "旧团队规模表述", n20)
+
+
+def n21(root):
+    # 注入到隐藏目录下的 .claude-plugin/marketplace.json：验证 C8 的 rglob
+    # 扫描确实覆盖市场清单，防止「用户可见描述」成为护栏盲区。
+    path = root / ".claude-plugin/marketplace.json"
+    data = json.loads(path.read_text(encoding="utf-8"))
+    data["plugins"][0]["description"] = (
+        data["plugins"][0]["description"] + " (legacy Six-agent build)"
+    )
+    path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+case("N21", "marketplace.json 旧 Six-agent 规模表述回归", "旧团队规模表述", n21)
+
+
 def make_copy(src: Path, dst: Path) -> None:
     shutil.copytree(
         src, dst, symlinks=True,

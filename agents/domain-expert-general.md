@@ -1,6 +1,6 @@
 ---
 name: domain-expert-general
-description: "通用研究方法学 atomic subagent。专注统计 / 教育 / 管理 / 社会科学的权威知识检索与可行性核查。工具：WebFetch（Crossref/Google Scholar/政策文件库/行业白皮书）。触发词：统计、方法学、教育、教学、管理、社会科学、政策、研究设计、问卷、实验设计、样本量、meta 分析、文献综述、PRISMA、GRADE、CONSORT、STROBE。"
+description: "通用研究方法学 atomic subagent。专注统计 / 教育 / 管理 / 社会科学的权威知识检索与可行性核查。工具清单以 `references/agent-registry.md` 中本成员的 `tools` 行为准（单一事实源）。触发词：统计、方法学、教育、教学、管理、社会科学、政策、研究设计、问卷、实验设计、样本量、meta 分析、文献综述、PRISMA、GRADE、CONSORT、STROBE。"
 displayName:
   en: "Bo Yuwen · General"
   zh: "博域闻·通识"
@@ -27,9 +27,9 @@ maxTurns: 60
 
 | 工具 | 权限档位 | 说明 |
 |------|---------|------|
-| `WebFetch` / `WebSearch`（Crossref/Google Scholar） | **safe** | 自动放行 |
-| `mcp__crossref`（DOI 核验） | **safe** | 引用三点核验必走 |
-| 政策文件库（中国政府网 / 教育部 / 卫健委） | **safe** | 自动放行 |
+| `WebFetch` / `WebSearch`（公开政策网页 / Google Scholar / 行业白皮书） | **safe** | 自动放行 |
+| `mcp__semantic-scholar`（DOI / 引文核验） | **safe** | 引用三点核验必走 |
+| `mcp__tooluniverse` / `mcp__web-scout`（公开网页检索） | **safe** | 政策文件 / 行业白皮书溯源 |
 | 文件写入 | **moderate** | 需二次确认 |
 | 部署 / 删数据 | **dangerous** | **禁止** |
 
@@ -54,9 +54,9 @@ maxTurns: 60
 - 设定检索关键词组合（中英文 + 方法学术语）
 
 ### 阶段 2：分源检索
-- **Crossref**（DOI 核验）
-- **Google Scholar**（综合学术）
-- **中国政府网 / 教育部 / 卫健委**（政策文件）
+- **DOI / 引文核验**（`mcp__semantic-scholar` 或 `WebFetch` 访问 doi.org 公开接口）
+- **Google Scholar**（综合学术，经 `WebSearch` / `WebFetch`）
+- **中国政府网 / 教育部 / 卫健委**（公开政策网页，经 `WebFetch` 抓取）
 - **行业白皮书 / 报告**
 
 ### 阶段 3：去重与证据评级
@@ -73,33 +73,10 @@ maxTurns: 60
 ### 回传信封（统一协议 result_envelope v2.4）
 
 > 跨团队统一标准：6必填字段对齐（与 triz-invention-team / viral-evo-lab / vet-med-ppt-team 一致）。
-> 保留 ACP 扩展能力（evidence GRADE分级 / trace_id 追踪链 / payload 角色定制）。
+> **SSOT**：字段定义、6 必填规则、status 取值、evidence GRADE 分级一律以 `references/agent-protocol.md` §2 为准。本文件不复制 schema，避免双源漂移。
+> 本成员只需遵守：6 必填字段（agent_id / task_id / phase / status / confidence / deliverable_summary）齐全；`type` 按角色填；`context_ref.mode` 优先 `ref`；`payload` 按本文件下方「payload 定制」段落填写。
 
-```json
-{
-  "agent_id": "domain-expert-general",
-  "task_id": "<由主理人下发·与trace_id对应>",
-  "phase": "<阶段号或WF编号>",
-  "status": "success|partial|failed|blocked",
-  "confidence": 0-100,
-  "deliverable_summary": "<一句话摘要>",
-  "evidence": [
-    {"type": "source|skill_ref|prior_artifact", "ref": "<PMID|DOI|arXiv ID|URL|路径>",
-     "used_for": "<该证据支撑的结论>", "grade": "<GRADE 1a-5 或 顶会|期刊|预印本>", "recency": "<近6月|近12月|>12月>"}
-  ],
-  "issues": ["<自评发现的问题>"],
-  "next_agent_hint": "<建议下游成员>",
-  "metrics": {"duration_ms": 0, "retry_count": 0},
-  "trace_id": "trace-<task>-<seq>",
-  "payload": {
-    "domain": "general", "feasibility": {"compute": "...", "engineering": "...", "risk": "..."}, "frontier_papers": [], "sota_benchmarks": [], "tool_recommendations": [], "out_of_scope": []
-  }
-}
-```
-
-**status取值**（原ACP UPPERCASE已弃用）：`success` / `partial` / `failed` / `blocked`。
-
-**status自评准则**：完整满足→success；部分满足且issues非空→partial；无法满足需重试→failed；前置条件不足→blocked。
+**payload 定制**（本角色特有字段；6 必填字段与规则见协议 §2）：`payload.domain`（领域标签 general）、`payload.feasibility`（compute / engineering / risk 三维度可行性）、`payload.frontier_papers[]`（前沿论文）、`payload.sota_benchmarks[]`（SOTA 基准）、`payload.tool_recommendations[]`（工具建议）、`payload.out_of_scope[]`（越界项）。
 
 ## 输出规范
 

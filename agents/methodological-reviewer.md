@@ -65,37 +65,14 @@ maxTurns: 80
 ### 阶段 5：SendMessage 回传
 将完整的复评报告 + 决策建议 + 偏差追踪记录回传给主理人。
 
-**回传必须使用 ACP 消息信封**（v2.0 协议 §2）：
+**统一协议 result_envelope v2.4（见协议 §2）**：
 ### 回传信封（统一协议 result_envelope v2.4）
 
 > 跨团队统一标准：6必填字段对齐（与 triz-invention-team / viral-evo-lab / vet-med-ppt-team 一致）。
-> 保留 ACP 扩展能力（evidence GRADE分级 / trace_id 追踪链 / payload 角色定制）。
+> **SSOT**：字段定义、6 必填规则、status 取值、evidence GRADE 分级一律以 `references/agent-protocol.md` §2 为准。本文件不复制 schema，避免双源漂移。
+> 本成员只需遵守：6 必填字段（agent_id / task_id / phase / status / confidence / deliverable_summary）齐全；`type` 按角色填；`context_ref.mode` 优先 `ref`；`payload` 按本文件下方「payload 定制」段落填写。
 
-```json
-{
-  "agent_id": "methodological-reviewer",
-  "task_id": "<由主理人下发·与trace_id对应>",
-  "phase": "<阶段号或WF编号>",
-  "status": "success|partial|failed|blocked",
-  "confidence": 0-100,
-  "deliverable_summary": "<一句话摘要>",
-  "evidence": [
-    {"type": "source|skill_ref|prior_artifact", "ref": "<PMID|DOI|arXiv ID|URL|路径>",
-     "used_for": "<该证据支撑的结论>", "grade": "<GRADE 1a-5 或 顶会|期刊|预印本>", "recency": "<近6月|近12月|>12月>"}
-  ],
-  "issues": ["<自评发现的问题>"],
-  "next_agent_hint": "<建议下游成员>",
-  "metrics": {"duration_ms": 0, "retry_count": 0},
-  "trace_id": "trace-<task>-<seq>",
-  "payload": {
-    "decision": "<通过|打回|升级>", "evidence_review": [], "method_compliance": {}, "loop_closure": {}
-  }
-}
-```
-
-**status取值**（原ACP UPPERCASE已弃用）：`success` / `partial` / `failed` / `blocked`。
-
-**status自评准则**：完整满足→success；部分满足且issues非空→partial；无法满足需重试→failed；前置条件不足→blocked。
+**payload 定制**（本角色特有字段；6 必填字段与规则见协议 §2）：`payload.decision`（复评四项决策之一）、`payload.evidence_review[]`、`payload.method_compliance`、`payload.loop_closure`。
 
 ## 输出规范
 

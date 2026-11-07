@@ -48,17 +48,26 @@ budget），v2.1.2 之前它只是**纸面 schema**——没有任何脚本负�
 
 ## 依赖
 
-仅标准库，Python >= 3.9。原子写：.tmp + os.replace。
+仅标准库，Python >= 3.9。原子写：PID 隔离 .tmp + os.replace；
+写操作（init/advance/finish/budget）经 flock 互斥锁串行化
+（把协议 §3「写入者=仅主理人」的纸面约定固化为工程约束，
+非 POSIX 平台退化为无锁 + 约定兜底）。
 """
 
 from __future__ import annotations
 
 import argparse
+import contextlib
 import datetime
 import json
 import os
 import sys
 from pathlib import Path
+
+try:
+    import fcntl  # POSIX 互斥锁；非 POSIX 平台退化为无锁（见 _state_lock）
+except ImportError:  # pragma: no cover
+    fcntl = None
 
 # 八阶段状态机的合法阶段序列（顺序即推进方向）
 PHASES = ["FREEZE", "IDENTIFY", "COLLAPSE", "CLARIFY", "ALIGN",
@@ -81,11 +90,37 @@ def state_path(workspace: Path, task_id: str) -> Path:
 
 
 def _atomic_write(path: Path, text: str) -> None:
-    """原子写：先写 .tmp 再 os.replace，中断不会留下半截 JSON。"""
+    """原子写：先写 .tmp 再 os.replace，中断不会留下半截 JSON。
+
+    tmp 文件名按 PID 隔离：即使无锁环境（非 POSIX 退化路径）下多进程
+    并发，也不会出现「A 的 os.replace 把 B 正在写的 tmp 搬走」互踩崩溃。
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp = path.with_suffix(path.suffix + f".tmp.{os.getpid()}")
     tmp.write_text(text, encoding="utf-8")
     os.replace(tmp, path)  # POSIX 上原子
+
+
+@contextlib.contextmanager
+def _state_lock(workspace: Path, task_id: str):
+    """同一任务写操作的互斥锁（flock，跨进程）。
+
+    背景（v2.2.0 冻结前实测）：cmd_advance 是 read-modify-write，
+    20 路并发 advance 时 19/20 因共享 tmp 互踩 / 丢更新而失败。
+    协议 §3 约定「写入者=仅主理人（串行）」，本锁把该纸面约定固化
+    为工程约束：即便被误用并发，也退化为排队执行而非数据损坏或崩溃。
+    """
+    lock = runs_dir(workspace) / task_id / "_state.lock"
+    lock.parent.mkdir(parents=True, exist_ok=True)
+    if fcntl is None:  # 非 POSIX：依赖单写入者约定 + PID 隔离 tmp 兜底
+        yield
+        return
+    with open(lock, "w") as fh:
+        fcntl.flock(fh, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(fh, fcntl.LOCK_UN)
 
 
 def load_state(workspace: Path, task_id: str) -> dict:
@@ -112,33 +147,34 @@ def now_iso() -> str:
 
 def cmd_init(args) -> int:
     ws = Path(args.workspace).expanduser().resolve()
-    existing = load_state(ws, args.task_id)
-    if existing is not None:
-        print(f"↩️ 任务已存在，幂等返回: {state_path(ws, args.task_id)}")
-        print(f"   当前阶段: {existing['phase']}（turn {existing['turn']}）")
-        return 0
-    perception = {}
-    if args.perception:
-        try:
-            perception = json.loads(args.perception)
-        except Exception:
-            print("❌ --perception 不是合法 JSON", file=sys.stderr)
-            return 1
-    state = {
-        "version": STATE_VERSION,
-        "task_id": args.task_id,
-        "created_at": now_iso(),
-        "updated_at": now_iso(),
-        "status": "running",          # running | done | aborted
-        "phase": "FREEZE",
-        "turn": 0,
-        "checkpoints": [],            # [{turn, phase, ts, snapshot_ref}]
-        "perception": perception,
-        "budget": {"turns_used": 0, "turns_max": args.max_turns,
-                   "tokens_used": 0, "tokens_max": args.max_tokens},
-        "notes": [],
-    }
-    save_state(ws, args.task_id, state)
+    with _state_lock(ws, args.task_id):
+        existing = load_state(ws, args.task_id)
+        if existing is not None:
+            print(f"↩️ 任务已存在，幂等返回: {state_path(ws, args.task_id)}")
+            print(f"   当前阶段: {existing['phase']}（turn {existing['turn']}）")
+            return 0
+        perception = {}
+        if args.perception:
+            try:
+                perception = json.loads(args.perception)
+            except Exception:
+                print("❌ --perception 不是合法 JSON", file=sys.stderr)
+                return 1
+        state = {
+            "version": STATE_VERSION,
+            "task_id": args.task_id,
+            "created_at": now_iso(),
+            "updated_at": now_iso(),
+            "status": "running",          # running | done | aborted
+            "phase": "FREEZE",
+            "turn": 0,
+            "checkpoints": [],            # [{turn, phase, ts, snapshot_ref}]
+            "perception": perception,
+            "budget": {"turns_used": 0, "turns_max": args.max_turns,
+                       "tokens_used": 0, "tokens_max": args.max_tokens},
+            "notes": [],
+        }
+        save_state(ws, args.task_id, state)
     print(f"✅ 状态已初始化: {state_path(ws, args.task_id)}")
     print(f"   阶段序列: {' → '.join(PHASES)}")
     return 0
@@ -146,35 +182,36 @@ def cmd_init(args) -> int:
 
 def cmd_advance(args) -> int:
     ws = Path(args.workspace).expanduser().resolve()
-    state = load_state(ws, args.task_id)
-    if state is None:
-        print(f"❌ 任务未初始化: {args.task_id}（先跑 init）", file=sys.stderr)
-        return 2
-    if args.phase not in PHASES:
-        print(f"❌ 非法阶段 {args.phase!r}，合法值: {'/'.join(PHASES)}", file=sys.stderr)
-        return 1
-    state["phase"] = args.phase
-    state["turn"] += 1
-    state["updated_at"] = now_iso()
-    state["budget"]["turns_used"] = state["turn"]
-    cp = {"turn": state["turn"], "phase": args.phase,
-          "ts": now_iso(), "snapshot_ref": None}
-    if args.checkpoint:
-        # state://cp-NNN ≡ .harness-runs/<task_id>/checkpoints/cp-NNN.md
-        cp["snapshot_ref"] = f"state://{args.checkpoint}"
-        cp_dir = runs_dir(ws) / args.task_id / "checkpoints"
-        cp_dir.mkdir(parents=True, exist_ok=True)
-        marker = cp_dir / f"{args.checkpoint}.md"
-        if not marker.exists():
-            marker.write_text(
-                f"# {args.checkpoint}\n\n- phase: {args.phase}\n- ts: {cp['ts']}\n"
-                f"- note: {args.note or ''}\n\n"
-                f"（本文件为检查点指针：阶段产物应落盘于此目录，指针可被 resume 解析）\n",
-                encoding="utf-8")
-    state["checkpoints"].append(cp)
-    if args.note:
-        state["notes"].append({"ts": now_iso(), "phase": args.phase, "note": args.note})
-    save_state(ws, args.task_id, state)
+    with _state_lock(ws, args.task_id):
+        state = load_state(ws, args.task_id)
+        if state is None:
+            print(f"❌ 任务未初始化: {args.task_id}（先跑 init）", file=sys.stderr)
+            return 2
+        if args.phase not in PHASES:
+            print(f"❌ 非法阶段 {args.phase!r}，合法值: {'/'.join(PHASES)}", file=sys.stderr)
+            return 1
+        state["phase"] = args.phase
+        state["turn"] += 1
+        state["updated_at"] = now_iso()
+        state["budget"]["turns_used"] = state["turn"]
+        cp = {"turn": state["turn"], "phase": args.phase,
+              "ts": now_iso(), "snapshot_ref": None}
+        if args.checkpoint:
+            # state://cp-NNN ≡ .harness-runs/<task_id>/checkpoints/cp-NNN.md
+            cp["snapshot_ref"] = f"state://{args.checkpoint}"
+            cp_dir = runs_dir(ws) / args.task_id / "checkpoints"
+            cp_dir.mkdir(parents=True, exist_ok=True)
+            marker = cp_dir / f"{args.checkpoint}.md"
+            if not marker.exists():
+                marker.write_text(
+                    f"# {args.checkpoint}\n\n- phase: {args.phase}\n- ts: {cp['ts']}\n"
+                    f"- note: {args.note or ''}\n\n"
+                    f"（本文件为检查点指针：阶段产物应落盘于此目录，指针可被 resume 解析）\n",
+                    encoding="utf-8")
+        state["checkpoints"].append(cp)
+        if args.note:
+            state["notes"].append({"ts": now_iso(), "phase": args.phase, "note": args.note})
+        save_state(ws, args.task_id, state)
     print(f"✅ 已推进到 {args.phase}（turn {state['turn']}/{state['budget']['turns_max']}）")
     if args.checkpoint:
         print(f"   检查点: {cp['snapshot_ref']} → checkpoints/{args.checkpoint}.md")
@@ -211,30 +248,32 @@ def cmd_resume(args) -> int:
 
 def cmd_finish(args) -> int:
     ws = Path(args.workspace).expanduser().resolve()
-    state = load_state(ws, args.task_id)
-    if state is None:
-        print(f"❌ 任务未初始化: {args.task_id}", file=sys.stderr)
-        return 2
-    state["status"] = "done"
-    state["updated_at"] = now_iso()
-    save_state(ws, args.task_id, state)
+    with _state_lock(ws, args.task_id):
+        state = load_state(ws, args.task_id)
+        if state is None:
+            print(f"❌ 任务未初始化: {args.task_id}", file=sys.stderr)
+            return 2
+        state["status"] = "done"
+        state["updated_at"] = now_iso()
+        save_state(ws, args.task_id, state)
     print(f"✅ 任务标记完成: {state['task_id']}")
     return 0
 
 
 def cmd_budget(args) -> int:
     ws = Path(args.workspace).expanduser().resolve()
-    state = load_state(ws, args.task_id)
-    if state is None:
-        print(f"❌ 任务未初始化: {args.task_id}", file=sys.stderr)
-        return 2
-    if args.turns is not None:
-        state["budget"]["turns_used"] = args.turns
-    if args.tokens is not None:
-        state["budget"]["tokens_used"] = args.tokens
-    state["updated_at"] = now_iso()
-    save_state(ws, args.task_id, state)
-    b = state["budget"]
+    with _state_lock(ws, args.task_id):
+        state = load_state(ws, args.task_id)
+        if state is None:
+            print(f"❌ 任务未初始化: {args.task_id}", file=sys.stderr)
+            return 2
+        if args.turns is not None:
+            state["budget"]["turns_used"] = args.turns
+        if args.tokens is not None:
+            state["budget"]["tokens_used"] = args.tokens
+        state["updated_at"] = now_iso()
+        save_state(ws, args.task_id, state)
+        b = state["budget"]
     warn = ""
     if b["turns_used"] >= b["turns_max"] or b["tokens_used"] >= b["tokens_max"]:
         warn = "  ⚠️ 预算触顶 → 按协议熔断：升级用户，不空转"

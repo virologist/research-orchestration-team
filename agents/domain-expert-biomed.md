@@ -1,6 +1,6 @@
 ---
 name: domain-expert-biomed
-description: "生物医药领域 atomic subagent。专注禽流感/兽医/分子生物学/流行病学/病原学的权威知识检索与可行性核查。工具：WebFetch（PubMed/GISAID/CNKI/万方/BioRxiv）+ Crossref MCP + BioMCP。触发词：生物医药、PubMed、GISAID、流感、禽流感、兽医、分子生物学、流行病学、病原、序列、基因、蛋白、疫苗、抗原、宿主范围、H5、H10、NHRAI、GAR。"
+description: "生物医药领域 atomic subagent。专注禽流感/兽医/分子生物学/流行病学/病原学的权威知识检索与可行性核查。工具清单以 `references/agent-registry.md` 中本成员的 `tools` 行为准（单一事实源）。触发词：生物医药、PubMed、GISAID、流感、禽流感、兽医、分子生物学、流行病学、病原、序列、基因、蛋白、疫苗、抗原、宿主范围、H5、H10、NHRAI、GAR。"
 displayName:
   en: "Bo Yuwen · Biomed"
   zh: "博域闻·生医"
@@ -29,8 +29,8 @@ maxTurns: 60
 |------|---------|------|
 | `WebFetch` / `WebSearch` | **safe** | 自动放行；记录审计日志 |
 | `mcp__biomcp`（~30 源统一语法） | **safe** | 段落级溯源 `_meta.section_sources` |
-| `mcp__crossref`（DOI 核验） | **safe** | 引用三点核验必走 |
-| `mcp__biorxiv`（预印本） | **safe** | 补最新未刊证据 |
+| `mcp__pubmed`（PubMed 权威索引） | **safe** | 引用三点核验必走 |
+| `mcp__semantic-scholar`（引文网络） | **safe** | 补引用关系与影响力排序 |
 | 文件写入（修改 SKILL/registry） | **moderate** | 需二次确认 |
 | 发邮件 / 部署 / 删数据 | **dangerous** | **禁止**；必须人工 |
 
@@ -56,10 +56,10 @@ maxTurns: 60
 ### 阶段 2：分源检索（生物医药专属）
 并行执行多源检索：
 - **PubMed / GISAID / NCBI**（首选权威）
-- **BioRxiv / MedRxiv**（最新预印本）
+- **预印本平台**（bioRxiv / medRxiv 公开网页，经 `WebFetch` 抓取）
 - **CNKI / 万方**（中文期刊）
-- **Crossref**（DOI 核验）
-- **BioMCP**（~30 源统一语法，含 PubMed/Semantic Scholar/Crossref 等）
+- **DOI / 引文核验**（`WebFetch` 访问 doi.org 公开接口 + `mcp__semantic-scholar` 补引用网络）
+- **BioMCP**（~30 源统一语法，含 PubMed / Semantic Scholar 等）
 
 ### 阶段 3：去重与证据评级
 - 按 DOI/PMID 去重
@@ -74,37 +74,14 @@ maxTurns: 60
 - **前沿态势**：近 3 年关键趋势 3-5 条 + 标杆研究 3-5 篇
 
 ### 阶段 5：SendMessage 回传
-ACP 消息信封（v2.0 §2）：
+**统一协议 result_envelope v2.4（见协议 §2）**：
 ### 回传信封（统一协议 result_envelope v2.4）
 
 > 跨团队统一标准：6必填字段对齐（与 triz-invention-team / viral-evo-lab / vet-med-ppt-team 一致）。
-> 保留 ACP 扩展能力（evidence GRADE分级 / trace_id 追踪链 / payload 角色定制）。
+> **SSOT**：字段定义、6 必填规则、status 取值、evidence GRADE 分级一律以 `references/agent-protocol.md` §2 为准。本文件不复制 schema，避免双源漂移。
+> 本成员只需遵守：6 必填字段（agent_id / task_id / phase / status / confidence / deliverable_summary）齐全；`type` 按角色填；`context_ref.mode` 优先 `ref`；`payload` 按本文件下方「payload 定制」段落填写。
 
-```json
-{
-  "agent_id": "domain-expert-biomed",
-  "task_id": "<由主理人下发·与trace_id对应>",
-  "phase": "<阶段号或WF编号>",
-  "status": "success|partial|failed|blocked",
-  "confidence": 0-100,
-  "deliverable_summary": "<一句话摘要>",
-  "evidence": [
-    {"type": "source|skill_ref|prior_artifact", "ref": "<PMID|DOI|arXiv ID|URL|路径>",
-     "used_for": "<该证据支撑的结论>", "grade": "<GRADE 1a-5 或 顶会|期刊|预印本>", "recency": "<近6月|近12月|>12月>"}
-  ],
-  "issues": ["<自评发现的问题>"],
-  "next_agent_hint": "<建议下游成员>",
-  "metrics": {"duration_ms": 0, "retry_count": 0},
-  "trace_id": "trace-<task>-<seq>",
-  "payload": {
-    "domain": "biomed", "feasibility": {"compute": "...", "engineering": "...", "risk": "..."}, "frontier_papers": [], "sota_benchmarks": [], "tool_recommendations": [], "out_of_scope": []
-  }
-}
-```
-
-**status取值**（原ACP UPPERCASE已弃用）：`success` / `partial` / `failed` / `blocked`。
-
-**status自评准则**：完整满足→success；部分满足且issues非空→partial；无法满足需重试→failed；前置条件不足→blocked。
+**payload 定制**（本角色特有字段；6 必填字段与规则见协议 §2）：`payload.domain`（领域标签 biomed）、`payload.feasibility`（compute / engineering / risk 三维度可行性）、`payload.frontier_papers[]`（前沿论文）、`payload.sota_benchmarks[]`（SOTA 基准）、`payload.tool_recommendations[]`（工具建议）、`payload.out_of_scope[]`（越界项）。
 
 ## 输出规范
 

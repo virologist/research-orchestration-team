@@ -7,6 +7,12 @@ on:
       - 'agents/**'
       - 'skills/**'
       - 'scripts/**'
+      # v2.2.0：Vendor core anti-drift (V1-V6) step 跑的是 tests/test_vendor_core.py，
+      # 只改 tests/ 若不在 paths 里则 CI 根本不触发，等于该门禁形同虚设。
+      - 'tests/**'
+      # 同理：Vendor core anti-drift (V1-V6) 校验的是 vendor/shared-core/ 下的
+      # VENDOR.json 与 assemble_spawn_prompt.py，只改 vendor 也必须触发 CI。
+      - 'vendor/**'
       - 'docs/**'
       - 'avatars/**'
       - '.codebuddy-plugin/**'
@@ -23,7 +29,11 @@ jobs:
   validate:
     name: Validate Plugin Package
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # v2.2.0：三套 mutation-based selftest 会在临时目录反复复制整个包体，
+    # 本机实测合计约 350s（近 6 分钟）；本轮又新增 N8 / N13 / N21 三条负例，
+    # 时长还会上升。CI 共享 runner 需另留 checkout / setup 与波动余量，
+    # 原 10 分钟偏紧，提到 15。
+    timeout-minutes: 15
 
     steps:
       - name: Checkout
@@ -54,13 +64,51 @@ jobs:
           python3 protocol_check.py conflict
           python3 protocol_check.py integration
 
-      # v2.1.2 起 CI 纳入 Harness Engineering 12 项设计检查 + 13 条注入式负例。
-      # 此前仅本地手动跑，改一行文档即可无声破坏（Step 4 对标发现的执行层缺口）。
+      # v2.1.2 起 CI 纳入 Harness Engineering 12 项设计检查 + 注入式负例
+      # （v2.2.0 为 14 条：N1-N13 + R1）。此前仅本地手动跑，改一行文档即可
+      # 无声破坏（Step 4 对标发现的执行层缺口）。
       - name: Harness design checks (H1-H12)
         run: python3 scripts/harness_eval.py
 
       - name: Harness eval self-test (mutation-based)
         run: python3 scripts/harness_eval_selftest.py
+
+      # 成员集合 / 触发词 / 条目结构 / 工具名形态 / 工具集合一致性（R1-R5），
+      # 防「文档加了成员但 MD/manifest 没同步」「MD 工具名漂移或伪造」的假绿。
+      - name: Routing consistency check (R1-R5)
+        run: python3 scripts/routing_eval.py
+
+      # 注入式负例证明 R1-R5 真会拦截破坏而非永远返回 0，防门禁退化成假绿。
+      - name: Routing eval self-test (mutation-based)
+        run: python3 scripts/routing_eval_selftest.py
+
+      # vendor 副本与联邦真源哈希比对 + git clone 冒烟，防 shared-core 静默漂移。
+      - name: Vendor core anti-drift (V1-V6)
+        run: python3 tests/test_vendor_core.py
+
+      # v2.2.0 P0-2 的状态持久化工具此前完全没有 CI 覆盖，只靠本地手测。
+      # 跑一次完整八阶段 + 8 检查点 + 断点续跑 + 预算 + finish，确保协议 §3
+      # 的确定性工程层不会在「只改 skills/」的情况下静默坏掉。
+      - name: State IO lifecycle smoke test (v2.2.0)
+        run: |
+          set -e
+          S=skills/research-orchestration-workflow/scripts/state_io.py
+          W=$(mktemp -d)
+          python3 "$S" init --task-id ci-smoke --workspace "$W" >/dev/null
+          i=1
+          for P in FREEZE IDENTIFY COLLAPSE CLARIFY ALIGN EXECUTE REVIEW NEXT; do
+            CP=$(printf 'cp-%03d' "$i")
+            python3 "$S" advance --task-id ci-smoke --workspace "$W" \
+              --phase "$P" --checkpoint "$CP" --note "CI $P" >/dev/null
+            i=$((i + 1))
+          done
+          python3 "$S" resume --task-id ci-smoke --workspace "$W"
+          python3 "$S" budget --task-id ci-smoke --workspace "$W" --turns 8 --tokens 8000
+          python3 "$S" finish --task-id ci-smoke --workspace "$W"
+          test -f "$W/.harness-runs/ci-smoke/_state.json"
+          N=$(find "$W/.harness-runs/ci-smoke/checkpoints" -name 'cp-*.md' | wc -l | tr -d ' ')
+          test "$N" -eq 8
+          echo "✅ state_io 八阶段 + 8 检查点 + 断点续跑 + 预算 + finish 全链路通过"
 
       - name: Topic scoring edge cases
         run: |
@@ -85,3 +133,15 @@ jobs:
             exit 1
           fi
           echo "✅ 缺维被正确拒绝 (rc=2)"
+
+          # 正常态阳性用例：只在两个错误路径上断言，无法发现「校验器退化成对
+          # 任何输入都拒绝」，故补一条合法输入必须 rc=0。
+          python3 topic_scoring.py --topic healthy --originality 8 --feasibility 7 \
+            --value-density 9 --data-availability 7 --competition 6 \
+            --cognition 8 --resource-fit 7 --sustainability 7 >/dev/null 2>&1
+          rc=$?
+          if [ $rc -ne 0 ]; then
+            echo "❌ 正常输入应退出码 0，实际 rc=$rc"
+            exit 1
+          fi
+          echo "✅ 正常输入被正确接受 (rc=0)"

@@ -12,14 +12,16 @@
 
 ```bash
 # 1. 包一致性校验（双 manifest 对等 / 市场清单 / agents 与头像资产 / teamInfo 自洽 /
-#    README 版本一致 / 废弃表述 / 契约章节完整性）—— 单一事实来源，共 46 项
+#    README 版本一致 / 废弃表述 / 契约章节完整性）—— 单一事实来源，共 64 项（C1–C12）
 python3 scripts/manifest_check.py -v
 
-# 2. 校验器自测（注入式负例 17 条）：证明上面的校验器真的会失败，而不是永远返回 0
+# 2. 校验器自测（注入式负例 21 条）：证明上面的校验器真的会失败，而不是永远返回 0
 python3 scripts/manifest_check_selftest.py
 
 # 3. 协议合规单元测试
-python3 skills/research-orchestration-workflow/scripts/protocol_check.py
+python3 skills/research-orchestration-workflow/scripts/protocol_check.py envelope
+python3 skills/research-orchestration-workflow/scripts/protocol_check.py conflict
+python3 skills/research-orchestration-workflow/scripts/protocol_check.py integration
 
 # 4. 选题评分脚本边界测试
 python3 skills/research-orchestration-workflow/scripts/topic_scoring.py \
@@ -28,7 +30,7 @@ python3 skills/research-orchestration-workflow/scripts/topic_scoring.py \
 # 期望：退出码 1 + "评分超出有效范围"
 ```
 
-> `scripts/manifest_check.py` 的校验项为 C1–C10，全部为**硬失败**（`rc=1`）。
+> `scripts/manifest_check.py` 的校验项为 C1–C12，全部为**硬失败**（`rc=1`）。
 > 其中 C8 的废弃术语清单是本仓库的**单一事实来源**，请勿在 workflow 或别处另抄一份
 > —— 历史上正是因为另抄了一份「精确串」清单，某个在关键词中间插了字的旧表述逃过匹配，
 > 造成了 CI 假绿。
@@ -47,7 +49,7 @@ python3 skills/research-orchestration-workflow/scripts/topic_scoring.py \
    **删掉或改坏它们会让 README 首推的 `/plugin marketplace add` 失效**（v2.0.1 之前就是这个状态），
    由 `manifest_check.py` 的 C10 守护。
 5. 若涉及协议改动（消息信封/仲裁/错误分类），**必须**同步更新：
-   - 5 个执行/分析/审查型 agent MD 的「v2.0 协议合规契约」章节
+   - 6 个执行/分析/审查型 agent MD 的「v2.0 协议合规契约」章节
      （整合者用「接口契约」、主理人用「Harness 运行时规范 v2.0」，命名不同但语义等价，
      由 `manifest_check.py` 的 C9 统一校验「每个成员都必须有契约章节」）
    - `protocol_check.py` 对应单元测试
@@ -58,13 +60,15 @@ python3 skills/research-orchestration-workflow/scripts/topic_scoring.py \
 
 ## 角色修改规范
 
-本包共 6 个 agent（1 主理人 + 5 成员）。契约章节的命名分工如下：
+本包共 8 个 agent（1 主理人 + 7 成员）。契约章节的命名分工如下：
 
 | 角色类型 | agent | 契约章节 |
 |---------|-------|---------|
 | 主理人 | `research-orchestration-team-team-lead` | `## Harness 运行时规范 v2.0` |
 | 分析/执行/审查型成员 | `socratic-questioner` / `meta-architect` / `domain-expert-biomed`（atomic 三元之一）/ `methodological-reviewer` | `## v2.0 协议合规契约` |
 | 整合型成员 | `synthesis-integrator` | `## 接口契约` |
+
+> 注：本表及上文第 5 条中的「v2.0 协议合规契约」「Harness 运行时规范 v2.0」此处为契约章节名，非版本号，勿随协议版本改名；`scripts/manifest_check.py` 的 `CONTRACT_SECTION_MARKERS` 以这些字面量做校验，改名会直接破坏门禁。
 
 **修改任何契约约束必须**：
 - 在 PR 描述里逐条列出

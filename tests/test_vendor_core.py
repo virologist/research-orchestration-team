@@ -5,8 +5,8 @@ shared-core 分发与防漂移门禁（v3.4.2 P0-1 配套，2026-10-15 适配至
 =====================================================================
 目的：修复「R9 联邦下沉后 git clone 直跑 shim 退出码 3」的可安装性回归，
       同时用哈希比对防止 vendor 兜底副本与联邦真源产生漂移。
-适配：自 smart-textbook-team/tests/test_vendor_core.py 复制，仅改
-      _INSTALL_DIR / MEMBER_IDS / V6 临时目录名三处包耦合。
+适配：沿袭 shared-core 联邦下沉门禁的通用骨架，_INSTALL_DIR /
+      MEMBER_IDS / V6 临时目录名三处包耦合已按 research-orchestration-team 改写。
 
 检查项：
   V1  vendor/shared-core/assemble_spawn_prompt.py 存在
@@ -20,7 +20,12 @@ shared-core 分发与防漂移门禁（v3.4.2 P0-1 配套，2026-10-15 适配至
 
 用法：
   python3 tests/test_vendor_core.py [--expert-dir 路径] [--json]
-退出码：0 全通过 | 1 有失败项
+退出码：0 全通过或无失败项（SKIP 不影响退出码） | 1 有失败项
+统计口径（文本末行与 --json 共用同一组计数）：total = 检查项总数，
+          passed 只数 PASS，skipped 只数 SKIP，failed 只数 FAIL；
+          --json 另附 skipped_ids / failed_ids 列出具体项。
+          SKIP 仅表示该检查项未执行、不等于通过：V4 在 git clone / CI
+          隔离态因联邦真源不可达按设计跳过，安装态必须为 PASS 才可判 6/6。
 """
 
 import argparse
@@ -32,7 +37,7 @@ import subprocess
 import sys
 import tempfile
 
-_PKG_NAME = "triz-invention-team"
+_PKG_NAME = "research-orchestration-team"
 _INSTALL_DIR = os.path.expanduser(
     "~/.workbuddy/plugins/marketplaces/my-experts/plugins/" + _PKG_NAME
 )
@@ -184,26 +189,38 @@ def main():
     args = ap.parse_args()
 
     r = run_checks(args.expert_dir)
+    total = len(r.items)
+    passed = [i for i in r.items if i[2] == "PASS"]
+    skipped = [i for i in r.items if i[2] == "SKIP"]
     failed = r.failed
+    n_pass, n_skip, n_fail = len(passed), len(skipped), len(failed)
 
     if args.json:
-        print(json.dumps({"passed": len(r.items) - len(failed),
-                          "total": len(r.items),
+        print(json.dumps({"passed": n_pass,
+                          "skipped": n_skip,
+                          "failed": n_fail,
+                          "total": total,
+                          "skipped_ids": [i[0] for i in skipped],
+                          "failed_ids": [i[0] for i in failed],
                           "items": [{"id": i[0], "desc": i[1], "status": i[2],
                                      "detail": i[3]} for i in r.items]},
                          ensure_ascii=False, indent=2))
     else:
         print("=" * 62)
-        print("shared-core 分发与防漂移门禁（triz-invention-team）")
+        print(f"shared-core 分发与防漂移门禁（{_PKG_NAME}）")
         print("=" * 62)
         for cid, desc, status, detail in r.items:
             mark = {"PASS": "✓", "FAIL": "✗", "SKIP": "-"}[status]
             print(f"  {mark} [{cid}] {status:<4} {desc}")
             if detail:
                 print(f"          → {detail}")
-        n_pass = sum(1 for i in r.items if i[2] == "PASS")
         print("-" * 62)
-        print(f"检查项 {len(r.items)} | 通过 {n_pass} | 失败 {len(failed)}")
+        if skipped:
+            skip_ids = "、".join(i[0] for i in skipped)
+            print(f"⚠️ 以下检查项未执行（SKIP）：{skip_ids}；"
+                  "V4 在 git clone / CI 隔离态因联邦真源不可达按设计跳过，"
+                  "安装态必须为 PASS 才可判 6/6")
+        print(f"检查项 {total} | 通过 {n_pass} | 跳过 {n_skip} | 失败 {n_fail}")
         print("=" * 62)
     return 0 if not failed else 1
 

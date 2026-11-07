@@ -54,12 +54,14 @@ description: "科研编排团 v2.0 强制工作流：科研选题（8维评分+S
 
 **通信协议**：`references/agent-protocol.md` 包含消息信封/状态同步/上下文传递/任务分配/冲突仲裁/错误四分类/生命周期 9 节。所有 v2.0 团队成员按此协议通信。
 
-**协议校验脚本**：`scripts/protocol_check.py` 12 个信封 + 4 个冲突仲裁单元测试。集成前运行：
+**协议校验脚本**：`scripts/protocol_check.py`：result_envelope v2.4 主套件 16 用例 + ACP v2.0 历史 fixture 回归 12 用例 + 冲突仲裁 5 用例 + 集成仿真。集成前运行：
 ```bash
-python3 scripts/protocol_check.py envelope    # 12 用例
-python3 scripts/protocol_check.py conflict   # 4 用例
-python3 scripts/protocol_check.py integration # 集成仿真
+python3 scripts/protocol_check.py envelope    # v2.4 主套件 16 + legacy 12
+python3 scripts/protocol_check.py conflict   # 5 用例
+python3 scripts/protocol_check.py integration # 8/8 检查点回引
 ```
+
+`envelope` 模式同时跑两组，legacy 组仅作历史 fixture 回归，**不用于当前协议合规判定**；当前合规以 result_envelope v2.4 的 6 必填字段与小写 status 为准。
 
 ### 分档规则
 

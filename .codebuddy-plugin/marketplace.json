@@ -4,12 +4,12 @@
     "name": "TZUVet",
     "email": "yzuvet@outlook.com"
   },
-  "description": "TZUVet 的 AI 专家团市场。当前收录：科研价值驱动研究编排团（六agent 科研编排）。",
+  "description": "TZUVet 的 AI 专家团市场。当前收录：科研价值驱动研究编排团（八agent 科研编排）。",
   "plugins": [
     {
       "name": "research-orchestration-team",
       "source": "./",
-      "description": "Six-agent cross-disciplinary research orchestration team with ACP communication protocol, five-role matrix, L1-L5 conflict arbitration, and harness-compliant 12-component runtime."
+      "description": "Eight-agent cross-disciplinary research orchestration team with result_envelope v2.4 message protocol, five-role matrix, L1-L5 conflict arbitration, and harness-compliant 12-component runtime."
     }
   ]
 }

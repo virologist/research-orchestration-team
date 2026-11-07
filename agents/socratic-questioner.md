@@ -51,37 +51,15 @@ maxTurns: 80
 - 任意维度 < 90% → 进入下一轮追问
 - 全部 ≥ 90% → 返回主理人，标注"信息完整度达标，可进入 ALIGN"
 
-**检查点机制（v2.0）**：每轮追问结束**必须**向主理人发送 `STATUS` 同步消息，形成可审计的轮次检查点（信封字段对齐协议 §2 必填项）：
+**检查点机制（v2.0）**：每轮追问结束**必须**向主理人发送 `STATUS` 同步消息，形成可审计的轮次检查点（信封字段对齐协议 §2 必填项）。字段规范见下节。
 ### 回传信封（统一协议 result_envelope v2.4）
 
 > 跨团队统一标准：6必填字段对齐（与 triz-invention-team / viral-evo-lab / vet-med-ppt-team 一致）。
-> 保留 ACP 扩展能力（evidence GRADE分级 / trace_id 追踪链 / payload 角色定制）。
+> **SSOT**：字段定义、6 必填规则、status 取值、evidence GRADE 分级一律以 `references/agent-protocol.md` §2 为准。本文件不复制 schema，避免双源漂移。
+> 本成员只需遵守：6 必填字段（agent_id / task_id / phase / status / confidence / deliverable_summary）齐全；`type` 按角色填；`context_ref.mode` 优先 `ref`；`payload` 按本文件下方「payload 定制」段落填写。
 
-```json
-{
-  "agent_id": "socratic-questioner",
-  "task_id": "<由主理人下发·与trace_id对应>",
-  "phase": "<阶段号或WF编号>",
-  "status": "success|partial|failed|blocked",
-  "confidence": 0-100,
-  "deliverable_summary": "<一句话摘要>",
-  "evidence": [
-    {"type": "source|skill_ref|prior_artifact", "ref": "<PMID|DOI|arXiv ID|URL|路径>",
-     "used_for": "<该证据支撑的结论>", "grade": "<GRADE 1a-5 或 顶会|期刊|预印本>", "recency": "<近6月|近12月|>12月>"}
-  ],
-  "issues": ["<自评发现的问题>"],
-  "next_agent_hint": "<建议下游成员>",
-  "metrics": {"duration_ms": 0, "retry_count": 0},
-  "trace_id": "trace-<task>-<seq>",
-  "payload": {
-    "clarify_questions": [], "completeness": 0, "missing_dimensions": [], "priority": []
-  }
-}
-```
+**payload 定制**（本角色特有字段；6 必填字段与规则见协议 §2）：`payload.clarify_questions[]`（本轮 5 个追问；`payload.questions[]` 为同义别名）、`payload.completeness`（四维完整度 background/constraint/goal/risk，取最低分）、`payload.missing_dimensions[]`、`payload.priority[]`、`payload.assumption_density`（假设密度）、`payload.emotion_risk`（情绪风险）、`payload.ready_for_align`（是否可进 ALIGN）。
 
-**status取值**（原ACP UPPERCASE已弃用）：`success` / `partial` / `failed` / `blocked`。
-
-**status自评准则**：完整满足→success；部分满足且issues非空→partial；无法满足需重试→failed；前置条件不足→blocked。
 **检查点规则**：
 - `min_dimension < 90%` → 下一轮（最多 5 轮）
 - `min_dimension ≥ 90%` → 上报"可进入 ALIGN"，**不得自行推进**——是否进入下一阶段由主理人裁决
@@ -91,30 +69,7 @@ maxTurns: 80
 ### 阶段 4：SendMessage 回传
 将本轮追问结果 + 信息完整度评分 + 假设密度等级 + 情绪风险评估一并回传给主理人。
 
-**回传使用统一协议 result_envelope v2.4**（见本文件末「回传信封」节）：
-```json
-{
-  "agent_id": "socratic-questioner",
-  "task_id": "<由主理人下发·与trace_id对应>",
-  "phase": "<阶段号>",
-  "status": "success|partial|failed|blocked",
-  "confidence": 0-100,
-  "deliverable_summary": "<本轮追问结果+完整度一句话摘要>",
-  "evidence": [],
-  "issues": ["<自评发现的问题·如外部信息缺口>"],
-  "next_agent_hint": "research-orchestration-team-team-lead",
-  "metrics": {"duration_ms": 0, "retry_count": 0},
-  "trace_id": "trace-<task>-<seq>",
-  "payload": {
-    "questions": ["<Q1..Q5>"],
-    "completeness": {"background": 0, "constraint": 0, "goal": 0, "risk": 0},
-    "assumption_density": 0,
-    "emotion_risk": 0,
-    "ready_for_align": false
-  }
-}
-```
-**status取值**（原 ACP `SUCCESS` 已弃用）：`success` / `partial` / `failed` / `blocked`。
+**回传使用统一协议 result_envelope v2.4**（见本文件「回传信封」节；字段定义与 6 必填规则以 `references/agent-protocol.md` §2 为准，本角色 payload 字段见该节「payload 定制」）。
 
 ## 输出规范
 

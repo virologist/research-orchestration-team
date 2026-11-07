@@ -3,7 +3,7 @@
     "id": 1,
     "name": "Workflow A 科研选题（信息充分）",
     "prompt": "我想做一个研究：用机器学习预测禽流感HA蛋白糖基化位点与宿主适应的关系。我有2543条HA序列和2365条NA序列，数据截止2021年，目标投CAS 1区virology期刊。帮我评估这个选题值不值得做，值多少资源投入。",
-    "expected": "走 ALIGN → EXECUTE_ONE_STEP，输出《选题评分卡》+ S/A/B/C 分档 + 3条止损线（数据/时间/资源）",
+    "expected": "走 ALIGN → EXECUTE，输出《选题评分卡》+ S/A/B/C 分档 + 3条止损线（数据/时间/资源）",
     "tests": "happy path · Workflow A · 选题评分卡生成 · 脚本调用",
     "target_agents": [
       "team-lead",
