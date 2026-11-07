@@ -237,8 +237,13 @@ CHECKS = [
 
 
 def find_repo_root(start: Path) -> Path | None:
-    """向上查找仓库根（须同时含 .claude-plugin 与 .codebuddy-plugin）"""
-    cur = start.resolve()
+    """定位仓库根（须同时含 .claude-plugin 与 .codebuddy-plugin）。
+
+    v2.2.0 修复：起点从 Path.cwd() 改为本脚本所在位置上溯——
+    cwd 依赖导致从任意外部目录调用时 exit 2（实测缺陷），与
+    manifest_check.py 的 `Path(__file__)` 定位保持一致。
+    """
+    cur = Path(__file__).resolve().parent
     for _ in range(8):
         if (cur / ".claude-plugin").exists() and (cur / ".codebuddy-plugin").exists():
             return cur
@@ -256,7 +261,7 @@ def main(argv: list[str] | None = None) -> int:
                         help="输出每个通过项")
     args = parser.parse_args(argv)
 
-    root = args.root.resolve() if args.root else find_repo_root(Path.cwd())
+    root = args.root.resolve() if args.root else find_repo_root(Path(__file__))
     if root is None:
         print("❌ 找不到仓库根（须同时含 .claude-plugin 与 .codebuddy-plugin）", file=sys.stderr)
         return 2

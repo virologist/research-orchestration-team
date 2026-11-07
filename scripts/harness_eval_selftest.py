@@ -192,7 +192,9 @@ def run_case(pristine: Path, tmp_root: Path, cid: str, desc: str,
 
     try:
         proc = subprocess.run(
-            [sys.executable, str(CHECKER)],
+            # v2.2.0 起 harness_eval 根定位从 cwd 改为 __file__ 上溯，
+            # 故必须显式传被测副本的 --root，负例才会作用在被测副本上
+            [sys.executable, str(CHECKER), "--root", str(case_dir)],
             cwd=case_dir, capture_output=True, text=True, timeout=30,
         )
         output = proc.stdout + proc.stderr
