@@ -23,6 +23,28 @@
 
 > 说明：以下 v2.2.0 补记的 5 条为**工程内证**——证据来源为本仓库真实 commit（short hash）、`CHANGELOG.md`、`README.md 版本历史` 与脚本 / 文件路径，不引用外部 DOI / PMID / URL；`observability` 因历史未逐任务采集，统一如实标注「未采集」，不自造数值。
 
+### [2026-11-08] / team-lead / v2.3.0 残留风险工程化收口（R5 分级扩展 + R6 工具真实性）
+
+- **决策**：
+  - v2.2.0 发布时登记的 4 条残留风险中 3 条落为工程修复，1 条文档化收口，不「记录了事」
+  - R5 分级解析扩展全 8 成员：atomic（registry 有 tools 行）沿用四类解析 + 双向相等；非 atomic（零工具授权）用 ①②③ 三类解析、任何工具 token 即 FAIL，跳过对中文叙述误报率高的 ④ `+` 槽位分支——不选「净化 MD 描述」路线，避免损失内容
+  - 新增 R6 工具真实性：对照真实 MCP 清单（env `ROUTING_EVAL_MCP_JSON` → `~/.workbuddy/mcp.json`）硬校验 registry 全部 `mcp__` 名；清单不可得的 CI / git-clone 态显式 SKIP（⏭️ 标记，不计 FAIL 不影响 rc），安装态必须 PASS
+  - 条目 4（validate_expert 硬编码安装路径）在 README 文档化为已知限制，不改官方脚本
+  - 门禁总量 33 → 39 项（R5 3→8、R6 +1）
+- **证据**：
+  - `git fd23177` feat(v2.3.0)（R5/R6/文档收口/升版，7 files +304/-65）
+  - `git 85e343c` fix(CI): N12 fixture 自包含化（见下方 lesson）
+  - 实测：routing 39/39（R5 8/8 + R6 1/1）、selftest 12/12、R6 SKIP 分支空 HOME 下 rc=0、破坏验证非 atomic 注入 rc=1 / registry 注 GHOST_SERVER + 清单 rc=1、CI run 42420262814 success
+  - Release：tag v2.3.0 → 85e343c，三源（canonical / GitHub / OneDrive 镜像）一致
+- **下一步**：
+  - CI tag 步骤曾把 tag 打在 CI-failure 的 fd23177 上，后重打到 85e343c——发布纪律补强：**tag 必须落在 CI 绿的 commit**，先看 run 结果再打 tag（已执行，记录防复发）
+  - R6 的 SKIP 语义与 V4 同类：环境性 SKIP ≠ 门禁失败，但「39/39 全绿」在 CI 态实际是 38 项判定 + 1 项 SKIP，对外报告须注明
+- **observability**：
+  - 成功率：未采集
+  - 平均 tool call：未采集
+  - 重试次数：1（fd23177 CI 红后 85e343c 修复重推）
+  - next_actions 存在率：2/2（两条均有下一步）
+
 ### [2026-11-07] / team-lead / v2.2.0 P0-1 恢复包根 settings.json + manifest C12 护栏
 
 - **决策**：
@@ -230,6 +252,16 @@
 | `explicit_stop_condition` | 什么情况下必须停，不自己硬撞 | 同上；`team-lead.md` 错误路径三件套 |
 
 > 三件套与协议 §6 的 `ERROR` payload（`category` / `detail` / `recovery_action` / `retry_count`）互补：前者写给**下一次会话的人**看，后者写给**当前运行时**用。
+
+### [2026-11-08] / team-lead / lesson：CI 环境性假红（失败回流 · 部署实测抓出）
+
+- **task_id / trace_id**：v2.3.0 部署 / CI run 42419531746（failure）→ 42420262814（success）
+- **失败类别**：第 3 类「校验器 rc=1」（CI 实跑抓出；本质是 fixture 依赖外部环境）
+- **现象**：本机 12/12 全绿，CI 仅 `Routing eval self-test` 一步红：N12 前置处理 `AssertionError: 本机无默认 MCP 清单，无法构造 R6 fixture: /home/runner/.workbuddy/mcp.json` → selftest 11/12
+- **root_cause_hint**：N12 的 fixture 从 `~/.workbuddy/mcp.json` 复制——该路径只在开发机存在。**测试依赖了本机私有的外部环境 = 测试不自包含**，CI 天然必红。「本机全绿」与「CI 全绿」之间隔着环境差异，任何跨机断言必须在 CI 同构环境（空 HOME / 无 env）下预演过才算数。
+- **safe_retry_instruction**：fixture 改为**自包含合成清单**（覆盖被测全集的真实 server 名 + 少量干扰项，使「真实名 PASS / 伪造名 FAIL」判据与真实清单等价）；修复后在「空 HOME + 无 env」模拟 CI 态复跑通过再推送。不要用「CI 上跳过 N12」的方式糊——那会让 R6 的负例保护在 CI 里永久失明。
+- **explicit_stop_condition**：若修复重推后 CI 仍红且失败点不在本地可复现的用例上，停止自行重试，拉 `gh run view --log-failed` 逐行比对本地与 CI 输出差异，定位环境差异源后再动手。
+- **已落地护栏**：`scripts/routing_eval_selftest.py` N12（自包含合成清单，SYNTHETIC_SERVERS 12 项含干扰项）；`git 85e343c`；「空 HOME 模拟 CI 态」纳入交付判据。**附带教训**：tag 曾打在 CI-failure 的 `fd23177` 上——发布纪律：**先看 CI run 结果、再打 tag**（本次已重打至 `85e343c`）。
 
 ### 写入位置与责任人
 
