@@ -83,6 +83,7 @@ raw_probe 保证，而非被夹具掩盖。归一化只动 tools 行内容与 de
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import re
 import shutil
@@ -375,10 +376,20 @@ def n12(root):
     """
     _inject_tools(root, " / `mcp__GHOST_SERVER`")
     fixture = root / "mcp-fixture.json"
-    src = Path(MCP_MANIFEST_DEFAULT).expanduser()
-    if not src.is_file():
-        raise AssertionError(f"本机无默认 MCP 清单，无法构造 R6 fixture: {src}")
-    fixture.write_text(src.read_text(encoding="utf-8"), encoding="utf-8")
+    # 自包含合成清单：覆盖 registry tools 行的全部真实 server 名 + 若干干扰项。
+    # 不依赖 ~/.workbuddy/mcp.json（CI runner 上不存在，会让本用例前置处理失败
+    # 变成环境性假红——v2.3.0 首次 CI 实锤）。合成清单只须让「真实名 PASS、
+    # GHOST_SERVER FAIL」这条判据可复现，与真实清单等价。
+    SYNTHETIC_SERVERS = {
+        "biomcp", "pubmed", "semantic-scholar", "biorxiv-mcp-server",
+        "arxiv-mcp-server", "context7", "fetch", "tooluniverse", "web-scout",
+        # 干扰项：确保判据不是「凡在清单里就行」的宽松放行
+        "zotero", "playwright", "memory",
+    }
+    fixture.write_text(
+        json.dumps({"mcpServers": {k: {} for k in sorted(SYNTHETIC_SERVERS)}},
+                   ensure_ascii=False, indent=2),
+        encoding="utf-8")
     os.environ[MCP_MANIFEST_ENV] = str(fixture)
 
 
