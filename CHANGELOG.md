@@ -2,6 +2,34 @@
 
 所有重要变更按版本倒序记录。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [2.3.0] - 2026-11-08
+
+> 发布后残留风险的工程化收口版。主题：**登记的残留 → 门禁化的消除**。
+> 四条残留中的三条（R5 覆盖盲区 / SSOT 内容无保护 / 裸词拦截依赖槽位写法）落为工程修复，第四条（validate_expert 安装路径限制）文档化收口。
+
+### Added
+
+- **R6 工具真实性校验**：`routing_eval.py` 对照真实 MCP 清单（探测顺序：env `ROUTING_EVAL_MCP_JSON` → `~/.workbuddy/mcp.json`）硬校验 registry 全部成员 tools 行的 9 个 `mcp__` 名；伪造 server 名（形态合法但清单中不存在）现在会被拦截。清单不可得的 CI / git-clone 态**显式 SKIP**（组标题带 ⏭️ 标记 + V4 式语义说明），SKIP 不计入 FAIL、不影响 rc；安装态必须 PASS 才算完整覆盖。
+- **R5 分级解析扩展全 8 成员**：原 R5 只覆盖 3 个 atomic。现按 registry 动态分级——atomic（有 tools 行）沿用四类解析 + 双向相等；非 atomic（无 tools 行 = 零工具授权）用 ①mcp__ 前缀 ②反引号 ③内置裸词 三类解析，任何工具 token 即 FAIL，**跳过 ④ `+` 槽位分支**（对中文叙述描述误报率高，是原残留的根因）。R5 由 3 项变 8 项。
+- **selftest 12 例**：N10 非 atomic MD 注入反引号伪造名（走①类）断言 rc=1；N12 registry 注入 `mcp__GHOST_SERVER`（R4 形态放行、只有 R6 能拦）+ 真实清单 fixture + 环境快照恢复防用例间污染；N11 并入 P1 正例（与独立正例完全重复，不重复造例）。N10/N12 均实测 rc=1 命中。
+
+### Regression evidence（v2.3.0 部署前实测）
+
+| 套件 | 结果 |
+|------|------|
+| `routing_eval.py` | **39/39** ✅（R1 4 + R2 8 + R3 15 + R4 3 + **R5 8** + **R6 1**）|
+| `routing_eval_selftest.py` | **12/12** ✅（P1 + N1~N10 + N12）|
+| R6 SKIP 分支 | 空 HOME + 无 env 下显式 SKIP 标记、rc 仍 0、39/39 ✅ |
+| 破坏验证 | 非 atomic 注 `` `mcp__GHOST_TOOL` `` rc=1（extra=）；registry 注 `mcp__GHOST_SERVER` + 真实清单 rc=1（不存在）✅ |
+| `manifest_check.py` | 64/64 ✅ |
+| `harness_eval.py` | 12/12 ✅ |
+
+### Changed
+
+- 双 manifest version 2.2.0 → **2.3.0**；README 头部、版本历史、健康检查命令注释同步。
+- README 新增「validate_expert.py 的已知限制」节：该校验器硬编码安装路径检查，tempfile 副本必误报「专家不在专家目录下」、CI 无法覆盖，只能安装态原位运行（v2.2.0 部署时 xval 双验证者实测定性的环境性误报，现文档化）。
+- agent-registry.md「注入式负例」节计数同步（routing selftest 10 → 12 条，R5/R6 语义一句话）。
+
 ## [2.2.0] - 2026-11-07
 
 > 从零独立诊断（15 项短板亲验）后的补全完善版。主题：**纸面机制 → 确定性工程**。

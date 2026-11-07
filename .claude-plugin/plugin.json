@@ -1,6 +1,6 @@
 {
   "name": "research-orchestration-team",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "description": "Eight-agent cross-disciplinary research orchestration team (v2.1.0 Harness Engineering). ACP protocol + L1-L5 conflict arbitration + Orchestrator Pattern routing + Loop hard-stop (max_turns/time/token) + per-step verification + atomic subagent split (biomed/ai/general) + Ralph Loop cross-session memory. For Claude Code / WorkBuddy / Claude Desktop.",
   "author": {
     "name": "TZUVet",

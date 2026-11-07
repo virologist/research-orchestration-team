@@ -218,7 +218,7 @@ plan_execution:
 - **H1-H12 正向校验**：`python3 scripts/harness_eval.py`（干净仓库期望 rc=0）
 - **14 条注入式负例（N1-N13 + R1）**：`python3 scripts/harness_eval_selftest.py`（逐条把仓库复制到临时目录、注入一处破坏，断言校验器 rc=1 且命中预期检查项文案；R1 为语义不变的反向放行用例）
   - N13 删除整个 `### moderate` 权限档章节（标题+正文），验证 H6 已改为按 `^### (safe|moderate|dangerous)` 章节标题判定，不再被 Changelog 里的兜底词放行
-- `scripts/routing_eval_selftest.py` 为 10 条（P1 + N1~N9），其中 `raw_probe` 是准备阶段护栏、不计入用例数，作用是对未归一化的原始副本直跑 `routing_eval.py`，防止 `sanitize_pristine` 自愈夹具掩盖真实仓库的 R2/R4 缺陷。
+- `scripts/routing_eval_selftest.py` 为 12 条（P1 + N1~N10 + N12；N11 并入 P1 正例），其中 `raw_probe` 是准备阶段护栏、不计入用例数，作用是对未归一化的原始副本直跑 `routing_eval.py`，防止 `sanitize_pristine` 自愈夹具掩盖真实仓库的 R2/R4 缺陷。R5 已扩展到全部 8 个成员（非 atomic 走 ①②③ 类解析、零工具授权，跳过误报率高的 ④ 槽位分支）；R6 对照真实 MCP 清单校验 registry 全部 `mcp__` 名，清单不可得的 CI/git-clone 态显式 SKIP 且不计 FAIL。
 - `scripts/manifest_check_selftest.py` 为 21 条，含 N21 验证 C8 的 rglob 扫描覆盖隐藏目录下的 `.claude-plugin/marketplace.json`。
 
 ---

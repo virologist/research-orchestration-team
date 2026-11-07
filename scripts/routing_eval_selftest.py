@@ -14,7 +14,7 @@
 
 归一化（sanitize_pristine）会重写 tools 行、给 description 追加触发词，这本身会
 「修好」真实仓库里的 R2 / R4 缺陷。历史缺陷（对抗实验 B1/B2p）：若真实仓库本就
-存在这类路由不一致，selftest 仍会先把它修好再跑负例，得到 10/10 PASS —— 等于用
+存在这类路由不一致，selftest 仍会先把它修好再跑负例，得到 13/13 PASS —— 等于用
 自愈夹具掩盖真实缺陷，而直跑 `routing_eval.py --root <副本>` 其实是 rc=1。
 
 因此准备阶段分两步，且顺序不可颠倒：
@@ -24,7 +24,7 @@
      真实仓库存在路由不一致，selftest 打印「拒绝用自愈夹具掩盖」并 return 1，
      不再跑任何负例。
   2. **归一化（仅用于负例基准）**：仅在 raw_probe 通过后，才把副本归一为
-     R1-R5 已知全绿（见 sanitize_pristine），再注入单一破坏。归一化后的副本
+     R1-R6 已知全绿（见 sanitize_pristine），再注入单一破坏。归一化后的副本
      **仅用于证明校验器逻辑**，输出显式标注「不代表真实仓库合规」。
 
 本自测要证明的是「校验器能否捕获被注入的破坏」；真实仓库是否合规由第 1 步
@@ -33,7 +33,9 @@ raw_probe 保证，而非被夹具掩盖。归一化只动 tools 行内容与 de
 
 ## 用例
 
-  P1 正向：归一化基准副本 → rc=0（并断言汇总 PASS 文案）
+  P1 正向：归一化基准副本 → rc=0（并断言汇总 PASS 文案；含非 atomic 5 项
+     R5 放行正例，即 N11 的信息性验证并入 P1——P1 rc=0 蕴含非 atomic 5 项
+     全 PASS，另在 n10 注入负例中反向证明放行分支真实存在）
   N1 删除某个成员 MD                       → R1 命中「成员集合」
   N2 删掉某 description 的前 3 个触发词     → R2 命中「关键触发词」
   N3 删除 registry 一条 `**routing**:` 行   → R3 命中「结构完整」
@@ -43,13 +45,22 @@ raw_probe 保证，而非被夹具掩盖。归一化只动 tools 行内容与 de
   N7 删除整个 `### moderate` 权限档章节     → R3 命中「权限档」（按章节标题判定）
   N8 在 atomic MD description 注入伪造 mcp__GHOST_TOOL → R5 命中 `extra=`
   N9 在 atomic MD description 注入裸词「政策文件库」   → R5 命中「疑似非工具名裸词」
+  N10 在**非 atomic** MD description 注入反引号 `mcp__GHOST_TOOL` → R5 非 atomic
+      分支命中 `extra=`（覆盖分级解析器：非 atomic 仅 ①②③ 类解析、零工具授权）
+  N12 注入 `mcp__GHOST_SERVER` 到 registry tools 行 + ROUTING_EVAL_MCP_JSON
+      指向真实清单副本 → R6 命中「清单中不存在」负例
 
 ## 用例数
 
-  共 10 条：1 条正向（P1）+ 9 条负例（N1~N9）。raw_probe 为准备阶段护栏，不计入用例数。
-  N8 证明解析器认 `mcp__` 前缀（②）；N9 证明解析器认不带反引号 / 不带前缀的
-  非工具名裸词（④），两条合起来防止 R5 的「无 token → PASS」分支退化成永久放行。
+  共 12 条：1 条正向（P1）+ 11 条负例（N1~N10、N12）。raw_probe 为准备阶段护栏，
+  不计入用例数。N11（非 atomic 放行正例）并入 P1：P1 的 rc=0 已蕴含非 atomic 5 项
+  R5 PASS，故不设独立用例（无单独注入便无独立断言点，独立正例会与 P1 完全重复）。
+  N8 证明 atomic 分支解析器认 `mcp__` 前缀（②）；N9 证明 atomic 分支认不带反引号 /
+  不带前缀的非工具名裸词（④）；N10 证明非 atomic 分支（仅 ①②③、零工具授权）同样
+  会抓反引号内伪造名——三条合起来防止 R5 的「无 token → PASS」分支退化成永久放行。
   裸词 WebFetch（③内置工具裸词）由交付时的破坏验证单独覆盖。
+  N12 证明 R6 清单校验真实工作：GHOST_SERVER 不在真实清单副本中必 FAIL；清单不可得
+  时 R6 显式 SKIP 不影响 rc，该 SKIP 分支由交付时的 env/HOME 破坏验证单独覆盖。
 
 ## 用法
 
@@ -72,6 +83,7 @@ raw_probe 保证，而非被夹具掩盖。归一化只动 tools 行内容与 de
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import shutil
 import subprocess
@@ -83,6 +95,13 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 CHECKER_REL = Path("scripts") / "routing_eval.py"
 REGISTRY_REL = "skills/research-orchestration-workflow/references/agent-registry.md"
 COPY_EXCLUDE = {".git", "__pycache__", ".backups"}
+
+# 与 routing_eval.py 保持一致（R6 清单探测；自测保持独立，不 import 校验器）
+MCP_MANIFEST_ENV = "ROUTING_EVAL_MCP_JSON"
+MCP_MANIFEST_DEFAULT = "~/.workbuddy/mcp.json"
+
+# 注入过进程环境的用例编号 → mutate 结束后必须清除的环境变量（防污染后续用例）
+ENV_CLEANUP = {MCP_MANIFEST_ENV}
 
 # 与 routing_eval.py 保持一致的最小判定逻辑（自测保持独立，不 import 校验器）
 BUILTIN_TOOLS = frozenset({
@@ -330,6 +349,39 @@ def n9(root):
     _inject_description_token(root, "domain-expert-biomed", "政策文件库")
 
 
+def n10(root):
+    """在某个**非 atomic** MD（socratic-questioner，registry 无 tools 行）的
+    frontmatter description 注入反引号包裹的 `mcp__GHOST_TOOL` → R5 非 atomic
+    分支应命中 `extra=`（零工具授权集合应恒为空集）。
+
+    覆盖分级解析器：非 atomic 成员仅 ①②③ 类解析（反引号 token 属 ①），跳过 ④。
+    注入发生在归一之后的用例副本上——sanitize_pristine 只重写 registry tools 行
+    与追加触发词，不会改写已注入的 token；raw_probe 对未归一原始副本仍要求 rc=0
+    （真实仓库 5 个非 atomic 的 ①②③ token 实测全空）。
+    """
+    _inject_description_token(root, "socratic-questioner", "`mcp__GHOST_TOOL`")
+
+
+def n12(root):
+    """往 registry tools 行注入 `mcp__GHOST_SERVER`，并把 ROUTING_EVAL_MCP_JSON
+    指向一份真实清单副本（复制到用例目录内，不依赖外部路径）→ R6 应判
+    「清单中不存在」FAIL。
+
+    GHOST_SERVER 形态合法（mcp__ 前缀 + 非空后缀，R4 放行），只有 R6 的真实清单
+    校验能拦住它——这正是「SSOT 自身内容无保护」残留风险的回归证明。
+    run_case 会在 mutate 之后、run_checker 之前执行，因此环境变量必须在
+    run_checker 的进程环境里生效；这里通过 os.environ 设置、并在 case 收尾
+    由 run_case 的 finally 语义清除（见 CASES 清理钩子）。
+    """
+    _inject_tools(root, " / `mcp__GHOST_SERVER`")
+    fixture = root / "mcp-fixture.json"
+    src = Path(MCP_MANIFEST_DEFAULT).expanduser()
+    if not src.is_file():
+        raise AssertionError(f"本机无默认 MCP 清单，无法构造 R6 fixture: {src}")
+    fixture.write_text(src.read_text(encoding="utf-8"), encoding="utf-8")
+    os.environ[MCP_MANIFEST_ENV] = str(fixture)
+
+
 # ── 用例注册 ───────────────────────────────────────────────────────────────
 case("P1", "自愈基准副本全绿", "PASS", p1, expect_rc=0)
 case("N1", "删除一个成员 MD → R1 成员集合", "成员集合", n1)
@@ -341,6 +393,8 @@ case("N6", "tools 行塞入空后缀 mcp__ → R4 工具名", "工具名", n6)
 case("N7", "删除整个 ### moderate 权限档章节 → R3 权限档", "权限档", n7)
 case("N8", "description 注入伪造 mcp__GHOST_TOOL → R5 工具集合一致性", "extra=", n8)
 case("N9", "description 注入裸词「政策文件库」→ R5 非工具名裸词", "疑似非工具名裸词", n9)
+case("N10", "非 atomic MD description 注入 `mcp__GHOST_TOOL` → R5 非 atomic 零授权分支", "extra=", n10)
+case("N12", "registry 注入 mcp__GHOST_SERVER + 真实清单 fixture → R6 清单中不存在", "清单中不存在", n12)
 
 
 # ── 复制与执行 ─────────────────────────────────────────────────────────────
@@ -364,27 +418,41 @@ def run_case(pristine: Path, workdir: Path, cid, desc, expect, expect_rc, mutate
     if case_dir.exists():
         shutil.rmtree(case_dir)
     make_copy(pristine, case_dir)
+    saved_env = {k: os.environ.get(k) for k in ENV_CLEANUP}
     try:
         mutate(case_dir)
     except Exception as exc:  # 用例自身前置断言失败也要计入失败，而不是崩掉整个自测
         print(f"  ⚠️  {cid} {desc}: 用例前置处理失败 —— {exc}")
+        _restore_env(saved_env)
         return False
 
-    proc = run_checker(case_dir)
-    output = proc.stdout + proc.stderr
-    hit = expect in output
-    ok = proc.returncode == expect_rc and hit
-    mark = "✅" if ok else "❌"
-    print(
-        f"  {mark} {cid} {desc}: rc={proc.returncode}（期望 {expect_rc}）"
-        f" 命中预期='{expect}' → {hit}"
-    )
-    if not ok:
-        for line in output.splitlines():
-            if "❌" in line or "⚠️" in line:
-                print("       ", line.strip())
-    shutil.rmtree(case_dir, ignore_errors=True)
+    try:
+        proc = run_checker(case_dir)
+        output = proc.stdout + proc.stderr
+        hit = expect in output
+        ok = proc.returncode == expect_rc and hit
+        mark = "✅" if ok else "❌"
+        print(
+            f"  {mark} {cid} {desc}: rc={proc.returncode}（期望 {expect_rc}）"
+            f" 命中预期='{expect}' → {hit}"
+        )
+        if not ok:
+            for line in output.splitlines():
+                if "❌" in line or "⚠️" in line:
+                    print("       ", line.strip())
+    finally:
+        _restore_env(saved_env)
+        shutil.rmtree(case_dir, ignore_errors=True)
     return ok
+
+
+def _restore_env(saved: dict[str, str | None]) -> None:
+    """恢复 mutate 之前的环境变量快照，防止用例间互相污染（N12 设了 env var）。"""
+    for k, v in saved.items():
+        if v is None:
+            os.environ.pop(k, None)
+        else:
+            os.environ[k] = v
 
 
 def main() -> int:

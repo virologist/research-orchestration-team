@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""路由结构一致性评估器（routing_eval · R1-R5）
+"""路由结构一致性评估器（routing_eval · R1-R6）
 
 ## 定位（重要）
 
@@ -12,7 +12,7 @@
   被比对对象       = agents/*.md 的 frontmatter `description`
                      + .codebuddy-plugin/plugin.json 的 teamInfo / agentName
 
-## 五组检查（每组独立 FAIL 计数，逐条给「文件路径:行号 + 具体差异」）
+## 六组检查（每组独立 FAIL 计数，逐条给「文件路径:行号 + 具体差异」）
 
   R1 成员集合一致
      registry「团队成员一览」表格的 agent_id 集合
@@ -37,17 +37,25 @@
      （WebFetch, WebSearch, Read, Grep, Glob, Write, Edit, Bash, Agent, Skill）之一，
      或以 `mcp__` 开头且后缀非空；行内出现「政策文件库」这类非工具名裸词即 FAIL。
 
-  R5 工具集合一致性（3 个 atomic MD × 1 项）
-     读每个 atomic MD 的 frontmatter `description`，复用 R4 的 tool_ok / 内置白名单
-     抽取四类 token：①反引号内工具名 ②mcp__ 前缀名 ③内置工具裸词（无反引号无前缀）
-     ④非工具名裸词（如「政策文件库」，直接判 FAIL）。与该 agent_id 在 registry 的
-     `tools` 行集合比对：一个 token 都不枚举、也无非法裸词 → PASS（已单源化，无漂移面，
-     detail 注明「description 未枚举工具，工具清单以 registry 为 SSOT」）；一旦枚举则
-     必须与 registry 集合完全相等，缺项 / 多项 / 形态非法 token / 非工具名裸词全部
-     FAIL，明细给出文件路径:行号、`missing=[...]`、`extra=[...]` 与「疑似非工具名裸词」。
-     伪造名 mcp__GHOST_TOOL 之类必然落入 extra。R4 只校验 registry 自身命名形态、
-     从不比对 MD，本组补上这个盲区。遍历范围严格锁定 3 个 atomic MD，非 atomic
-     成员的 description 不参与本组。
+  R5 工具集合一致性（agents/*.md 全部 8 个成员 × 1 项，分级解析）
+     按 registry 是否有该成员的 `tools` 行分级：
+     · atomic 成员（registry 有 tools 行，3 个）：与 registry tools 行集合双向相等，
+       逻辑不变（见下方 R5 设计说明）。
+     · 非 atomic 成员（registry 无 tools 行 = 零工具授权，如 team-lead /
+       socratic-questioner / meta-architect 等）：只用 ①②③ 三类 token 解析，
+       跳过 ④ `+` 槽位分支（它对中文叙述文本误报率高，是 v2.2.0 残留风险的根因）。
+       判定规则：①②③ 任一类出现任何 token → FAIL（集合应为空集）；
+       全空 → PASS，detail 注明「非 atomic 成员无工具授权，description 应不含工具 token」。
+
+  R6 registry 工具真实性校验（1 项，可 SKIP）
+     取 registry 全部成员 tools 行中的 `mcp__xxx` 名，逐一校验 server 段（mcp__
+     之后的部分）是否存在于真实 MCP 清单。清单按顺序探测：
+     ① 环境变量 ROUTING_EVAL_MCP_JSON（显式路径）
+     ② ~/.workbuddy/mcp.json（本机默认）
+     ③ 都不存在 → SKIP（如 CI / git-clone 态）。SKIP 是**环境性跳过**而非门禁
+     失败：不影响 rc，但输出醒目标记，绝不静默。安装态（清单可得）必须 PASS 才算
+     完整覆盖（借鉴 test_vendor_core 的 V4 语义）。内置白名单工具（WebFetch 等）
+     是宿主内置非 MCP，不在本组校验范围。
 
 ## R2 为什么只查前 3 个触发词（阈值理由，刻意设计）
 
@@ -81,8 +89,10 @@ token 解析器覆盖四类（见 description_tool_tokens）：反引号内 toke
 「恰好是触发词表 `、` 分隔项」的白名单词豁免——ai 触发词表含「RAG、Agent、多智能体」，
 其中 Agent 恰是内置白名单词，不豁免会让已单源化 description 假红。
 ④ 只取每个 `+` 之后紧邻的短裸段（到下一个句读为止），跳过第一个 `+` 之前的
-角色散文，避免整段 prose 被当成工具槽位。故干净（单源化）仓库 3/3 PASS，
-注入任一类别均会 FAIL。
+角色散文，避免整段 prose 被当成工具槽位。**④ 是设计约束：仅对 atomic 成员启用**——
+非 atomic 成员的 description 是中文角色叙述（无工具槽位写法），④ 的短裸段启发式
+对这类文本误报率高（会把「输入」「五角色矩阵」等叙述词抓成非法裸段），故分级解析
+时对非 atomic 成员跳过 ④。故干净（单源化）仓库 8/8 PASS，注入任一类别均会 FAIL。
 
 ## 用法
 
@@ -92,8 +102,8 @@ token 解析器覆盖四类（见 description_tool_tokens）：反引号内 toke
 
 ## 退出码
 
-  0 = 全部通过（N/N PASS）
-  1 = 存在 FAIL 项（R1-R5 任一不一致）
+  0 = 全部通过（N/N PASS；R6 的 SKIP 不算失败）
+  1 = 存在 FAIL 项（R1-R6 任一不一致）
   2 = 参数 / 关键文件缺失（仓库根、registry、plugin.json、agents 目录、JSON 非法）
 
 ## 依赖
@@ -105,6 +115,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
 from dataclasses import dataclass, field
@@ -115,6 +126,10 @@ AGENTS_DIR = "agents"
 REFS_DIR = "skills/research-orchestration-workflow/references"
 REGISTRY_REL = f"{REFS_DIR}/agent-registry.md"
 PLUGIN_REL = ".codebuddy-plugin/plugin.json"
+
+# R6 真实 MCP 清单探测顺序：① 显式环境变量 ② 本机默认 ③ 都没有 → None（SKIP）
+MCP_MANIFEST_ENV = "ROUTING_EVAL_MCP_JSON"
+MCP_MANIFEST_DEFAULT = "~/.workbuddy/mcp.json"
 
 # 宿主内置工具白名单（R4）
 BUILTIN_TOOLS = frozenset({
@@ -127,15 +142,15 @@ PERMISSION_TIERS = ("safe", "moderate", "dangerous")
 LOOP_KEYS = ("max_turns", "max_time", "max_token", "circuit_breaker")
 TRIGGER_HEAD = 3  # R2 只查前 3 个触发词，理由见模块 docstring
 
-# R5 只比对这 3 个 atomic MD 的 frontmatter description（与 registry tools 行集合）
-ATOMIC_IDS = ("domain-expert-biomed", "domain-expert-ai", "domain-expert-general")
-
+# R5 分级解析：atomic 成员 = registry 有该成员的 **tools** 行（动态判定，不硬编码名单）；
+# 非 atomic 成员 = registry 无 tools 行（零工具授权），只用 ①②③ 类解析（跳过 ④）
 GROUP_NAMES = {
     "R1": "成员集合一致",
     "R2": "关键触发词覆盖",
     "R3": "条目结构完整",
     "R4": "工具名合法性（软校验）",
     "R5": "工具集合一致性",
+    "R6": "工具真实性（真实 MCP 清单校验）",
 }
 
 
@@ -223,7 +238,9 @@ def tool_ok(token: str) -> bool:
     return token.startswith(MCP_PREFIX) and len(token) > len(MCP_PREFIX)
 
 
-def description_tool_tokens(desc_text: str) -> tuple[set[str], list[str]]:
+def description_tool_tokens(
+    desc_text: str, *, allow_plus_slots: bool = True
+) -> tuple[set[str], list[str]]:
     """从成员 MD 的 frontmatter `description` 抽取工具名 token（R5 用）。
 
     四类候选统一用 tool_ok（复用 R4 的 BUILTIN_TOOLS / MCP_PREFIX，不另造一套）分类：
@@ -241,6 +258,12 @@ def description_tool_tokens(desc_text: str) -> tuple[set[str], list[str]]:
     豁免——它是路由关键词而非工具声明，否则已单源化 description 会假红。
     ④ 只取每个 `+` 之后紧邻的短裸段（本仓库工具枚举既有写法；到下一个句读 /
     分隔符为止），跳过第一个 `+` 之前的角色散文，避免整段 prose 被当成工具槽位。
+
+    分级约束（allow_plus_slots）：④ 的短裸段启发式是针对 atomic 成员「工具槽位」
+    写法设计的。非 atomic 成员的 description 是中文角色叙述（无 `+` 工具槽位写法），
+    ④ 会把「决策点）」「五角色矩阵」这类叙述词误报成非法裸段——这是 v2.2.0 残留
+    风险的根因。故非 atomic 成员必须传 allow_plus_slots=False 跳过 ④；atomic
+    成员保持 True，逻辑一字不改。
     """
     tokens: set[str] = set()
     illegal: list[str] = []
@@ -285,16 +308,19 @@ def description_tool_tokens(desc_text: str) -> tuple[set[str], list[str]]:
     # ④ 非工具名裸词：`+` 连接的工具清单槽位（如 `WebFetch + mcp__pubmed + 政策文件库`）。
     #    只取每个 `+` 之后紧邻的短裸段（到下一个句读 / 分隔符为止），跳过第一个 `+`
     #    之前的角色散文，避免整段 prose 被当成工具槽位。
-    for seg in re.split(r"\+", value)[1:]:
-        s = re.sub(r"`([^`]*)`", r"\1", seg)
-        s = re.sub(r"[（(][^）)]*[）)]", " ", s)
-        s = re.split(r"[。；;、,，/]", s)[0].strip().strip("\"'").strip()
-        if not s or len(s) > 24:
-            continue
-        if tool_ok(s):
-            tokens.add(s)
-        else:
-            illegal.append(s)
+    #    仅 atomic 成员启用（allow_plus_slots=True）；非 atomic 的中文叙述描述
+    #    不走此分支，详见函数 docstring 的分级约束说明。
+    if allow_plus_slots:
+        for seg in re.split(r"\+", value)[1:]:
+            s = re.sub(r"`([^`]*)`", r"\1", seg)
+            s = re.sub(r"[（(][^）)]*[）)]", " ", s)
+            s = re.split(r"[。；;、,，/]", s)[0].strip().strip("\"'").strip()
+            if not s or len(s) > 24:
+                continue
+            if tool_ok(s):
+                tokens.add(s)
+            else:
+                illegal.append(s)
 
     return tokens, illegal
 
@@ -437,6 +463,37 @@ def load_plugin(root: Path) -> tuple[set[str], int]:
         (i for i, ln in enumerate(text.splitlines(), 1) if '"memberAgents"' in ln), 1
     )
     return ids, member_line
+
+
+# ── R6：真实 MCP 清单解析 ──────────────────────────────────────────────────
+def load_mcp_manifest() -> tuple[dict[str, object] | None, str]:
+    """按探测顺序取得真实 MCP 清单（server 名集合），供 R6 校验 registry。
+
+    探测顺序：
+      ① 环境变量 ROUTING_EVAL_MCP_JSON（显式指定清单路径）
+      ② ~/.workbuddy/mcp.json（本机默认）
+      ③ 都不存在 / 均无 mcpServers 键 → (None, 原因)
+
+    返回 (servers, source)：清单可得时 servers 为 {server 名} 集合、source 为
+    人类可读来源描述；不可得时 servers 为 None（R6 据此 SKIP，不影响 rc）。
+    """
+    candidates: list[tuple[str, Path]] = []
+    env_path = os.environ.get(MCP_MANIFEST_ENV)
+    if env_path:
+        candidates.append((f"环境变量 {MCP_MANIFEST_ENV}", Path(env_path)))
+    candidates.append(("本机默认", Path(MCP_MANIFEST_DEFAULT).expanduser()))
+
+    for source, path in candidates:
+        if not path.is_file():
+            continue
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            continue
+        servers = data.get("mcpServers") if isinstance(data, dict) else None
+        if isinstance(servers, dict):
+            return set(servers), f"{source}: {path}"
+    return None, f"未找到真实 MCP 清单（依次探测了环境变量 {MCP_MANIFEST_ENV} 与 {MCP_MANIFEST_DEFAULT}）"
 
 
 # ── 检查项构造 ──────────────────────────────────────────────────────────────
@@ -582,21 +639,53 @@ def build_checks(
                 details,
             ))
 
-    # ── R5 工具集合一致性（每个 atomic MD 一项；补 R4 不比对 MD 的盲区）──────
-    for aid in ATOMIC_IDS:
+    # ── R5 工具集合一致性（agents/*.md 全部成员 × 1 项，分级解析）────────────
+    #     atomic（registry 有 tools 行）= 四类解析 + 双向相等；非 atomic（registry
+    #     无 tools 行 = 零工具授权）= 仅 ①②③ 类解析，集合必须为空。分级按 registry
+    #     动态判定，不硬编码名单。
+    for aid in sorted(agent_ids):
         md_file = f"{AGENTS_DIR}/{aid}.md"
         desc_text, desc_line = agent_desc.get(aid, ("", 0))
-        md_tokens, illegal = description_tool_tokens(desc_text)
         entry = entries.get(aid)
         reg_tokens: set[str] = set()
         tools_loc = REGISTRY_REL
+        has_tools_row = bool(entry is not None and entry.tools_lines)
         if entry is not None:
             for _ln, toks in entry.tools_lines:
                 reg_tokens.update(toks)
             if entry.tools_lines:
                 tools_loc = f"{REGISTRY_REL}:{entry.tools_lines[0][0]}"
 
+        if has_tools_row:
+            # atomic 成员：沿用四类解析 + 双向相等（逻辑与基线一字不改）
+            md_tokens, illegal = description_tool_tokens(desc_text, allow_plus_slots=True)
+        else:
+            # 非 atomic 成员：零工具授权，仅 ①②③ 类解析（跳过 ④ `+` 槽位分支，
+            # 它对中文叙述文本误报率高，是残留风险根因），集合必须为空
+            md_tokens, illegal = description_tool_tokens(desc_text, allow_plus_slots=False)
+
         label = f"R5 工具集合一致性 · {md_file}"
+        if not has_tools_row:
+            if not md_tokens and not illegal:
+                checks.append(Check(
+                    "R5", label, True,
+                    [f"{md_file}:{desc_line} 非 atomic 成员无工具授权"
+                     f"（registry 无 tools 行），description 应不含工具 token：实测 ①②③ 类全空 ✓"],
+                ))
+            else:
+                details = [
+                    f"{md_file}:{desc_line} 非 atomic 成员无工具授权"
+                    f"（registry 无 tools 行），description 出现工具 token：{sorted(md_tokens)}",
+                    f"  extra={sorted(md_tokens)}（非 atomic 成员应为空集）",
+                    f"  illegal={sorted(set(illegal))}（形态非法 token）",
+                ]
+                if illegal:
+                    details.append(
+                        f"  → 疑似非工具名裸词 {sorted(set(illegal))}"
+                    )
+                checks.append(Check("R5", label, False, details))
+            continue
+
         if not md_tokens and not illegal:
             # 已单源化：description 不枚举任何工具名、也无非法裸词，无双源漂移面
             checks.append(Check(
@@ -623,6 +712,51 @@ def build_checks(
             )
         checks.append(Check("R5", label, passed, [] if passed else details))
 
+    # ── R6 工具真实性校验（1 项，可 SKIP；治「SSOT 自身内容无保护」残留）────
+    #     registry tools 行里的 mcp__xxx 名，server 段必须在真实 MCP 清单中存在。
+    #     清单不可得（CI / git-clone 态）→ 显式 SKIP，不影响 rc；安装态必须 PASS。
+    manifest, manifest_src = load_mcp_manifest()
+    reg_mcp: dict[str, list[tuple[str, int]]] = {}  # 工具全名 → [(agent_id, 行号)]
+    for aid, entry in entries.items():
+        for line_no, toks in entry.tools_lines:
+            for t in toks:
+                if t.startswith(MCP_PREFIX) and len(t) > len(MCP_PREFIX):
+                    reg_mcp.setdefault(t, []).append((aid, line_no))
+
+    r6_label = "R6 工具真实性 · registry mcp__ 名 ↔ 真实 MCP 清单"
+    if manifest is None:
+        checks.append(Check(
+            "R6", f"{r6_label}（SKIP）", True,
+            [f"R6 SKIP：未找到真实 MCP 清单（CI / git-clone 态），跳过真实性校验",
+             f"  探测顺序：① 环境变量 {MCP_MANIFEST_ENV} ② {MCP_MANIFEST_DEFAULT}；"
+             f"SKIP 是环境性跳过 ≠ 门禁失败，安装态（清单可得）必须 PASS 才算完整覆盖",
+             f"  涉及 {len(reg_mcp)} 个 mcp__ 工具名，未校验"],
+        ))
+    else:
+        ghost = {
+            t: f"{MCP_PREFIX}{t}" for t in (
+                name[len(MCP_PREFIX):] for name in reg_mcp
+                if name[len(MCP_PREFIX):] not in manifest
+            )
+        }
+        if ghost:
+            details = [
+                f"registry 引用的 mcp__ 工具名在真实清单中不存在对应 server（清单来源: {manifest_src}）",
+            ]
+            for server_seg, name in sorted(ghost.items()):
+                where = ", ".join(f"{aid}（{REGISTRY_REL}:{ln}）" for aid, ln in reg_mcp.get(name, []))
+                details.append(
+                    f"  {name} → 清单中不存在的 server 段「{server_seg}」（引用于 {where}）"
+                )
+            details.append(f"  清单 server 数: {len(manifest)}（来源: {manifest_src}）")
+            checks.append(Check("R6", r6_label, False, details))
+        else:
+            checks.append(Check(
+                "R6", r6_label, True,
+                [f"registry 全部 {len(reg_mcp)} 个 mcp__ 工具名的 server 段均存在于真实清单 ✓"
+                 f"（清单来源: {manifest_src}，server 数: {len(manifest)}）"],
+            ))
+
     return checks
 
 
@@ -640,7 +774,7 @@ def find_repo_root(start: Path) -> Path | None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="路由结构一致性评估器（R1-R5）")
+    parser = argparse.ArgumentParser(description="路由结构一致性评估器（R1-R6）")
     parser.add_argument("--root", type=Path, default=None, help="仓库根（默认自动定位）")
     parser.add_argument("-v", "--verbose", action="store_true", help="输出每个通过项")
     args = parser.parse_args(argv)
@@ -681,20 +815,26 @@ def main(argv: list[str] | None = None) -> int:
         agent_desc, agent_ids, plugin_ids, plugin_member_line,
     )
 
-    print("🔍 路由结构一致性评估（routing_eval · R1-R5）")
+    print("🔍 路由结构一致性评估（routing_eval · R1-R6）")
     print(f"   仓库根: {root}")
     print(f"   SSOT  : {REGISTRY_REL}")
     print(f"   被比对: {AGENTS_DIR}/*.md frontmatter description + {PLUGIN_REL} teamInfo")
     print(f"   说明  : R2 仅查 trigger 行前 {TRIGGER_HEAD} 个关键词（刻意阈值，避免词表远长于 description 造成过严假红）")
     print("   说明  : R4 仅校验命名形态，真实可用性由 agent-registry.md 降级链保障")
-    print("   说明  : R5 比对 3 个 atomic MD description 与 registry tools 行；未枚举工具即视为单源化")
+    print("   说明  : R5 按 registry 是否有 tools 行分级比对全部成员 MD description；未枚举工具即视为单源化")
+    print("   说明  : R6 用真实 MCP 清单校验 registry mcp__ 名的 server 段；清单不可得时显式 SKIP（不影响 rc）")
     print()
 
-    for group in ("R1", "R2", "R3", "R4", "R5"):
+    for group in ("R1", "R2", "R3", "R4", "R5", "R6"):
         group_checks = [c for c in checks if c.group == group]
+        if not group_checks:
+            continue
         gp = sum(1 for c in group_checks if c.passed)
         gf = len(group_checks) - gp
-        print(f"【{group} {GROUP_NAMES[group]}】 {gp}/{len(group_checks)} PASS（{gf} FAIL）")
+        skip_mark = ""
+        if group == "R6" and any("SKIP" in c.label or any("SKIP" in d for d in c.details) for c in group_checks):
+            skip_mark = "  ⏭️ SKIP（环境性跳过，不计 FAIL）"
+        print(f"【{group} {GROUP_NAMES[group]}】 {gp}/{len(group_checks)} PASS（{gf} FAIL）{skip_mark}")
         for c in group_checks:
             if c.passed:
                 if args.verbose:

@@ -1,9 +1,9 @@
 # 科研价值驱动研究编排团
 
 > **团队名称**：科研价值驱动研究编排团 / Research Value-Driven Research Orchestration Team
-> **专家类型**：Team 型（8 人协作团 · v2.2.0 状态持久化与断点续跑）
+> **专家类型**：Team 型（8 人协作团 · v2.3.0 工具真实性门禁 R1-R6）
 > **行业分类**：12-IndustryConsultant（跨学科咨询）
-> **版本**：2.2.0
+> **版本**：2.3.0
 > **许可证**：MIT
 > **仓库**：[github.com/virologist/research-orchestration-team](https://github.com/virologist/research-orchestration-team)
 
@@ -132,6 +132,7 @@ research-orchestration-team/
 - **v2.1.1** (2026-09-19)：新增 `harness_eval_selftest.py`（dev-only 负例工具），运行时行为无变更。
 - **v2.1.2** (2026-09-30)：atomic 拆分残留补全（4 处死引用、六/八阶段表述、maxTurns 消歧义）；协议统一为 result_envelope v2.4；CI 纳入 harness 校验。回归 12/12 + 63/63 + 17/17 + 13/13。
 - **v2.2.0** (2026-11-07)：从零独立诊断后的补全完善版。恢复包根 `settings.json`（官方校验 0 error）+ manifest C12 护栏；新增 `state_io.py` 状态持久化与断点续跑（治协议 §3 纸面 schema）；harness_eval 根定位修复；routing_eval 结构一致性评估；README/CHANGELOG/LEARNING 历史欠账补齐。两轮独立交叉验证后修复 3 个门禁假绿（R3/H6 权限档章节漏检、routing selftest 自愈夹具掩盖真实缺陷）与 1 个方向性错误（protocol_check 校验废弃 ACP v2.0），并补齐文档计数与两份 marketplace.json 的八agent 描述。详见 [CHANGELOG.md](./CHANGELOG.md)。
+- **v2.3.0** (2026-11-08)：残留风险工程化收口。routing_eval 升至 **R1-R6 共 39 项**——R5 工具集合一致性扩展到全部 8 个成员（分级解析：atomic 四类 + 双向相等；非 atomic 零工具授权，①②③ 类 token 即 FAIL，跳过对中文叙述误报率高的 ④ `+` 槽位分支）；新增 **R6 工具真实性校验**（对照真实 MCP 清单硬校验 registry 全部 `mcp__` 名，清单不可得的 CI/git-clone 态显式 SKIP 且不计 FAIL）；selftest 增至 12 例（N10 非 atomic 注入 / N12 伪造 server 名 + 真实清单 fixture）。官方 `validate_expert.py` 的安装路径限制已在本文档化。详见 [CHANGELOG.md](./CHANGELOG.md)。
 
 ## 安装方式（三套并存）
 
@@ -247,7 +248,7 @@ python3 scripts/manifest_check.py                 # C1–C12，含 Team settings
 python3 scripts/manifest_check_selftest.py        # 注入式负例
 python3 scripts/harness_eval.py                   # H1–H12（根定位已改为 __file__，任意目录可调）
 python3 scripts/harness_eval_selftest.py          # harness 注入式负例
-python3 scripts/routing_eval.py                   # 路由结构一致性
+python3 scripts/routing_eval.py                   # 路由结构一致性 R1-R6（R6 需真实 MCP 清单，CI 态显式 SKIP）
 python3 scripts/routing_eval_selftest.py          # 路由注入式负例自测
 python3 tests/test_vendor_core.py                 # 联邦防漂移 V1–V6
 python3 skills/research-orchestration-workflow/scripts/protocol_check.py envelope    # v2.4 主套件 16 + legacy 12
@@ -259,6 +260,8 @@ python3 skills/research-orchestration-workflow/scripts/topic_scoring.py --topic 
   --competition 6 --cognition 8 --resource-fit 7 --sustainability 7
 python3 /Applications/WorkBuddy.app/Contents/Resources/app.asar.unpacked/resources/plugins/workbuddy-builtin/skills/expert-manager/scripts/validate_expert.py .   # 官方校验：0 error
 ```
+
+> **validate_expert.py 的已知限制**：该校验器内部硬编码要求包位于 `~/.workbuddy/plugins/marketplaces/my-experts/plugins/` 之下——对 tempfile 副本运行必报「专家不在专家目录下」（环境性误报），且 CI checkout 目录天然不满足安装路径，故这一项**只能安装态原位运行、无法纳入 CI**。上例 `cd` 到安装路径后原位执行即为正确用法。
 
 > **为何不自动化**：OneDrive 是只读云备份，不是 critical path。手写契约比 launchd cron / WebDAV 推送简单可靠，且无凭据泄漏面。若未来团队规模扩大、需要 ≤1 天同步窗口，再考虑 GitHub Action + WebDAV（成本：OAuth + secret 配置）。
 
