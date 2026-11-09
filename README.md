@@ -220,10 +220,10 @@ cp -r research-orchestration-team ~/.claude/skills/research-orchestration-team
 
 ### 方式 3 · GitHub Release tarball
 
-下载 [v2.4.1 release](https://github.com/virologist/research-orchestration-team/releases/tag/v2.4.1) 的 `rot-v2.4.1.tar.gz` → 解压 → 按方式 2 拷贝。
+下载 [最新 release](https://github.com/virologist/research-orchestration-team/releases/latest) 页面的 tarball（资产名约定 `rot-<版本>.tar.gz`，如本版 `rot-v2.5.0.tar.gz`）→ 解压 → 按方式 2 拷贝。
 
 > tarball 内容与 `git clone` 一致（含 `avatars/` 与包根 `settings.json`），已剔除编辑备份等本地产物。
-> **注意资产名不统一**：各 release 的资产命名不完全遵循 `research-orchestration-team-<版本>.tar.gz` 约定（v2.1.2 / v2.4.0 / v2.4.1 均为 `rot-<版本>.tar.gz`），下载前请先在 release 页面确认实际资产名。
+> **链接不写死版本（v2.5.0 起）**：统一指向 `releases/latest` 页面，避免每次发版都要改 README。此前方式 3 写死 `rot-v2.4.1.tar.gz`，v2.4.0 曾因同类滞后专门发过 v2.4.1 补丁版——这是该复发点的根治。下载前请在 release 页面确认实际资产名。
 > **历史缺口**：v2.2.0 与 v2.3.0 两个 release 未附带 tarball 资产；**自 v2.4.0 起已补齐**，方式 3 现在可直接安装到最新版。
 
 ### 方式 4 · 开发测试（`--plugin-dir`）
@@ -286,12 +286,22 @@ claude --plugin-dir ./research-orchestration-team
 
 **发布契约**：每次 push 到 GitHub 之后，必须把 OneDrive 镜像 fast-forward 到同一 commit。**v2.0.1 → v2.0.2 期间发生过漏同步**，原因是没有明文契约——本节即是修补。
 
+**发布前强制检查（v2.5.0 起，逐条核对）**：
+
+1. **tag 只打在 CI 绿 commit 上**——`gh run list` 核到 `conclusion=success` 且 `headSha` 等于待打 tag 的 commit。
+2. **资产必须 `git archive <tag>` 生成**，禁止手工修改资产内容——保证「资产内容 == tag 内容」。v2.4.0 的教训：重打已发布资产比文档过期更严重。
+3. **打包前确认 README「方式 3」不含具体版本字面量**（已改为 `releases/latest` 通用链接）；CHANGELOG 版本段保持倒序。
+4. **解包核对**：资产内 README 头部版本行 == tag 版本、关键门禁脚本齐全、无 `.git/` 与本地备份产物，之后才上传。
+
 ```bash
 # 1. 在 canonical 仓库推送
 cd ~/.workbuddy/plugins/marketplaces/my-experts/plugins/research-orchestration-team
 git push origin master
+# 打包：资产内容严格等于 tag 内容（prefix 与方式 2 的目录名一致）
+git archive --format=tar.gz --prefix=research-orchestration-team/ vX.Y.Z \
+  -o /tmp/rot-vX.Y.Z.tar.gz
 gh release create vX.Y.Z --repo virologist/research-orchestration-team \
-  --title "..." --notes-file /tmp/release-notes.md /tmp/release-X.Y.Z.tar.gz
+  --title "..." --notes-file /tmp/release-notes.md /tmp/rot-vX.Y.Z.tar.gz
 
 # 2. 同步 OneDrive（**必做**，否则云镜像会落后）
 cd ~/Library/CloudStorage/OneDrive-Personal/GPT/Claude/research-orchestration-team

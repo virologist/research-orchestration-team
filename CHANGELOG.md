@@ -2,30 +2,6 @@
 
 所有重要变更按版本倒序记录。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
-## [2.4.1] - 2026-11-09
-
-> 发布介质自洽性补丁。主题：**资产内容必须与 tag 内容一致**。
-> 协议、运行时、门禁**行为无变更**；仅修正发布链路的一处介质-文档矛盾。
-
-### Fixed
-
-- **release 资产内的 README 与自身文档矛盾**：v2.4.0 的 tarball 资产 `rot-v2.4.0.tar.gz` 已补齐，但 tag `v2.4.0` 指向 `90a1c36`——**早于**修正「安装方式 3」链接的 commit `2f2b016`。结果：tarball 内的 README 仍写「方式 3 只能安装到 v2.1.2」，用户下载后按文档操作会指向旧版本。
-  - **不改 v2.4.0**：已发布 tag 不重写；已发布资产不重打包（重打会造成「资产内容 ≠ tag 内容」，比文档过期更严重）。
-  - **改为发补丁版 v2.4.1**：版本号三处同步（`.claude-plugin` / `.codebuddy-plugin` / README 头部），方式 3 改指 `rot-v2.4.1.tar.gz`，README 版本历史补 v2.4.1 条目并如实登记该缺口成因。
-
-### Changed
-
-- 双 manifest version 2.4.0 → **2.4.1**；README 头部版本行同步。
-
-### Regression evidence（v2.4.1 部署前实测，12 套门禁逐条独立取 rc）
-
-与 v2.4.0 同一套门禁、同一结果：manifest **73/73** ✅ / manifest_selftest **26/26** ✅ / harness **12/12** ✅ / harness_selftest **14/14** ✅ / routing **39/39** ✅ / routing_selftest **12/12** ✅ / phase_norm **26/26** ✅ / vendor V1–V6 **6/6** ✅ / protocol envelope **37/37**(v2.4) + **12/12**(legacy) + conflict **5/5** + 阶段流水线 **9/9** + HANDOFF 回引覆盖 **8/8** ✅ / protocol_selftest **13/13** ✅ / shim `assemble_spawn_prompt.py --member synthesis-integrator` rc=0 ✅。
-CI run（14 step 全执行全绿）+ OneDrive 镜像独立复跑 manifest 73/73 与 protocol 全套通过。
-
-### Known limitations
-
-- v2.4.0 的 tarball 资产内 README 保留旧链接（历史资产，不追溯修改）；需最新安装路径的用户请用 v2.4.1 资产或方式 1 / 方式 2。
-
 ## [2.5.0] - 2026-11-09
 
 > R2 覆盖矩阵盲区修复版。主题：**每一条门禁分支都要有一只「会红的测试」盯着**。
@@ -34,6 +10,14 @@ CI run（14 step 全执行全绿）+ OneDrive 镜像独立复跑 manifest 73/73 
 > 描述漂移实锤并修复）。
 
 ### Fixed
+
+- **发布介质自洽性（打包前拦截，FM-R1-01 第 3 次复发的根治）**：本版打包前
+  发现 README「安装方式 3」仍写死 `rot-v2.4.1.tar.gz`——与 v2.4.0 那次
+  「资产内文档指向旧版」同源。已改为统一指向 `releases/latest` 页面并去掉
+  版本锚点，**根治**每次发版都要同步改 README 的复发点；README 发布契约段
+  补 4 条强制检查（CI 绿才打 tag / `git archive <tag>` 保证资产 == tag /
+  打包前查版本字面量 / 解包核对版本行）。另修正本文件版本段倒序错误
+  （v2.5.0 段原误排在 v2.4.1 之后）。协议、运行时、门禁行为均无变更。
 
 - **编排层上限语义失真（P0-1）**：v2.4.0 CHANGELOG 笼统写「硬上限代码化」，实测
   `advance` 超过 `--max-turns` 上限后仍 rc=0 放行（turn 2/1）。真实语义是**分层**
@@ -90,6 +74,30 @@ CI run（14 step 全执行全绿）+ OneDrive 镜像独立复跑 manifest 73/73 
 | `protocol_check.py` | envelope **37/37**(v2.4) + **12/12**(legacy) ✅ / conflict **5/5** ✅ / integration 阶段流水线 **10/10**（+真值源断言）+ HANDOFF 回引 **8/8** ✅ |
 | `protocol_check_selftest.py` | **14/14** ✅（N10 重构 + N11 新增）|
 | 独立破坏实锤 | GHOST-MEMBER 注入 → integration rc=1 且列幽灵 ID ✅；turn 2/1 放行 + 告警（语义锁定）✅；fail x5 → aborted → advance rc=1 → finish rc=0 且 status 仍 aborted ✅ |
+
+## [2.4.1] - 2026-11-09
+
+> 发布介质自洽性补丁。主题：**资产内容必须与 tag 内容一致**。
+> 协议、运行时、门禁**行为无变更**；仅修正发布链路的一处介质-文档矛盾。
+
+### Fixed
+
+- **release 资产内的 README 与自身文档矛盾**：v2.4.0 的 tarball 资产 `rot-v2.4.0.tar.gz` 已补齐，但 tag `v2.4.0` 指向 `90a1c36`——**早于**修正「安装方式 3」链接的 commit `2f2b016`。结果：tarball 内的 README 仍写「方式 3 只能安装到 v2.1.2」，用户下载后按文档操作会指向旧版本。
+  - **不改 v2.4.0**：已发布 tag 不重写；已发布资产不重打包（重打会造成「资产内容 ≠ tag 内容」，比文档过期更严重）。
+  - **改为发补丁版 v2.4.1**：版本号三处同步（`.claude-plugin` / `.codebuddy-plugin` / README 头部），方式 3 改指 `rot-v2.4.1.tar.gz`，README 版本历史补 v2.4.1 条目并如实登记该缺口成因。
+
+### Changed
+
+- 双 manifest version 2.4.0 → **2.4.1**；README 头部版本行同步。
+
+### Regression evidence（v2.4.1 部署前实测，12 套门禁逐条独立取 rc）
+
+与 v2.4.0 同一套门禁、同一结果：manifest **73/73** ✅ / manifest_selftest **26/26** ✅ / harness **12/12** ✅ / harness_selftest **14/14** ✅ / routing **39/39** ✅ / routing_selftest **12/12** ✅ / phase_norm **26/26** ✅ / vendor V1–V6 **6/6** ✅ / protocol envelope **37/37**(v2.4) + **12/12**(legacy) + conflict **5/5** + 阶段流水线 **9/9** + HANDOFF 回引覆盖 **8/8** ✅ / protocol_selftest **13/13** ✅ / shim `assemble_spawn_prompt.py --member synthesis-integrator` rc=0 ✅。
+CI run（14 step 全执行全绿）+ OneDrive 镜像独立复跑 manifest 73/73 与 protocol 全套通过。
+
+### Known limitations
+
+- v2.4.0 的 tarball 资产内 README 保留旧链接（历史资产，不追溯修改）；需最新安装路径的用户请用 v2.4.1 资产或方式 1 / 方式 2。
 
 ## [2.4.0] - 2026-11-09
 
