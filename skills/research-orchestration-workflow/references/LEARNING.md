@@ -23,6 +23,31 @@
 
 > 说明：以下 v2.2.0 补记的 5 条为**工程内证**——证据来源为本仓库真实 commit（short hash）、`CHANGELOG.md`、`README.md 版本历史` 与脚本 / 文件路径，不引用外部 DOI / PMID / URL；`observability` 因历史未逐任务采集，统一如实标注「未采集」，不自造数值。
 
+### [2026-11-09] / team-lead / v2.4.1 发布介质自洽性补丁（tarball 与 tag 内容脱钩的根因修复）
+
+- **决策**：
+  - 发现 `v2.4.0` 的 release 资产 `rot-v2.4.0.tar.gz` 内的 README 仍写「方式 3 只能安装到 v2.1.2」——**介质与自身文档矛盾**
+  - **否决**重打 v2.4.0 资产：会造成「资产内容 ≠ tag 内容」，比文档过期更严重
+  - **否决**重写 `v2.4.0` tag：已发布 tag 不可重写
+  - 采用**补丁版 v2.4.1**：版本号三处同步，方式 3 改指 `rot-v2.4.1.tar.gz`，CHANGELOG 与 README 版本历史如实登记缺口成因
+  - 确立发布纪律：**文档修正必须先于打 tag**；资产一律用 `git archive <tag>` 打包以强制「资产内容 == tag 内容」；打完必须解包核对再上传
+- **证据**：
+  - 根因定位：修正「方式 3」链接的 commit `2f2b016` 发生在打 tag `v2.4.0`（指向 `90a1c36`）**之后**
+  - v2.4.1 全量回归 12/12 套全绿（逐条独立取退出码）：manifest 73/73、manifest_selftest 26/26、harness 12/12、harness_selftest 14/14、routing 39/39、routing_selftest 12/12、phase_norm 26/26、vendor V1–V6 6/6、protocol envelope 37/37(v2.4)+12/12(legacy)+conflict 5/5+阶段流水线 9/9+HANDOFF 8/8、protocol_selftest 13/13、shim rc=0
+  - CI run `42561278912` **14 step 全部实际执行全绿**（核到 step 级，非仅看摘要）
+  - 资产自洽性实锤：`git archive v2.4.1` 打包 → 解包后 README 版本行为 `2.4.1`、方式 3 指向 v2.4.1 自身资产、双 manifest 均为 `2.4.1`；解包副本 manifest 73/73、protocol rc=0、shim rc=0
+  - 发布产物：`rot-v2.4.1.tar.gz` 14673511 B（API 确认落地），tag `v2.4.1` 落在 CI 绿 commit `5a5aaa4`
+  - 三源一致性：canonical / origin / mirror / GitHub API / tag **五方 HEAD 全等 `5a5aaa4`**，两处工作树 0 项未提交；镜像侧独立复跑 manifest 73/73 与 protocol 全套通过
+  - 本条为**工程内证**：证据来源为本仓库真实 commit / 脚本路径 / 实跑退出码，不引用外部 DOI / PMID / URL
+- **下一步**：
+  - 发布链路纪律已写入 `docs/harness-iteration-loop.md` §9 + §10.3.1，下轮发版按此顺序执行
+  - FM-R2-01 / FM-R2-02 两条失败模式已回流本文件，并入速查索引
+- **observability**：
+  - 成功率：未采集
+  - 平均 tool call：未采集
+  - 重试次数：1（`gh release upload` 曾遇 SIGTERM，改用 `timeout 400 ... --clobber` 后 rc=0；随后 API 确认资产落地）
+  - next_actions 字段存在率：未采集
+
 ### [2026-11-09] / team-lead / v2.4.0 R1 Harness 迭代进化闭环（四阶段 + 13 批次）
 
 - **决策**：
@@ -376,6 +401,26 @@
 | FM-R1-06 | 反例自带无关失败原因 | 一条负例只承载一个失败维度 |
 | FM-R1-07 | 整批门禁被截断（137） | 逐条独立执行并逐条断言退出码 |
 | FM-R1-08 | 全套门禁返回 127 / 2 | 退出码非 0/1 先查命令与路径 |
+| FM-R2-01 | 资产内文档与自身版本矛盾 | 先修文档再打 tag；资产用 `git archive <tag>` 打包 |
+| FM-R2-02 | 文档修正落在 tag 之后 | 打 tag 前核对「将被打包的文档」已在 CI 绿 commit 内 |
+
+### [2026-11-09] / team-lead / lesson 组：发布介质自洽性 2 条失败模式（v2.4.1 补丁的根因）
+
+#### FM-R2-01 · 失败类别：第 4 类「流程纪律违反」
+
+- **现象**：v2.4.0 的 release 资产 `rot-v2.4.0.tar.gz` 已补齐，但 tarball 内的 README 仍写「方式 3 只能安装到 v2.1.2」——**介质内容与介质自身的文档互相矛盾**。用户下载资产后按包内文档操作会指向旧版本。
+- **root_cause_hint**：修正「安装方式 3」链接的 commit `2f2b016` 发生在打 tag `v2.4.0` **之后**（tag 指向 `90a1c36`）。资产用 `git archive` 从 tag 打包时，忠实复制了 tag 时刻的旧文档——**打包机制本身是正确的，错的是打 tag 的时机**。另有一条被明确否决的「修复」路径：重打 v2.4.0 资产。那会造成「资产内容 ≠ tag 内容」，比文档过期更严重。
+- **safe_retry_instruction**：文档类修正必须在**打 tag 之前**完成并进 CI 绿 commit。若已发布，**不改历史 tag、不重打历史资产**，走补丁版（本次为 v2.4.1）。打包一律用 `git archive <tag>`（而非工作树或分支 HEAD），打完**必须解包核对** README 版本行与关键链接。
+- **explicit_stop_condition**：若解包后 README 的版本行 ≠ 预期版本，或包内链接指向的 release ≠ 本次 release，**禁止上传资产**。
+- **已落地护栏**：`docs/harness-iteration-loop.md` §9（发布契约新增 3 条）+ §10.3.1（发布纪律补录）+ §10.2 第 9 项；`CHANGELOG.md` v2.4.1 段；`README.md` v2.4.1 版本历史条目。
+
+#### FM-R2-02 · 失败类别：第 4 类「流程纪律违反」
+
+- **现象**：修正类 commit 单独走一轮「commit → push → CI → 同步镜像」，看起来一切正常，但**已打 tag 的资产不会被这次修正覆盖**——发布链路的两个阶段（打 tag 前 / 打 tag 后）被当成了同一条路径处理。
+- **root_cause_hint**：把「修正文档」和「发布资产」当成两个独立事件，忽略了**资产是 tag 的派生物**这一约束。凡是会进入资产的文档（README / CHANGELOG），其修正与打包之间必须由 tag 隔断；tag 之前的修正会进资产，tag 之后的修正不会。
+- **safe_retry_instruction**：执行顺序固定为 **修文档 → 升版 → commit → push → 等 CI 绿 → 打 tag → `git archive <tag>` 打包 → 解包核对 → 建 release → 上传 → 同步镜像**。任何「先打 tag 后改文档」的路径都必须改为补丁版重发。
+- **explicit_stop_condition**：若本次发布包含资产（tarball / zip），而文档修正发生在打 tag 之后 → **本轮资产不可发布**，必须换补丁版。
+- **已落地护栏**：`docs/harness-iteration-loop.md` §9 与 §10.3.1 的执行顺序条款；`LEARNING.md` 的 FM-R2 速查索引 2 行。
 
 ### 写入位置与责任人
 

@@ -171,6 +171,8 @@
 
 - 改 agent 必同步两份 manifest（`version` + `agents` 清单）；CHANGELOG 与版本号同步。
 - push 后 OneDrive 镜像 `git pull --ff-only` 并 `rev-parse` 核对两处 HEAD。
+- **release 资产一律用 `git archive <tag>` 打包**（强制「资产内容 == tag 内容」），打完必须解包核对 README 版本行与关键链接，再上传。
+- **已发布 tag 不重写、已发布资产不重打包**；资产内文档过期走补丁版。
 - `validate_expert.py` 仅安装态原位运行；tempfile 副本环境性误报不计失败。
 - 高危动作（`git push --force`、`rm -rf`、gh release、覆写共享资源）先警告并等管家节点确认。
 
@@ -193,15 +195,23 @@
 | 4 | `protocol_check.py` 集成段的 `cp-001~cp-008` 检查点清单仍为硬编码 | 未闭环（低优先） | 当前与 `state_io.py` 的阶段序列已交叉比对（真断言），但 cp 清单本身未动态化；成员增删 cp 编号变动时需同步 |
 | 5 | selftest 约 350s IO 耗时 | 未闭环（低优先） | 可用硬链接替代复制提速 |
 | 6 | `avatars/domain-expert.png` 不被任何 manifest 引用 | **已闭环 · 保留（既定决策）** | R2 复核发现：v2.1.0 CHANGELOG 已明确定策「保留（防历史引用）」，并非「待清理的孤儿文件」。R1 §10.2 曾误登记为待删除项，与既定决策冲突，R2 已改正。不再作为遗留项跟踪 |
-| 7 | GitHub Release tarball 资产名不统一 + v2.2.0/v2.3.0 无 tarball 资产 | **R1 已修文档**（资产补发未闭环） | README 方式 3 原链 `v2.2.0/research-orchestration-team-2.2.0.tar.gz` 实测 HTTP 404；已改为指向 v2.1.2 的 `rot-v2.1.2.tar.gz` 并加「资产名不统一 / 当前版本无 tarball」的说明。**发版侧补 tarball 资产**仍需在下次发布时一并处理 |
-| 8 | README「安装方式」标题写「三套并存」但实际列 4 种方式 | **R1 已修** | v2.0 时期引入就存在的表述错误（从引入 commit 起就错），R1 改为「四种并存」 |
+| 7 | GitHub Release tarball 资产名不统一 + v2.2.0/v2.3.0 无 tarball 资产 | **已闭环** | README 方式 3 原链 `v2.2.0/research-orchestration-team-2.2.0.tar.gz` 实测 HTTP 404；R1 改文档，v2.4.0 发布侧补齐 `rot-v2.4.0.tar.gz`（14685476 B），**v2.4.1 补齐 `rot-v2.4.1.tar.gz`（14673511 B）**。v2.2.0/v2.3.0 的资产缺口作为历史缺口如实登记，不追溯补发 |
+| 8 | README「安装方式」标题写「三套并存」但实际列 4 种方式 | **已闭环** | v2.0 时期引入就存在的表述错误（从引入 commit 起就错），R1 改为「四种并存」 |
+| 9 | release 资产内容可能与 tag 内容脱钩（资产内 README 与自身文档矛盾） | **已闭环**（v2.4.1） | v2.4.0 的 tag 指向 `90a1c36`，早于修正「方式 3」链接的 commit `2f2b016` → 资产内 README 仍写旧版本指引。按发布纪律（tag 不重写、已发布资产不重打包）发 v2.4.1 补丁版；打包一律用 `git archive <tag>` 强制「资产内容 == tag 内容」 |
 
 ### 10.3 R1 验收遗留
 
-- **R1 未做升版**：包 `version` 仍为 `2.3.0`，本轮改动全部停留在工作树（未 commit / 未 push / 未三源同步 / 未打 tag）。升版与发布属高危动作，需管家节点单独裁决。
-- **CI step 名已改**：`Routing consistency check (R1-R5)` → `(R1-R6)`（R6 已在 v2.3.0 落地，step 名未同步）。**该改名会触发一次 CI 重跑**，需与首次 push 一并完成。
-- **CHANGELOG 未写 v2.4.0 条目**：R1 的全部改动尚未进入 CHANGELOG。升版时需补，含批次 1–5 的变更摘要与回归证据表。
-- **§7 黑名单的 4 处引用式登记仍有效**，但新增的 8 条失败模式（FM-R1-01 ~ FM-R1-08）需在升版时同步进包内 `LEARNING.md`。
+- **R1 未做升版**：包 `version` 仍为 `2.3.0`，本轮改动全部停留在工作树（未 commit / 未 push / 未三源同步 / 未打 tag）。升版与发布属高危动作，需管家节点单独裁决。 → **已闭环**：管家节点已授权，v2.4.0（commit `90a1c36`）与 v2.4.1（commit `5a5aaa4`）均已发布，三源同步 + tag + release 资产全部落地。
+- **CI step 名已改**：`Routing consistency check (R1-R5)` → `(R1-R6)`（R6 已在 v2.3.0 落地，step 名未同步）。**该改名会触发一次 CI 重跑**，需与首次 push 一并完成。 → **已闭环**：CI 已扩为 14 step，v2.4.0 / v2.4.1 两次发布 run 均 14 step 全执行全绿。
+- **CHANGELOG 未写 v2.4.0 条目**：R1 的全部改动尚未进入 CHANGELOG。升版时需补，含批次 1–5 的变更摘要与回归证据表。 → **已闭环**：CHANGELOG 已含 v2.4.0 段（Added/Changed/Fixed/Regression evidence/Known limitations）+ v2.4.1 段。
+- **§7 黑名单的 4 处引用式登记仍有效**，但新增的 8 条失败模式（FM-R1-01 ~ FM-R1-08）需在升版时同步进包内 `LEARNING.md`。 → **已闭环**：8 条失败模式已写入 `LEARNING.md`（含速查索引），C8 扫描零命中。
+
+### 10.3.1 发布纪律补录（v2.4.1 新增）
+
+- **tag 只打 CI 绿的 commit**，且**资产必须从该 tag 打包**（`git archive <tag>`），禁止从工作树或分支 HEAD 打包——否则会出现「资产内容 ≠ tag 内容」。
+- **已发布 tag 不重写、已发布资产不重打包**：发现资产内文档过期时，走补丁版（v2.4.0 → v2.4.1），不原地修补。
+- **文档修正必须先于打 tag**：凡会被打进资产的文档（README/CHANGELOG），必须在打 tag 之前完成修正并进 CI 绿 commit。
+- **三源一致性的验收口径**：canonical / origin / mirror / GitHub API 四处 `rev-parse` 全部相等，且两处工作树 `git status --porcelain` 均为 0 项。
 
 ### 10.4 收口判据进度
 
