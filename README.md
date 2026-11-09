@@ -216,11 +216,11 @@ cp -r research-orchestration-team ~/.claude/skills/research-orchestration-team
 
 ### 方式 3 · GitHub Release tarball
 
-下载 [v2.1.2 release](https://github.com/virologist/research-orchestration-team/releases/tag/v2.1.2) 的 `rot-v2.1.2.tar.gz` → 解压 → 按方式 2 拷贝。
+下载 [v2.4.0 release](https://github.com/virologist/research-orchestration-team/releases/tag/v2.4.0) 的 `rot-v2.4.0.tar.gz` → 解压 → 按方式 2 拷贝。
 
 > tarball 内容与 `git clone` 一致（含 `avatars/` 与包根 `settings.json`），已剔除编辑备份等本地产物。
-> **注意资产名不统一**：各 release 的资产命名不完全遵循 `research-orchestration-team-<版本>.tar.gz` 约定（v2.1.2 为 `rot-v2.1.2.tar.gz`），下载前请先在 release 页面确认实际资产名。
-> **当前限制**：v2.2.0 与 v2.3.0 两个 release **未附带 tarball 资产**，故方式 3 目前只能安装到 v2.1.2 版本；要装最新版请用方式 1 或方式 2。
+> **注意资产名不统一**：各 release 的资产命名不完全遵循 `research-orchestration-team-<版本>.tar.gz` 约定（v2.1.2 与 v2.4.0 均为 `rot-<版本>.tar.gz`），下载前请先在 release 页面确认实际资产名。
+> **历史缺口**：v2.2.0 与 v2.3.0 两个 release 未附带 tarball 资产；**自 v2.4.0 起已补齐 `rot-v2.4.0.tar.gz`**，方式 3 现在可直接安装到最新版。
 
 ### 方式 4 · 开发测试（`--plugin-dir`）
 
