@@ -3,7 +3,7 @@
 > **团队名称**：科研价值驱动研究编排团 / Research Value-Driven Research Orchestration Team
 > **专家类型**：Team 型（8 人协作团 · v2.3.0 工具真实性门禁 R1-R6）
 > **行业分类**：12-IndustryConsultant（跨学科咨询）
-> **版本**：2.4.0
+> **版本**：2.4.1
 > **许可证**：MIT
 > **仓库**：[github.com/virologist/research-orchestration-team](https://github.com/virologist/research-orchestration-team)
 
@@ -181,6 +181,7 @@ research-orchestration-team/
 - **v2.2.0** (2026-11-07)：从零独立诊断后的补全完善版。恢复包根 `settings.json`（官方校验 0 error）+ manifest C12 护栏；新增 `state_io.py` 状态持久化与断点续跑（治协议 §3 纸面 schema）；harness_eval 根定位修复；routing_eval 结构一致性评估；README/CHANGELOG/LEARNING 历史欠账补齐。两轮独立交叉验证后修复 3 个门禁假绿（R3/H6 权限档章节漏检、routing selftest 自愈夹具掩盖真实缺陷）与 1 个方向性错误（protocol_check 校验废弃 ACP v2.0），并补齐文档计数与两份 marketplace.json 的八agent 描述。详见 [CHANGELOG.md](./CHANGELOG.md)。
 - **v2.3.0** (2026-11-08)：残留风险工程化收口。routing_eval 升至 **R1-R6 共 39 项**——R5 工具集合一致性扩展到全部 8 个成员（分级解析：atomic 四类 + 双向相等；非 atomic 零工具授权，①②③ 类 token 即 FAIL，跳过对中文叙述误报率高的 ④ `+` 槽位分支）；新增 **R6 工具真实性校验**（对照真实 MCP 清单硬校验 registry 全部 `mcp__` 名，清单不可得的 CI/git-clone 态显式 SKIP 且不计 FAIL）；selftest 增至 12 例（N10 非 atomic 注入 / N12 伪造 server 名 + 真实清单 fixture）。官方 `validate_expert.py` 的安装路径限制已在本文档化。详见 [CHANGELOG.md](./CHANGELOG.md)。
 - **v2.4.0** (2026-11-09)：Harness 迭代进化 R1 首轮全闭环。四阶段硬门控走完一轮，门禁体系从一层升为**三层**（正向校验器 / 注入式负例自测 5 套 91 条 / 联邦防漂移）：manifest 升至 **C1–C13**（新增 C13 成员 ID 集合一致性，以 `agents/*.md` 文件名为机器真值源逐处比对 8 个目标）、protocol 主套件 16 → **37**、新增 `protocol_check_selftest.py`（13 条）与 `test_phase_normalization.py`（26 条）；`state_io.py` 状态机代码化（按序推进 / 熔断 / 预算 / metrics / `fail` 子命令）；C8 豁免机制声明化；shim 命中 core 加 sha256 硬校验。新建 `docs/harness-iteration-loop.md` 作为迭代断点续跑的单一事实源。回归 **12 套门禁全绿** + 4 组独立负向实锤。详见 [CHANGELOG.md](./CHANGELOG.md)。
+- **v2.4.1** (2026-11-09)：发布介质自洽性补丁。v2.4.0 的 release 资产 `rot-v2.4.0.tar.gz` 已补齐，但其 tag 指向 `90a1c36`——**早于**修正「安装方式 3」链接的 commit，导致 tarball 内的 README 仍写「方式 3 只能安装到 v2.1.2」，介质与自身文档矛盾。按发布纪律（tag 不重写、不重打已发布资产以免「资产内容 ≠ tag 内容」）不改 v2.4.0，改发本补丁版：方式 3 改指 v2.4.1 资产。协议、运行时、门禁**行为无变更**。
 
 ## 安装方式（四种并存）
 
@@ -216,11 +217,11 @@ cp -r research-orchestration-team ~/.claude/skills/research-orchestration-team
 
 ### 方式 3 · GitHub Release tarball
 
-下载 [v2.4.0 release](https://github.com/virologist/research-orchestration-team/releases/tag/v2.4.0) 的 `rot-v2.4.0.tar.gz` → 解压 → 按方式 2 拷贝。
+下载 [v2.4.1 release](https://github.com/virologist/research-orchestration-team/releases/tag/v2.4.1) 的 `rot-v2.4.1.tar.gz` → 解压 → 按方式 2 拷贝。
 
 > tarball 内容与 `git clone` 一致（含 `avatars/` 与包根 `settings.json`），已剔除编辑备份等本地产物。
-> **注意资产名不统一**：各 release 的资产命名不完全遵循 `research-orchestration-team-<版本>.tar.gz` 约定（v2.1.2 与 v2.4.0 均为 `rot-<版本>.tar.gz`），下载前请先在 release 页面确认实际资产名。
-> **历史缺口**：v2.2.0 与 v2.3.0 两个 release 未附带 tarball 资产；**自 v2.4.0 起已补齐 `rot-v2.4.0.tar.gz`**，方式 3 现在可直接安装到最新版。
+> **注意资产名不统一**：各 release 的资产命名不完全遵循 `research-orchestration-team-<版本>.tar.gz` 约定（v2.1.2 / v2.4.0 / v2.4.1 均为 `rot-<版本>.tar.gz`），下载前请先在 release 页面确认实际资产名。
+> **历史缺口**：v2.2.0 与 v2.3.0 两个 release 未附带 tarball 资产；**自 v2.4.0 起已补齐**，方式 3 现在可直接安装到最新版。
 
 ### 方式 4 · 开发测试（`--plugin-dir`）
 
