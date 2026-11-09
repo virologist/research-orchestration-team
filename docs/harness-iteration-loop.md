@@ -15,9 +15,9 @@
 | 执行者 | R1 = `agent-harness-architect`（Agent Harness 专家团 P1 架构师角色）；R2 = `team-lead`（主理人直做） |
 | 执行者裁决依据 | 指令 §0 指定「Agent Harness 架构设计师\|墨衡」，经全环境检索确认该专家不存在而冻结；管家节点 2026-11-08 裁决 **A**：改由 agent-harness-expert 的架构师角色执行，不虚拟身份 |
 | 迭代对象基线 | R1 = v2.3.0；**R2 = v2.4.1**（`5a5aaa4`） |
-| canonical HEAD | **`4d6e7e0`**（fix(release): 打包前拦截资产内文档滞后 + CHANGELOG 段序归位） |
-| tag | **v2.5.0 → `4d6e7e0`**（CI 绿 commit；发布于 2026-11-09T14:12:58Z，资产 `rot-v2.5.0.tar.gz` 14689986 B） |
-| 工作树 | **R2 全闭环（GATE3 已过）**：工作树干净（`git status --porcelain` 0 项）；canonical / origin / OneDrive 镜像 / GitHub API 四处 HEAD 全等 `4d6e7e0` |
+| canonical HEAD | **`f6ed42e`**（docs(state): R2 Phase D 收口 — 状态文件落盘 + FM-R2-06 回流 LEARNING）；前序 `4d6e7e0`（fix(release): 打包前拦截资产内文档滞后） |
+| tag | **v2.5.0 → `4d6e7e0`**（CI 绿 commit；发布于 2026-11-09T14:12:58Z，资产 `rot-v2.5.0.tar.gz` 14689986 B）。已发布 tag **不重写**——R2 Phase D 为纯文档落盘，走 patch commit，不影响资产内容 |
+| 工作树 | **R2 全闭环（GATE3 已过）**：工作树干净（`git status --porcelain` 0 项）；canonical / origin / OneDrive 镜像 / GitHub API 四处 HEAD 全等 `f6ed42e`；CI run `42637122693` success（16 门禁 step 全执行全绿） |
 | 意图漂移 | **R2 相对 R1 基线 = 0%**（静默通过，见 §3.1 复检） |
 | R2 主题 | 覆盖矩阵盲区审计——「每一条门禁分支都要有一只『会红的测试』盯着」 |
 | canonical 路径 | `~/.workbuddy/plugins/marketplaces/my-experts/plugins/research-orchestration-team/` |
@@ -220,7 +220,8 @@
 | origin/master | `4d6e7e0`（一致） |
 | OneDrive 镜像（`~/Library/CloudStorage/OneDrive-Personal/GPT/Claude/research-orchestration-team/`） | `4d6e7e0`（一致），工作树 `git status --porcelain` 0 项 |
 | GitHub API release | tag `v2.5.0` → `4d6e7e0`，资产 `rot-v2.5.0.tar.gz`（14689986 B），发布于 2026-11-09T14:12:58Z |
-| CI | 最新 run `42623476669` success（16 step 全执行）；v2.5.0 首推 run `42610641275` failure → 已由 `dcd174e`/`4d6e7e0` 修复，后续 run 全绿 |
+| CI | v2.5.0 发布 run `42623476669` success（16 step 全执行）；v2.5.0 首推 run `42610641275` failure → 已由 `dcd174e`/`4d6e7e0` 修复，后续 run 全绿 |
+| **R2 Phase D 落盘后**（本轮续跑补记） | canonical / origin / OneDrive 镜像三处 HEAD 全等 **`f6ed42e`**，两处工作树 0 项；CI run `42637122693` success（核到 step 级：Package consistency / Checker self-test / Protocol compliance / Protocol checker self-test / Phase normalization / Harness H1-H12 / Harness eval self-test / Routing R1-R6 / Routing eval self-test / Vendor V1-V6 / State IO lifecycle / State IO circuit breaker + ceiling / State IO ceiling semantics lock / Topic scoring 共 **14 个门禁 step 全执行全绿**）；tag `v2.5.0` 仍指向 `4d6e7e0`（**已发布 tag 不重写**，纯文档落盘走 patch commit，不影响资产内容） |
 
 ## 6. R1 诊断基准资产清单（§3，实际存在性已核验）
 
