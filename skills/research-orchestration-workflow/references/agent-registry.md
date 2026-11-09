@@ -250,15 +250,16 @@ plan_execution:
 
 | 层 | 门禁 | 检查项 | 覆盖什么 |
 |----|------|--------|---------|
-| 正向 | `scripts/manifest_check.py` | **C1–C13（73 项）** | 双 manifest 对等 / 资产完整性 / 版本一致 / 废弃表述 / 契约章节 / frontmatter 结构 / **成员 ID 五处一致性** / Team settings.json |
+| 正向 | `scripts/manifest_check.py` | **C1–C13（74 项）** | 双 manifest 对等（含 description）/ 资产完整性 / 版本一致 / 废弃表述 / 契约章节 / frontmatter 结构 / **成员 ID 五处一致性** / Team settings.json |
 | 正向 | `scripts/harness_eval.py` | **H1–H12（12 项）** | Harness Engineering 设计模式退化（路由单一事实源、Loop 硬停止、per-step verification 等） |
 | 正向 | `scripts/routing_eval.py` | **R1–R6（39 项）** | 成员集合 / 触发词 / 条目结构 / 工具名形态 / 工具集合双向相等 / 真实 MCP 清单对照（R6 清单不可得时显式 SKIP，不计 FAIL） |
-| 正向 | `skills/research-orchestration-workflow/scripts/protocol_check.py` | **信封 37 / 冲突仲裁 5 / 集成仿真 9** | 协议合规三层判定（信封字段 + 证据链 + HANDOFF 回引覆盖） |
-| 负例 | `scripts/manifest_check_selftest.py` | **26 条** | 见下方「注入式负例」 |
+| 正向 | `skills/research-orchestration-workflow/scripts/protocol_check.py` | **信封 37 / 冲突仲裁 5 / 集成仿真 10** | 协议合规三层判定（信封字段 + 证据链 + HANDOFF 回引覆盖 + 流水线成员真值源断言） |
+| 负例 | `scripts/manifest_check_selftest.py` | **30 条** | 见下方「注入式负例」 |
 | 负例 | `scripts/harness_eval_selftest.py` | **14 条** | H1–H12 每项被破坏时都能检出 |
 | 负例 | `scripts/routing_eval_selftest.py` | **12 条** | R1–R6 各类路由破坏（含 raw_probe 未归一化护栏，不计入用例数） |
-| 负例 | `skills/research-orchestration-workflow/scripts/protocol_check_selftest.py` | **13 条** | 三个 suite 的退出码链路与判定分支真实有效 |
+| 负例 | `skills/research-orchestration-workflow/scripts/protocol_check_selftest.py` | **14 条** | 三个 suite 的退出码链路与判定分支真实有效（含 list 形态分支 N10 / 流水线幽灵成员 N11） |
 | 负例 | `scripts/test_phase_normalization.py` | **26 条** | `--phase` 阶段名归一化 shim 的映射与透传 |
+| 负例 | `tests/test_state_ceilings.py` | **4 条** | 编排层四项硬上限语义分层锁定（turns/tokens=告警、max_time/failures=终态） |
 | 防漂移 | `tests/test_vendor_core.py` | **V1–V6（6 项）** | `vendor/shared-core/` 与联邦真源 sha256 比对（真源不可达时显式 SKIP，不计 FAIL） |
 
 **「注入式 selftest」的含义**：把仓库复制到临时目录 → 注入一处破坏 → 断言校验器 **rc=1** 且输出命中**预期的检查项文案**。第二个断言不可省略：只断言退出码会让「任何错误都算通过」，检查项本身失效也会被误判为通过——这正是本项目历史上假绿的成因。
@@ -270,8 +271,9 @@ plan_execution:
 - **14 条注入式负例（N1-N13 + R1）**：`python3 scripts/harness_eval_selftest.py`（逐条把仓库复制到临时目录、注入一处破坏，断言校验器 rc=1 且命中预期检查项文案；R1 为语义不变的反向放行用例）
   - N13 删除整个 `### moderate` 权限档章节（标题+正文），验证 H6 已改为按 `^### (safe|moderate|dangerous)` 章节标题判定，不再被 Changelog 里的兜底词放行
 - `scripts/routing_eval_selftest.py` 为 12 条（P1 + N1~N10 + N12；N11 并入 P1 正例），其中 `raw_probe` 是准备阶段护栏、不计入用例数，作用是对未归一化的原始副本直跑 `routing_eval.py`，防止 `sanitize_pristine` 自愈夹具掩盖真实仓库的 R2/R4 缺陷。R5 已扩展到全部 8 个成员（非 atomic 走 ①②③ 类解析、零工具授权，跳过误报率高的 ④ 槽位分支）；R6 对照真实 MCP 清单校验 registry 全部 `mcp__` 名，清单不可得的 CI/git-clone 态显式 SKIP 且不计 FAIL。
-- `scripts/manifest_check_selftest.py` 为 26 条，含 N21 验证 C8 的 rglob 扫描覆盖隐藏目录下的 `.claude-plugin/marketplace.json`、N22/N23 验证 C8 声明式豁免（负例拦截 / 正例护栏）、N24/N25/N26 验证 C13 成员 ID 五处一致性（协议 §1 角色矩阵 / registry 团队成员一览 / team-lead 成员表 / 双 manifest 的 agents[]、members[].id、teamInfo 与 `agents/*.md` 文件名真值源对齐）。
-- `skills/research-orchestration-workflow/scripts/protocol_check_selftest.py` 为 13 条注入式负例（P1/N1/N2/P2 + N3–N7 + P3 + N8/N9/N10），逐条把脚本复制到临时目录、注入一处破坏、断言 rc 翻转（0→1）且命中预期检查项文案；P3 另以干净副本跑全量 suite 断言 rc=0，防「负例全红」掩盖校验器整体失效。
+- `scripts/manifest_check_selftest.py` 为 30 条，含 N21 验证 C8 的 rglob 扫描覆盖隐藏目录下的 `.claude-plugin/marketplace.json`、N22/N23 验证 C8 声明式豁免（负例拦截 / 正例护栏）、N24/N25/N26 验证 C13 成员 ID 五处一致性（协议 §1 角色矩阵 / registry 团队成员一览 / team-lead 成员表 / 双 manifest 的 agents[]、members[].id、teamInfo 与 `agents/*.md` 文件名真值源对齐）；v2.5.0 新增 N27（C8 七条缺口规则批量回归——规则清单以 `scripts/manifest_check.py` 的 `FORBIDDEN_PATTERNS` 为单一事实来源，此处不转录术语字面量）、N28（C13 主理人声明位互换攻击）、N29（C13 单元格内成员 ID 重复）、N30（C13 agents/ 目录整体删除 fail-closed）。
+- `skills/research-orchestration-workflow/scripts/protocol_check_selftest.py` 为 14 条注入式负例（P1/N1/N2/P2 + N3–N7 + P3 + N8/N9/N10/N11），逐条把脚本复制到临时目录、注入一处破坏、断言 rc 翻转（0→1）且命中预期检查项文案；P3 另以干净副本跑全量 suite 断言 rc=0，防「负例全红」掩盖校验器整体失效。N10 破坏 `context_ref` list 形态逐条校验分支（与 N6 的 dict 形态互不重叠）；N11 注入幽灵成员 ID 到流水线 producers、走整包副本态，锁定集成段的「流水线成员引用 ⊆ agents/*.md 真值源」断言。
+- `tests/test_state_ceilings.py` 为 4 条：C1 turns 触顶告警放行 / C2 tokens 同 / C3 failures 熔断终态（advance 拒绝）/ C4 finish 熔断后不改写 aborted。锁定编排层上限「告警 vs 终态」的语义分层，防任一层被误改。
 - `scripts/test_phase_normalization.py` 为 26 条，验证 `assemble_spawn_prompt.py` 的 `--phase` 参数归一化：8 个阶段名 × 两种写法（`--phase X` / `--phase=X`）、大小写不敏感、整数透传、非法值透传给 argparse 报错（rc=2）、缺值不崩溃。
 
 ### 相关模板

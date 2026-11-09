@@ -403,6 +403,9 @@
 | FM-R1-08 | 全套门禁返回 127 / 2 | 退出码非 0/1 先查命令与路径 |
 | FM-R2-01 | 资产内文档与自身版本矛盾 | 先修文档再打 tag；资产用 `git archive <tag>` 打包 |
 | FM-R2-02 | 文档修正落在 tag 之后 | 打 tag 前核对「将被打包的文档」已在 CI 绿 commit 内 |
+| FM-R2-03 | CHANGELOG「代码化」掩盖告警/终态语义分层 | 行为类描述必须区分「检测到」与「阻止」；破坏实验实测后再写 |
+| FM-R2-04 | 负例按大项配对 → 重复负例与分支盲区并存 | 每条负例对应一个可独立失效的分支；定期跑覆盖矩阵差集 |
+| FM-R2-05 | SKIP 容错让副本态负例假绿；YAML heredoc 顶格崩解析 | 负例强制非 SKIP 路径（整包副本）；heredoc 保持块缩进 + yaml.safe_load 验证 |
 
 ### [2026-11-09] / team-lead / lesson 组：发布介质自洽性 2 条失败模式（v2.4.1 补丁的根因）
 
@@ -421,6 +424,32 @@
 - **safe_retry_instruction**：执行顺序固定为 **修文档 → 升版 → commit → push → 等 CI 绿 → 打 tag → `git archive <tag>` 打包 → 解包核对 → 建 release → 上传 → 同步镜像**。任何「先打 tag 后改文档」的路径都必须改为补丁版重发。
 - **explicit_stop_condition**：若本次发布包含资产（tarball / zip），而文档修正发生在打 tag 之后 → **本轮资产不可发布**，必须换补丁版。
 - **已落地护栏**：`docs/harness-iteration-loop.md` §9 与 §10.3.1 的执行顺序条款；`LEARNING.md` 的 FM-R2 速查索引 2 行。
+
+### [2026-11-09] / team-lead / lesson 组：R2 覆盖矩阵审计的 3 条失败模式（16 组破坏实验实锤）
+
+#### FM-R2-03 · 失败类别：第 5 类「文档与实现脱节」
+
+- **现象**：v2.4.0 CHANGELOG 写「编排层硬上限（30 轮/1800s/200000 token/熔断 5 次）代码化」，实测 `init --max-turns 1` 后连续 `advance` 两次均 rc=0 放行（turn 2/1）——「代码化」被读成「真截断」，实际 turns/tokens 是「告警」语义。
+- **root_cause_hint**：CHANGELOG 措辞从 state_io.py docstring 的语义分层表（告警 vs 终态）压缩成一句话时丢失了关键限定。读者（包括主理人自己）会按「硬上限」字面理解行为。语义类功能写文档时，「有这个机制」和「机制触发时发生什么」必须分开写。
+- **safe_retry_instruction**：写行为类 CHANGELOG 必须区分「检测到违规」（告警/记录）与「阻止继续」（拒绝/终态）两种语义；或直接引用实现文件的语义表而不是另写摘要。
+- **explicit_stop_condition**：描述任何门禁/上限前，先用破坏实验实测触发行为（超限一次看 rc 与 status），禁止凭 docstring 转写。
+- **已落地护栏**：`tests/test_state_ceilings.py`（4 用例锁定语义分层）；`CHANGELOG.md` v2.5.0 Fixed 段；`README.md` state_io.py 注释行；`docs/harness-iteration-loop.md` §10.2 第 10 项。
+
+#### FM-R2-04 · 失败类别：第 2 类「门禁覆盖缺口」
+
+- **现象**：16 组破坏实验实锤三类覆盖缺口——①流水线 producers 注入幽灵成员 ID 后 integration 仍 rc=0（断言只查「引用是否在上游参与」不查「是否真实成员」）；②protocol selftest N6/N10 锚点逐字相同（13 条里 1 条纯重复，「两条负例」的计数给人虚假安心）；③C8 的 13 条规则仅 5 条有负例，7 条规则的正则被误改无人知晓。
+- **root_cause_hint**：负例设计时按「校验器大项」（C13/H1/R1）配负例，没有下沉到「分支级」；跨文件引用类断言（流水线成员 vs agents/*.md）在两处独立演进时无人对齐。**每条负例必须对应一个「会独立失效的分支」**，大项级配对会产生重复负例和真盲区并存。
+- **safe_retry_instruction**：新增断言时同步回答「哪条负例会在该断言被破坏时变红？」——答不出就不许合入；定期跑覆盖矩阵审计（列出全部断言分支 × 全部负例做差集）；发现重复负例立即重构为互补维度（本次 N10 改为 list 形态分支）。
+- **explicit_stop_condition**：若覆盖矩阵差集 >0 且涉及「rc 判定分支」（非纯文案），必须补负例后才能发布；禁止以「低优先」延后 rc 分支的盲区。
+- **已落地护栏**：`protocol_check.py` 集成段真值源断言（10 项）+ selftest N11（整包副本态）；selftest N10 重构；`manifest_check_selftest.py` N27（七规则批量）+ N28/N29/N30（C13 分支）；`docs/harness-iteration-loop.md` §10.2 第 11–16 项。
+
+#### FM-R2-05 · 失败类别：第 1 类「工具失败」（跨副本语义）
+
+- **现象**：给 protocol selftest 补 N11 时，第一版注入在「单文件副本态」静默失效——新断言读 agents/*.md 真值源，副本里没有 agents/ 目录 → 断言按设计 SKIP 放行 → 注入了破坏但 rc 仍 0，负例假绿。同轮 CI 的 YAML heredoc 首版把 Python 代码顶格写进 `run: |` 块，YAML 解析直接崩。
+- **root_cause_hint**：①「SKIP 不误报」的容错设计与「负例必须红」的测试目标在副本态互相冲突——容错路径在负例场景下变成了盲区；②YAML 块标量内 heredoc 的每一行都受块缩进约束，顶格行会被 YAML 解析器当成新键。
+- **safe_retry_instruction**：给校验器加 SKIP 分支时必须同步问「负例如何强制走非 SKIP 路径？」——N11 的解法是整包副本（copytree 整个包再注入）；CI 内嵌 Python 一律用 `python3 - args <<'EOF'` 且 heredoc 内容保持块缩进，写入后必跑 `yaml.safe_load` 验证。
+- **explicit_stop_condition**：负例跑完后 rc 未翻转且输出含 SKIP 字样 → 该负例无效，禁止计为通过；CI YAML 修改后未经 `yaml.safe_load` 验证禁止 commit。
+- **已落地护栏**：`protocol_check_selftest.py` run_case 的 whole_pkg 分支 + N11；`.github/workflows/validate.yml` heredoc 缩进版（本地 `yaml.safe_load` + 熔断段全链路实测通过）。
 
 ### 写入位置与责任人
 

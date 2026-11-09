@@ -128,6 +128,57 @@ jobs:
           test "$N" -eq 8
           echo "✅ state_io 八阶段 + 8 检查点 + 断点续跑 + 预算 + finish 全链路通过"
 
+      # R2 P1-3：v2.4.0 的 fail 子命令与熔断（circuit breaker）此前只在本地手测过，
+      # CI 只走 happy path——熔断逻辑被改坏时 CI 不会红。本段锁定四条语义：
+      # ① fail x5 达阈值 → status=aborted + abort_reason=circuit_breaker
+      # ② 熔断后 advance 拒绝（rc!=0）  ③ finish 仍 rc=0 且不改写 aborted
+      # ④ 四项上限语义分层（tests/test_state_ceilings.py：turns/tokens=告警，
+      #    max_time/failures=终态——防「告警被误改成截断」或反向漂移）。
+      - name: State IO circuit breaker + ceiling semantics (R2)
+        run: |
+          set -e
+          S=skills/research-orchestration-workflow/scripts/state_io.py
+          W=$(mktemp -d)
+          python3 "$S" init --task-id ci-cb --workspace "$W" >/dev/null
+          for i in 1 2 3 4 5; do
+            python3 "$S" fail --task-id ci-cb --workspace "$W" --reason "fail-$i" >/dev/null
+          done
+          ST="$W/.harness-runs/ci-cb/_state.json"
+          python3 - "$ST" <<'PYEOF'
+          import json, sys
+          st = json.load(open(sys.argv[1]))
+          assert st["status"] == "aborted", f'期望 aborted，实得 {st["status"]}'
+          assert st["abort_reason"] == "circuit_breaker", f'期望 circuit_breaker，实得 {st["abort_reason"]}'
+          print("✅ fail x5 → 熔断终态（status=aborted, reason=circuit_breaker）")
+          PYEOF
+          set +e
+          python3 "$S" advance --task-id ci-cb --workspace "$W" \
+            --phase FREEZE --checkpoint cp-001 --note post-abort >/dev/null 2>&1
+          RC_A=$?
+          set -e
+          if [ "$RC_A" -eq 0 ]; then
+            echo "❌ 熔断后 advance 被放行（应拒绝 rc!=0）"; exit 1
+          fi
+          echo "✅ 熔断后 advance 拒绝（rc=$RC_A）"
+          set +e
+          python3 "$S" finish --task-id ci-cb --workspace "$W" >/dev/null 2>&1
+          RC_F=$?
+          set -e
+          if [ "$RC_F" -ne 0 ]; then
+            echo "❌ 熔断后 finish 应仍 rc=0（归档收尾允许），实际 rc=$RC_F"; exit 1
+          fi
+          python3 - "$ST" <<'PYEOF'
+          import json, sys
+          st = json.load(open(sys.argv[1]))
+          assert st["status"] == "aborted", "finish 不得改写熔断终态"
+          print("✅ 熔断后 finish rc=0 且 status 仍 aborted（熔断信号未被抹掉）")
+          PYEOF
+
+      # R2 P0-1：四项硬上限的语义分层锁定（告警 vs 终态）
+      - name: State IO ceiling semantics lock (R2 P0-1)
+        run: python3 tests/test_state_ceilings.py
+
+
       - name: Topic scoring edge cases
         run: |
           set +e  # GitHub Actions bash -e 默认开启，关掉避免 Python rc=1 终止 step

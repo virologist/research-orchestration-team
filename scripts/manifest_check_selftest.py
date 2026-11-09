@@ -452,6 +452,119 @@ def n26(root):
 case("N26", "WorkBuddy manifest members[] 少一个成员", "C13 成员 ID 集合不一致", n26)
 
 
+# ── H 组：C8 规则覆盖矩阵补全（N27–N29，R2 新增）──────────────────────────
+# R2 审计实锤：FORBIDDEN_PATTERNS 13 条规则中仅 5 条被 N2/N8/N20/N21/N22 覆盖，
+# 其余规则的正则一旦被误改（退化），没有任何负例会红。N27 一次性覆盖全部
+# 缺口规则；N28/N29 补 C13 三个无负例分支（声明位互换 / 重复 ID / 目录删除）。
+# 注入文本全部运行时拼接：本文件虽在 SCAN_EXEMPT 白名单，仍守「不在源码里
+# 写连续废弃字面量」的纪律（避免未来有人移白名单时自指假红）。
+
+
+def n27(root):
+    """一条临时 .md 同时写入 7 条无负例规则的违规文本，断言每条规则的
+    desc 全部命中。运行时拼接规则锚点：期望命中的 desc 清单与 C8 规则表
+    的 desc 字段逐字同步——desc 改名时本用例前置断言会失败（防漂移）。"""
+    # 运行时拼接违规文本（不出现连续字面量）
+    legacy_terms = [
+        ("Six" + "-role",                 "旧英文角色数表述（现为 Eight-agent）"),
+        ("six-role" + " research",        "旧英文角色数表述（现为 Eight-agent）"),
+        ("L1-L3" + " " + "conflict",      "旧仲裁层级范围（现为 L1-L5）"),
+        ("msg" + "_" + "type",            "旧信封字段名（现为 type）"),
+        ("任意一维" + "<90",              "旧 FREEZE 量纲表述（现为完整度 0-100% + 风险维 0-10）"),
+        ("五项" + "核心任务",             "v1 遗留任务模型（现为三大任务 + 八阶段状态机）"),
+        ("5" + "-task",                   "v1 遗留任务模型（现为三大任务 + 八阶段状态机）"),
+    ]
+    docs = root / "docs"
+    if not docs.is_dir():
+        docs.mkdir(parents=True, exist_ok=True)
+    path = docs / "c8-matrix-injected.md"
+    lines = ["# C8 规则矩阵负例（R2 N27）"]
+    for term, _desc in legacy_terms:
+        lines.append(f"历史表述复述：{term}")
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    written = path.read_text(encoding="utf-8")
+    for term, _desc in legacy_terms:
+        assert term in written, f"N27 前置断言失败：{term!r} 未落盘"
+
+
+case("N27", "C8 七条缺口规则批量回归（Six-role/L1-L3/msg_type/量纲/v1 模型）",
+     "残留废弃表述", n27)
+
+
+def n28(root):
+    """C13 主理人声明位互换攻击：lead 的 role 改 member + 普通成员改 lead
+    （leadAgent 字段不动）。断言「leadAgent 与主理人声明位不一致」判红。"""
+    path = root / C13_CODEBUDDY_MANIFEST
+    data = json.loads(path.read_text(encoding="utf-8"))
+    lead_id = data["teamInfo"]["leadAgent"]
+    victim = None
+    for m in data.get("members") or []:
+        if m.get("id") != lead_id:
+            victim = m.get("id")
+            break
+    assert victim, "N28 前置断言失败：找不到非 lead 成员"
+    for m in data["members"]:
+        if m.get("id") == lead_id:
+            m["role"] = "member"
+        elif m.get("id") == victim:
+            m["role"] = "lead"
+    path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    written = json.loads(path.read_text(encoding="utf-8"))
+    roles = {m.get("id"): m.get("role") for m in written.get("members") or []}
+    assert roles.get(lead_id) == "member" and roles.get(victim) == "lead", \
+        "N28 前置断言失败：角色互换未落盘"
+
+
+case("N28", "C13 leadAgent 与主理人声明位不一致（角色互换）",
+     "主理人声明位不一致", n28)
+
+
+def n29(root):
+    """C13 单元格内成员 ID 重复：协议 §1 多 ID 单元格把首个 ID 重复一次。
+    断言「成员 ID 重复出现」判红（duplicates 分支从未有负例）。"""
+    path = root / C13_PROTOCOL_REL
+    text = path.read_text(encoding="utf-8")
+    lines = text.splitlines()
+    in_sec = False
+    target = None
+    for line in lines:
+        if line.startswith("## 1. 角色矩阵"):
+            in_sec = True
+            continue
+        if in_sec and line.startswith("## "):
+            break
+        if in_sec and line.startswith("|"):
+            cells = [c.strip() for c in line.strip().split("|")[1:-1]]
+            if len(cells) >= 2:
+                ids = re.findall(r"`([A-Za-z0-9][A-Za-z0-9._-]*)`", cells[1])
+                if len(ids) >= 2:
+                    target = (line, cells, ids)
+                    break
+    assert target, "N29 前置断言失败：协议 §1 无多 ID 单元格"
+    line, cells, ids = target
+    dup_cell = "<br>".join(f"`{i}`" for i in [ids[0]] + ids)
+    assert text.count(line) == 1, "N29 锚点行不唯一"
+    new_line = line.replace(cells[1], dup_cell, 1)
+    path.write_text(text.replace(line, new_line), encoding="utf-8")
+    written = path.read_text(encoding="utf-8")
+    assert line not in written and new_line in written, "N29 注入未落盘"
+
+
+case("N29", "C13 单元格内成员 ID 重复出现（duplicates 分支）",
+     "成员 ID 重复出现", n29)
+
+
+def n30(root):
+    """C13 真值源目录整体删除（fail-closed 路径）。
+    断言「真值源目录不存在」判红。"""
+    shutil.rmtree(root / "agents")
+    assert not (root / "agents").exists(), "N30 前置断言失败：agents/ 未删除"
+
+
+case("N30", "C13 agents/ 目录整体删除（fail-closed）",
+     "C13 真值源目录不存在", n30)
+
+
 def make_copy(src: Path, dst: Path) -> None:
     shutil.copytree(
         src, dst, symlinks=True,

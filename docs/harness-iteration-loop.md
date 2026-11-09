@@ -191,18 +191,25 @@
 |---|---|---|---|
 | 1 | 官方 `validate_expert.py` 本机不存在 | **环境性已知限制**（非缺陷） | R2 若宿主更新该工具，补装后跑安装态原位校验，接管 §5-8 的替代口径 |
 | 2 | `assemble_spawn_prompt.py` shim 向上查找 `shared-core/` 的脆弱性 | **未闭环**（FM-R1-03） | 给 shim 加「命中即校验 sha256 与 `VENDOR.json` 一致，不一致则拒绝加载」硬校验；当前若祖先目录存在旧版/被篡改的同名文件，会被静默加载并绕过哈希门禁 |
-| 3 | `token_budget` 无硬截断 | 未闭环（低优先） | R2 视优先级决定是否补 |
+| 3 | `token_budget` 无硬截断 | **已闭环（语义确认）** | R2 审计确认这是**设计语义**而非缺陷：turns/tokens 触顶 = 告警（主理人语义裁量），max_time/failures = 终态熔断。`tests/test_state_ceilings.py` 4 用例已把该分层锁定，误改即红。CHANGELOG/README 措辞已修正（「代码化」→「语义分层」） |
 | 4 | `protocol_check.py` 集成段的 `cp-001~cp-008` 检查点清单仍为硬编码 | 未闭环（低优先） | 当前与 `state_io.py` 的阶段序列已交叉比对（真断言），但 cp 清单本身未动态化；成员增删 cp 编号变动时需同步 |
 | 5 | selftest 约 350s IO 耗时 | 未闭环（低优先） | 可用硬链接替代复制提速 |
 | 6 | `avatars/domain-expert.png` 不被任何 manifest 引用 | **已闭环 · 保留（既定决策）** | R2 复核发现：v2.1.0 CHANGELOG 已明确定策「保留（防历史引用）」，并非「待清理的孤儿文件」。R1 §10.2 曾误登记为待删除项，与既定决策冲突，R2 已改正。不再作为遗留项跟踪 |
 | 7 | GitHub Release tarball 资产名不统一 + v2.2.0/v2.3.0 无 tarball 资产 | **已闭环** | README 方式 3 原链 `v2.2.0/research-orchestration-team-2.2.0.tar.gz` 实测 HTTP 404；R1 改文档，v2.4.0 发布侧补齐 `rot-v2.4.0.tar.gz`（14685476 B），**v2.4.1 补齐 `rot-v2.4.1.tar.gz`（14673511 B）**。v2.2.0/v2.3.0 的资产缺口作为历史缺口如实登记，不追溯补发 |
 | 8 | README「安装方式」标题写「三套并存」但实际列 4 种方式 | **已闭环** | v2.0 时期引入就存在的表述错误（从引入 commit 起就错），R1 改为「四种并存」 |
 | 9 | release 资产内容可能与 tag 内容脱钩（资产内 README 与自身文档矛盾） | **已闭环**（v2.4.1） | v2.4.0 的 tag 指向 `90a1c36`，早于修正「方式 3」链接的 commit `2f2b016` → 资产内 README 仍写旧版本指引。按发布纪律（tag 不重写、已发布资产不重打包）发 v2.4.1 补丁版；打包一律用 `git archive <tag>` 强制「资产内容 == tag 内容」 |
+| 10 | 编排层上限语义失真（advance 超限仍放行，CHANGELOG「代码化」易误读为截断） | **已闭环**（v2.5.0 P0-1） | 真实语义 = 分层：turns/tokens 触顶告警（budget ⚠️）、max_time/failures 终态熔断。`tests/test_state_ceilings.py` 4 用例锁定；CHANGELOG/README 措辞修正 |
+| 11 | 流水线 producers/requires 幽灵成员 ID 无门禁 | **已闭环**（v2.5.0 P0-2） | 集成段新增「流水线成员引用 ⊆ agents/*.md 真值源」断言（流水线 9→10 项）；protocol selftest N11（整包副本态注入 GHOST-MEMBER → rc=1）锁定 |
+| 12 | protocol selftest N6/N10 锚点重复（13 条里 1 条纯重复） | **已闭环**（v2.5.0 P1-1） | N10 重构为破坏 context_ref list 形态逐条校验分支（V29/V33 失效证明生效），与 N6 互不重叠；13→14 条 |
+| 13 | C8 七条规则无负例（Six-role/L1-L3/msg_type/量纲/五项核心任务/5-task 等） | **已闭环**（v2.5.0 P1-2） | N27 一条用例批量覆盖七条缺口规则，规则正则被误改立即红 |
+| 14 | fail/熔断路径零 CI 覆盖（v2.4.0 核心特性裸奔） | **已闭环**（v2.5.0 P1-3） | CI 新增 State IO circuit breaker step（fail x5 → aborted → advance 拒绝 → finish 不改写）+ ceiling semantics lock step；14→16 step |
+| 15 | C13 三分支无负例（声明位互换 / 重复 ID / 目录删除） | **已闭环**（v2.5.0 P1-4） | N28/N29/N30 分别锁定，26→30 条 |
+| 16 | 跨市场 description 漂移不可察觉（C2 只对等 7 字段） | **已闭环**（v2.5.0 P2-1） | 实锤两份 description 已漂移（ACP 措辞 vs Harness 措辞）→ 统一措辞 + SHARED_FIELDS 纳管 description（73→74 项）；keywords/author 有意不纳管（理由在校验器注释） |
 
 ### 10.3 R1 验收遗留
 
 - **R1 未做升版**：包 `version` 仍为 `2.3.0`，本轮改动全部停留在工作树（未 commit / 未 push / 未三源同步 / 未打 tag）。升版与发布属高危动作，需管家节点单独裁决。 → **已闭环**：管家节点已授权，v2.4.0（commit `90a1c36`）与 v2.4.1（commit `5a5aaa4`）均已发布，三源同步 + tag + release 资产全部落地。
-- **CI step 名已改**：`Routing consistency check (R1-R5)` → `(R1-R6)`（R6 已在 v2.3.0 落地，step 名未同步）。**该改名会触发一次 CI 重跑**，需与首次 push 一并完成。 → **已闭环**：CI 已扩为 14 step，v2.4.0 / v2.4.1 两次发布 run 均 14 step 全执行全绿。
+- **CI step 名已改**：`Routing consistency check (R1-R5)` → `(R1-R6)`（R6 已在 v2.3.0 落地，step 名未同步）。**该改名会触发一次 CI 重跑**，需与首次 push 一并完成。 → **已闭环**：CI 已扩为 14 step，v2.4.0 / v2.4.1 两次发布 run 均 14 step 全执行全绿；R2 再扩至 16 step。
 - **CHANGELOG 未写 v2.4.0 条目**：R1 的全部改动尚未进入 CHANGELOG。升版时需补，含批次 1–5 的变更摘要与回归证据表。 → **已闭环**：CHANGELOG 已含 v2.4.0 段（Added/Changed/Fixed/Regression evidence/Known limitations）+ v2.4.1 段。
 - **§7 黑名单的 4 处引用式登记仍有效**，但新增的 8 条失败模式（FM-R1-01 ~ FM-R1-08）需在升版时同步进包内 `LEARNING.md`。 → **已闭环**：8 条失败模式已写入 `LEARNING.md`（含速查索引），C8 扫描零命中。
 
@@ -235,3 +242,5 @@
 | R1 | 2026-11-09 | 批次 5 收口修复：README tarball 404 死链 → 改指 v2.1.2 实际资产名 + 加限制说明；「安装方式」标题「三套并存」→「四种并存」；SSOT 声明改为「集合维度真值源 = `agents/*.md` 文件名」 | agent-harness-architect |
 | R1 | 2026-11-09 | Phase D 收口：§4 台账 + §4.1 批次明细、§5 基线表回填 R1 实测值、§8 失败模式库增至 8 条（新增 FM-R1-07/08）、§10 下轮入口 + 8 条未闭环清单；**§8 最终全量回归 12/12 全绿** | agent-harness-architect |
 | R1 | 2026-11-09 | **GATE3 验收通过**：§5.1 落盘最终验收证据（12 套门禁逐条独立 rc + 4 组独立负向实锤，含 C13 空集合 fail-closed 与 `PHASES` 破坏实锤）；Phase D 收口完成，R1 全闭环 | agent-harness-architect |
+| R2 | 2026-11-09 | **覆盖矩阵盲区审计**：16 组真实破坏实验逐条验证三层门禁。实锤 2 个 P0（编排层上限语义失真：advance 超限仍放行 / 流水线幽灵成员无门禁）+ 4 个 P1（protocol selftest N6/N10 纯重复 / C8 七条规则无负例 / fail-熔断零 CI 覆盖 / C13 三分支无负例）+ 1 个 P2（跨市场 description 漂移实锤）；排除 4 个假阳性（C8 豁免窗口边界 / C13 目录删除 / C11 三路径 / references 依赖） | team-lead（R2 主理人直做） |
+| R2 | 2026-11-09 | **v2.5.0 修复落盘**：语义分层锁定（新增 `tests/test_state_ceilings.py` 4 用例）+ 集成段真值源断言（流水线 9→10 项）+ protocol selftest 13→14 条（N10 重构消除重复 / N11 新增）+ manifest selftest 26→30 条（N27–N30）+ CI 14→16 step（熔断段 + 语义锁定）+ C2 纳管 description（73→74 项）+ 全仓文档计数同步 | team-lead（R2 主理人直做） |

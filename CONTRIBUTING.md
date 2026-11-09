@@ -11,11 +11,12 @@
 ## 提交前必跑（强制 CI）
 
 ```bash
-# 1. 包一致性校验（双 manifest 对等 / 市场清单 / agents 与头像资产 / teamInfo 自洽 /
-#    README 版本一致 / 废弃表述 / 契约章节完整性 / 成员 ID 五处一致性）—— 单一事实来源，共 73 项（C1–C13）
+# 1. 包一致性校验（双 manifest 对等（含 description）/ 市场清单 / agents 与头像资产 / teamInfo 自洽 /
+#    README 版本一致 / 废弃表述 / 契约章节完整性 / 成员 ID 五处一致性）—— 单一事实来源，共 74 项（C1–C13）
 python3 scripts/manifest_check.py -v
 
-# 2. 校验器自测（注入式负例 26 条）：证明上面的校验器真的会失败，而不是永远返回 0
+# 2. 校验器自测（注入式负例 30 条，含 C8 全规则矩阵 N27 / C13 分支 N28–N30）：
+#    证明上面的校验器真的会失败，而不是永远返回 0
 python3 scripts/manifest_check_selftest.py
 
 # 3. 协议合规单元测试
@@ -23,11 +24,14 @@ python3 skills/research-orchestration-workflow/scripts/protocol_check.py envelop
 python3 skills/research-orchestration-workflow/scripts/protocol_check.py conflict
 python3 skills/research-orchestration-workflow/scripts/protocol_check.py integration
 
-# 4. 协议合规注入式负例自测（13 条）：证明上面三个 suite 不是永远返回 0
+# 4. 协议合规注入式负例自测（14 条）：证明上面三个 suite 不是永远返回 0
 python3 skills/research-orchestration-workflow/scripts/protocol_check_selftest.py
 
 # 5. 阶段名归一化自测（26 条）：--phase 阶段名 / 数字 / 大小写 / 非法值的归一化行为
 python3 scripts/test_phase_normalization.py
+
+# 5b. 编排层四项硬上限语义锁定（4 条）：turns/tokens 触顶=告警、max_time/failures=终态熔断
+python3 tests/test_state_ceilings.py
 
 # 6. 选题评分脚本边界测试
 python3 skills/research-orchestration-workflow/scripts/topic_scoring.py \
@@ -47,7 +51,7 @@ python3 skills/research-orchestration-workflow/scripts/topic_scoring.py \
 2. 改动一个角色或协议 → 在 `agents/` 或 `references/agent-protocol.md` 修
 3. **改任何元数据必须同步两份 manifest**：`.claude-plugin/plugin.json`（Claude Code）与
    `.codebuddy-plugin/plugin.json`（WorkBuddy）。二者的共享字段
-   （`name` / `version` / `license` / `homepage` / `repository` / `agents` / `skills`）
+   （`name` / `version` / `license` / `homepage` / `repository` / `description` / `agents` / `skills`）
    必须逐项一致，由 `manifest_check.py` 的 C2 强制校验。
    注意 `skills` 的取值是**字符串** `"./skills"`（WorkBuddy 第一方约定），不是文件路径数组。
 4. **市场清单同样要同步两份**：`.claude-plugin/marketplace.json` 与 `.codebuddy-plugin/marketplace.json`。

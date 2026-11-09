@@ -19,7 +19,10 @@ v2.3.0 Phase C 批次 4 新增（工作面 A：协议门禁强化）：
   N7 注入破坏冲突仲裁层级 2 置信度比较    -> conflict    rc=1
   N8 注入破坏信封层 pointer 格式校验分支  -> envelope    rc=1
   N9 注入破坏覆盖层 pointer 形态校验      -> integration rc=1
-  N10 注入破坏 HANDOFF context_ref 必填   -> envelope    rc=1
+  N10 注入破坏 context_ref list 形态逐条校验分支 -> envelope rc=1
+      （R2 P1-1 重构：原 N10 与 N6 锚点重复，改为覆盖 list 分支这一独立维度）
+  N11 注入幽灵成员 ID 到流水线 producers（整包副本态）-> integration rc=1
+      （R2 P0-2 配套：真值源断言「流水线成员引用 ⊆ agents/*.md」的负例）
   P3 干净副本全量套件                     -> all         rc=0
 
 注入采用「锚点唯一性 + 落盘校验」：锚点在副本中必须恰好出现 1 次，替换后
@@ -116,11 +119,28 @@ INJECT_PTR_INV = '''        if not _is_valid_context_pointer(pointer_str):
         elif require_checkpoint and not CHECKPOINT_POINTER_PATTERN.match(pointer_str):
             pass  # 注入破坏：覆盖层 pointer 形态校验失效'''
 
-# N10：把 HANDOFF 的 context_ref 必填判定短路（require_context_ref 分支失效）
-ANCHOR_CTX_REQUIRED2 = '''    if require_context_ref and not _context_ref_present(cr):
-        fails.append("context_ref 必填")'''
-INJECT_CTX_REQUIRED2 = '''    if require_context_ref and not _context_ref_present(cr):
-        pass  # 注入破坏：context_ref 必填判定被短路'''
+# N10：破坏 context_ref 的 **list 形态**逐条校验分支（R2 P1-1 重构：
+# 原 N10 与 N6 锚点逐字相同、注入同一位置，13 条里有一条纯重复。改为把
+# check_envelope 的 list 分支整体替换为恒跳过——覆盖「list 形态逐条校验」
+# 这一独立失败维度，与 N6（dict 形态必填判定）互不重叠。锚点取 list 分支
+# 起始行到函数 return（含），整段替换保证缩进合法且唯一命中。）
+ANCHOR_LIST_BRANCH = '''    elif isinstance(cr, list):
+        for i, r in enumerate(cr):
+            if not isinstance(r, dict):
+                # 健壮性：list 元素不是 dict 时旧实现会 AttributeError 崩溃，
+                # 改为显式失败原因。
+                fails.append(f"context_ref[{i}] 必须是字典")
+                continue
+            if r.get("mode") not in VALID_CONTEXT_MODES:
+                fails.append(f"context_ref[{i}].mode 非法: {r.get('mode')!r}")
+            else:
+                # list 形态逐条校验 pointer（带下标，便于定位是哪一条回引）
+                fails.extend(_check_context_pointer(r, f"context_ref[{i}]",
+                                                    require_checkpoint=is_handoff))
+    return fails'''
+INJECT_LIST_BRANCH = '''    elif isinstance(cr, list):
+        pass  # 注入破坏：list 形态逐条校验被整体短路
+    return fails'''
 
 # 用例：(编号, 说明, 套件列表, 注入(old,new)或 None, 期望 rc, 期望命中片段或 None)
 # 期望 rc=0 且未给命中片段时，额外要求输出中不出现失败标记。
@@ -145,8 +165,12 @@ CASES = [
      (ANCHOR_PTR_CHECK, INJECT_PTR_CHECK), 1, "❌"),
     ("N9", "注入破坏覆盖层 pointer 形态校验", ["integration"],
      (ANCHOR_PTR_INV, INJECT_PTR_INV), 1, "❌"),
-    ("N10", "注入破坏 HANDOFF 的 context_ref 必填校验", ["envelope"],
-     (ANCHOR_CTX_REQUIRED2, INJECT_CTX_REQUIRED2), 1, "❌"),
+    ("N10", "注入破坏 context_ref list 形态逐条校验分支", ["envelope"],
+     (ANCHOR_LIST_BRANCH, INJECT_LIST_BRANCH), 1, "❌"),
+    ("N11", "注入幽灵成员到流水线 producers（整包副本态）", ["integration"],
+     ('"upstream": ("FREEZE",), "producers": ("meta-architect",),',
+      '"upstream": ("FREEZE",), "producers": ("meta-architect", "GHOST-MEMBER"),'),
+     1, "幽灵成员"),
     ("P3", "干净副本全量套件", ["all"], None, 0, None),
 ]
 
@@ -173,6 +197,18 @@ def run_case(cid, desc, suites, mutate, expect_rc, expect_hit) -> bool:
         state_io_dst = Path(tmp) / "state_io.py"
         if state_io_src.is_file():
             shutil.copy2(state_io_src, state_io_dst)
+        # N11（流水线幽灵成员）需要 agents/*.md 真值源：单文件副本态下新断言
+        # 按 design SKIP 放行，会让负例「注入了却不变红」假绿。因此本用例走
+        # 整包副本（whole_pkg=True 时把整个包复制到临时目录再注入）。
+        whole_pkg = (cid == "N11")
+        if whole_pkg:
+            pkg_src = CHECKER.parents[3]
+            pkg_dst = Path(tmp) / "pkg"
+            shutil.copytree(
+                pkg_src, pkg_dst,
+                ignore=shutil.ignore_patterns(".git", "__pycache__", ".backups"),
+            )
+            checker = pkg_dst / "skills/research-orchestration-workflow/scripts/protocol_check.py"
         if mutate is not None:
             try:
                 inject_replace(checker, mutate[0], mutate[1])

@@ -528,6 +528,18 @@ def load_state_phases() -> list:
     return list(phases)
 
 
+def load_agent_ids() -> list | None:
+    """读 agents/*.md 文件名集合（与 manifest C13 同源的成员真值源）。
+
+    返回 None = 目录不可读（selftest 副本态只复制单文件）→ 调用方应 SKIP，
+    不因环境缺文件而误报。空目录返回 []（fail-closed 交由调用方判红）。
+    """
+    agents_dir = Path(__file__).resolve().parents[3] / "agents"
+    if not agents_dir.is_dir():
+        return None
+    return sorted(p.stem for p in agents_dir.glob("*.md") if p.is_file())
+
+
 def run_pipeline_tests() -> tuple:
     """集成仿真：阶段流水线真校验。返回 (用例列表, 通过数, 失败列表)。
 
@@ -597,6 +609,26 @@ def run_pipeline_tests() -> tuple:
         cases.append((f"阶段 {name} 依赖成立", ok, detail))
         produced[name] = s.get("msg_id", "")
         roles.update(s.get("producers", ()))
+
+    # ── 断言 3：流水线成员引用 ⊆ agents/*.md 真值源 ──
+    # R2 审计实锤（B16b）：producers 注入幽灵成员 ID（GHOST-MEMBER）时集成套件
+    # 仍 rc=0——「阶段依赖成立」断言只查引用是否在上游参与过，不查引用是否是
+    # 真实存在的成员。真值源与 manifest C13 同源（agents/*.md 文件名）；
+    # 目录不可读（selftest 单文件副本态）时 SKIP 不误报，目录为空时 fail-closed。
+    agent_ids = load_agent_ids()
+    if agent_ids is None:
+        cases.append(("流水线成员引用 ⊆ agents/*.md 真值源", True,
+                      "SKIP：agents/ 目录不可读（单文件副本态），不误报"))
+    elif not agent_ids:
+        cases.append(("流水线成员引用 ⊆ agents/*.md 真值源", False,
+                      "agents/*.md 真值源为空（空集合一律判红）"))
+    else:
+        truth = set(agent_ids)
+        ghosts = sorted(roles - truth)
+        ok = not ghosts
+        cases.append(("流水线成员引用 ⊆ agents/*.md 真值源", ok,
+                      f"引用 {len(roles)} 个成员全部真实存在" if ok
+                      else f"幽灵成员 ID（不在 agents/*.md）: {ghosts}"))
 
     failures = [(n, d) for n, ok, d in cases if not ok]
     return cases, len(cases) - len(failures), failures

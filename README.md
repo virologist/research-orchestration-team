@@ -3,7 +3,7 @@
 > **团队名称**：科研价值驱动研究编排团 / Research Value-Driven Research Orchestration Team
 > **专家类型**：Team 型（8 人协作团 · v2.3.0 工具真实性门禁 R1-R6）
 > **行业分类**：12-IndustryConsultant（跨学科咨询）
-> **版本**：2.4.1
+> **版本**：2.5.0
 > **许可证**：MIT
 > **仓库**：[github.com/virologist/research-orchestration-team](https://github.com/virologist/research-orchestration-team)
 
@@ -71,14 +71,14 @@ research-orchestration-team/
 │       │   ├── protocol_check.py                   # 协议合规校验（三套 suite：信封 / 冲突仲裁 / 集成仿真）
 │       │   ├── protocol_check_selftest.py          # 协议合规注入式负例自测 · 13 条
 │       │   ├── memory_log.py                       # 持久记忆自动写入
-│       │   └── state_io.py                         # 状态机持久化 · 六命令 init/advance/resume/budget/fail/finish（含预算与熔断语义）
+│       │   └── state_io.py                         # 状态机持久化 · 六命令 init/advance/resume/budget/fail/finish（四项硬上限语义分层：turns/tokens 触顶告警，max_time/failures 终态熔断，tests/test_state_ceilings.py 锁定）
 │       └── templates/
 │           ├── topic-scoring-card.md               # 选题评分卡模板
 │           ├── cross-domain-combo.md               # 跨域组合编排模板 · biomed×ai / biomed×general / ai×general
 │           └── result-envelope-v2.4.json           # result_envelope v2.4 空白信封模板
 ├── scripts/
 │   ├── assemble_spawn_prompt.py                    # 成员人设注入装配器（联邦两级查找 shim）
-│   ├── manifest_check.py                           # 包一致性校验 C1–C13（含成员 ID 一致性与 Team settings.json）
+│   ├── manifest_check.py                           # 包一致性校验 C1–C13（含成员 ID 一致性与 Team settings.json，74 项）
 │   ├── manifest_check_selftest.py                  # 注入式负例自测（26 条）
 │   ├── harness_eval.py                             # Harness Engineering H1–H12 设计检查
 │   ├── harness_eval_selftest.py                    # harness 注入式负例自测（14 条）
@@ -124,17 +124,19 @@ research-orchestration-team/
 | `scripts/manifest_check.py` | **C1–C13** | 双 manifest 对等 / 资产完整性 / 版本一致 / 废弃表述扫描 / 契约章节 / frontmatter 结构 / 成员 ID 五处一致性 / Team settings.json |
 | `scripts/harness_eval.py` | **H1–H12** | Harness Engineering 12 项设计模式（路由单一事实源、Loop 硬停止、per-step verification、失败熔断等）退化 |
 | `scripts/routing_eval.py` | **R1–R6** | 路由结构一致性：成员集合 / 触发词 / 条目结构 / 工具名形态 / 工具集合双向相等 / 真实 MCP 清单对照（R6 需真实 MCP 清单，CI/git-clone 态显式 SKIP 且不计 FAIL） |
-| `skills/research-orchestration-workflow/scripts/protocol_check.py` | **三个 suite** | 协议合规：信封 **37** / 冲突仲裁 **5** / 集成仿真 **9** |
+| `skills/research-orchestration-workflow/scripts/protocol_check.py` | **三个 suite** | 协议合规：信封 **37** / 冲突仲裁 **5** / 集成仿真 **10**（含流水线成员真值源断言） |
 
 ### 第二层 · 注入式负例自测（4 套）+ 阶段名归一化自测（1 套）
 
 | 自测脚本 | 用例数 | 证明什么 |
 |----------|--------|----------|
-| `scripts/manifest_check_selftest.py` | **26** 条 | manifest / 资产 / 版本 / 术语 / 市场清单 / settings.json / 成员 ID 各类破坏都能被检出 |
+| `scripts/manifest_check_selftest.py` | **30** 条 | manifest / 资产 / 版本 / 术语（C8 全 13 条规则含 N27 批量回归）/ 市场清单 / settings.json / 成员 ID（含声明位互换 / 重复 ID / 目录删除 fail-closed）各类破坏都能被检出 |
 | `scripts/harness_eval_selftest.py` | **14** 条 | H1–H12 每项设计检查被破坏时都能被检出 |
 | `scripts/routing_eval_selftest.py` | **12** 条 | R1–R6 各类路由破坏都能被检出（含 raw_probe 未归一化护栏，该护栏为准备阶段防自愈夹具掩盖真实缺陷，不计入用例数） |
-| `skills/research-orchestration-workflow/scripts/protocol_check_selftest.py` | **13** 条 | 协议三个 suite 的退出码链路与判定分支都真实有效 |
+| `skills/research-orchestration-workflow/scripts/protocol_check_selftest.py` | **14** 条 | 协议三个 suite 的退出码链路与判定分支都真实有效（含 list 形态分支破坏 N10 / 流水线幽灵成员 N11） |
 | `scripts/test_phase_normalization.py` | **26** 条 | 阶段名归一化 shim 的映射与透传行为正确 |
+
+另有 `tests/test_state_ceilings.py`（**4** 条）：锁定编排层四项硬上限的语义分层——turns/tokens 触顶为告警（不截断）、max_time/failures 为终态熔断，任何一层的语义被误改立即红。
 
 ### 第三层 · 联邦防漂移门禁（1 套）
 
@@ -182,6 +184,7 @@ research-orchestration-team/
 - **v2.3.0** (2026-11-08)：残留风险工程化收口。routing_eval 升至 **R1-R6 共 39 项**——R5 工具集合一致性扩展到全部 8 个成员（分级解析：atomic 四类 + 双向相等；非 atomic 零工具授权，①②③ 类 token 即 FAIL，跳过对中文叙述误报率高的 ④ `+` 槽位分支）；新增 **R6 工具真实性校验**（对照真实 MCP 清单硬校验 registry 全部 `mcp__` 名，清单不可得的 CI/git-clone 态显式 SKIP 且不计 FAIL）；selftest 增至 12 例（N10 非 atomic 注入 / N12 伪造 server 名 + 真实清单 fixture）。官方 `validate_expert.py` 的安装路径限制已在本文档化。详见 [CHANGELOG.md](./CHANGELOG.md)。
 - **v2.4.0** (2026-11-09)：Harness 迭代进化 R1 首轮全闭环。四阶段硬门控走完一轮，门禁体系从一层升为**三层**（正向校验器 / 注入式负例自测 5 套 91 条 / 联邦防漂移）：manifest 升至 **C1–C13**（新增 C13 成员 ID 集合一致性，以 `agents/*.md` 文件名为机器真值源逐处比对 8 个目标）、protocol 主套件 16 → **37**、新增 `protocol_check_selftest.py`（13 条）与 `test_phase_normalization.py`（26 条）；`state_io.py` 状态机代码化（按序推进 / 熔断 / 预算 / metrics / `fail` 子命令）；C8 豁免机制声明化；shim 命中 core 加 sha256 硬校验。新建 `docs/harness-iteration-loop.md` 作为迭代断点续跑的单一事实源。回归 **12 套门禁全绿** + 4 组独立负向实锤。详见 [CHANGELOG.md](./CHANGELOG.md)。
 - **v2.4.1** (2026-11-09)：发布介质自洽性补丁。v2.4.0 的 release 资产 `rot-v2.4.0.tar.gz` 已补齐，但其 tag 指向 `90a1c36`——**早于**修正「安装方式 3」链接的 commit，导致 tarball 内的 README 仍写「方式 3 只能安装到 v2.1.2」，介质与自身文档矛盾。按发布纪律（tag 不重写、不重打已发布资产以免「资产内容 ≠ tag 内容」）不改 v2.4.0，改发本补丁版：方式 3 改指 v2.4.1 资产。协议、运行时、门禁**行为无变更**。
+- **v2.5.0** (2026-11-09)：R2 覆盖矩阵盲区修复。16 组真实破坏实验逐条验证「每条门禁分支都有会红的测试盯着」，修复：编排层上限语义失真（turns/tokens 触顶=告警，max_time/failures=终态熔断，新增 `tests/test_state_ceilings.py` 4 用例锁定）；流水线幽灵成员无门禁（集成段新增真值源断言 9→10 项）；protocol selftest N10 重构（消除与 N6 的重复）+ N11 新增（13→14 条）；manifest selftest 补 N27（C8 七条缺口规则批量回归）+ N28/N29/N30（C13 声明位互换/重复 ID/目录删除）（26→30 条）；CI 补熔断段 + 语义锁定 step（14→16 step）；跨市场 description 漂移实锤并统一，C2 对等校验纳管 description（73→74 项）。详见 [CHANGELOG.md](./CHANGELOG.md)。
 
 ## 安装方式（四种并存）
 

@@ -26,6 +26,71 @@ CI run（14 step 全执行全绿）+ OneDrive 镜像独立复跑 manifest 73/73 
 
 - v2.4.0 的 tarball 资产内 README 保留旧链接（历史资产，不追溯修改）；需最新安装路径的用户请用 v2.4.1 资产或方式 1 / 方式 2。
 
+## [2.5.0] - 2026-11-09
+
+> R2 覆盖矩阵盲区修复版。主题：**每一条门禁分支都要有一只「会红的测试」盯着**。
+> 16 组真实破坏实验逐条验证覆盖矩阵，修复 2 个 P0（语义失真 + 幽灵成员无门禁）、
+> 4 个 P1（重复负例 / 规则覆盖缺口 / CI 缺口 / C13 分支无负例）、1 个 P2（跨市场
+> 描述漂移实锤并修复）。
+
+### Fixed
+
+- **编排层上限语义失真（P0-1）**：v2.4.0 CHANGELOG 笼统写「硬上限代码化」，实测
+  `advance` 超过 `--max-turns` 上限后仍 rc=0 放行（turn 2/1）。真实语义是**分层**
+  的：`turns`/`tokens` 触顶 = 告警（`budget` 子命令 ⚠️，主理人语义裁量），`max_time`
+  超时与 `failures` 熔断 = 终态（`status: aborted`，advance/fail 拒绝）。CHANGELOG
+  与 README 措辞已按 state_io.py docstring 的设计口径修正。
+  - 新增 `tests/test_state_ceilings.py`（4 用例）锁定该语义分层——告警被误改成
+    截断（或反向）时立即红。
+- **跨市场 description 漂移（P2-1 实锤）**：两份 manifest 的 `description` 已实际
+  漂移（cb 侧写 ACP+五角色矩阵，cl 侧写 v2.1.0 Harness 措辞）而 C2 无校验不可
+  察觉——用户在两个市场看到的插件介绍不同。已统一措辞，并把 `description` 纳入
+  `SHARED_FIELDS` 对等校验（74 项）。`keywords`/`author` 有意不纳管（允许平台
+  差异化），理由写在校验器源码注释。
+
+### Added
+
+- **流水线成员真值源断言（P0-2）**：`protocol_check.py` 集成段新增「流水线成员
+  引用 ⊆ agents/*.md 真值源」断言。审计实锤：producers 注入幽灵成员 ID
+  （GHOST-MEMBER）时 integration 仍 rc=0——旧断言只查「引用是否在上游参与过」，
+  不查「引用是否是真实成员」。agents/ 目录不可读（单文件副本态）时 SKIP 不误报；
+  目录为空时 fail-closed 判红。阶段流水线 9 → **10** 项。
+- **protocol selftest 13 → 14 条**：
+  - N10 重构：原 N10 与 N6 锚点逐字相同、注入同一位置（纯重复），改为破坏
+    `context_ref` **list 形态**逐条校验分支（V29/V33 两条用例失效证明注入生效），
+    与 N6（dict 形态必填）互不重叠。
+  - N11 新增：幽灵成员注入负例（整包副本态），锁定 P0-2 新断言。
+- **manifest selftest 26 → 30 条**：
+  - N27：C8 规则覆盖矩阵批量回归——13 条 FORBIDDEN_PATTERNS 中 7 条从无负例
+    （Six-role / six-role research / L1-L3 conflict / msg_type / 任意一维<90 /
+    五项核心任务 / 5-task），一条用例一次性覆盖，规则正则被误改时立即红。
+  - N28：C13 主理人声明位互换攻击（lead 的 role 改 member + 普通成员改 lead），
+    锁定「leadAgent 与声明位不一致」分支。
+  - N29：C13 单元格内成员 ID 重复（duplicates 分支）。
+  - N30：C13 agents/ 目录整体删除（fail-closed 路径）。
+
+### Changed
+
+- CI 新增 2 个 step（14 → 16 个门禁 step）：State IO circuit breaker 熔断段
+  （fail x5 → aborted → advance 拒绝 → finish 不改写）与 ceiling semantics lock
+  （test_state_ceilings.py）。v2.4.0 的熔断特性此前只在本地手测过，CI 只走 happy path。
+- timeout 25 分钟维持不变（新增 step 为秒级）。
+
+### Regression evidence（v2.5.0 部署前实测，逐条独立取 rc）
+
+| 套件 | 结果 |
+|------|------|
+| `manifest_check.py` | **74/74** ✅（C2 +1 项）|
+| `manifest_check_selftest.py` | **30/30** ✅（新增 N27–N30）|
+| `harness_eval.py` / `harness_eval_selftest.py` | 12/12 ✅ / 14/14 ✅ |
+| `routing_eval.py` / `routing_eval_selftest.py` | 39/39 ✅ / 12/12 ✅ |
+| `tests/test_vendor_core.py` | V1–V6 **6/6** ✅ |
+| `tests/test_state_ceilings.py`（新增） | **4/4** ✅ |
+| `test_phase_normalization.py` | **26/26** ✅ |
+| `protocol_check.py` | envelope **37/37**(v2.4) + **12/12**(legacy) ✅ / conflict **5/5** ✅ / integration 阶段流水线 **10/10**（+真值源断言）+ HANDOFF 回引 **8/8** ✅ |
+| `protocol_check_selftest.py` | **14/14** ✅（N10 重构 + N11 新增）|
+| 独立破坏实锤 | GHOST-MEMBER 注入 → integration rc=1 且列幽灵 ID ✅；turn 2/1 放行 + 告警（语义锁定）✅；fail x5 → aborted → advance rc=1 → finish rc=0 且 status 仍 aborted ✅ |
+
 ## [2.4.0] - 2026-11-09
 
 > Harness 迭代进化 R1 首轮全闭环版。主题：**机制 → 门禁 → 文档 → 状态落盘**。
@@ -37,7 +102,7 @@ CI run（14 step 全执行全绿）+ OneDrive 镜像独立复跑 manifest 73/73 
 - **C13 成员 ID 集合一致性门禁**：`manifest_check.py` 新增第 13 项校验——以 `agents/*.md` 的文件名集合（最底层事实）为机器真值源，逐处比对 8 个目标：协议 §1 角色矩阵「成员 ID」列 / registry「团队成员一览」`agent_id` 列 / team-lead 成员表 / `.claude-plugin` 的 `agents[]` / `.codebuddy-plugin` 的 `agents[]` / `.codebuddy-plugin` 的 `members[].id` / `teamInfo.leadAgent` / `teamInfo.memberAgents`。任一不匹配即 rc=1，并**逐处列出「多出 / 缺少」差异**。8 类解析失败路径（含真值源为空）全部 fail-closed——空集合一律判红。成员增删从此只需改 `agents/` 一处。
 - **协议注入式负例自测**（新建 `skills/research-orchestration-workflow/scripts/protocol_check_selftest.py`，**13** 条）：证明 `protocol_check.py` 的三个 suite 真会拦截破坏，而非永远返回 0。
 - **阶段名归一化自测**（新建 `scripts/test_phase_normalization.py`，**26** 条）：覆盖 8 个阶段名 × 2 种写法 + 大小写不敏感 + 整数直传 + 非法值透传。
-- **编排层状态机代码化**（`state_io.py` 327 → 805 行）：`init` / `advance` / `resume` / `budget` / `fail` / `finish` 六命令；按序推进门禁（跳级 rc=1，逃生阀 `--force` 必须配非空 `--force-reason`）；失败熔断达阈值 → `status: aborted` + `abort_reason`；4 个 metrics 落盘且未上报记 `null` 禁编造；编排层硬上限（30 轮 / 1800s / 200000 token / 熔断 5 次）代码化，与平台层 `maxTurns: 180` 分层表述、两层都保留。
+- **编排层状态机代码化**（`state_io.py` 327 → 805 行）：`init` / `advance` / `resume` / `budget` / `fail` / `finish` 六命令；按序推进门禁（跳级 rc=1，逃生阀 `--force` 必须配非空 `--force-reason`）；失败熔断达阈值 → `status: aborted` + `abort_reason`；4 个 metrics 落盘且未上报记 `null` 禁编造；编排层四项硬上限全部代码化、**语义分层**（与平台层 `maxTurns: 180` 分层表述、两层都保留）：`max_time` 超时与 `failures` 熔断为**终态**（`status: aborted`，`advance`/`fail` 拒绝），`turns`/`tokens` 触顶为**告警**（`budget` 子命令打印 ⚠️ 不截断——轮次/token 计数由主理人语义裁量，状态机不越权代管）。
 - **两层 pointer 校验**：信封层判「字段在不在」（4 种合法形态 + `full`/`summary` 可空 / `ref` 必填），覆盖层判「覆盖全不全」（HANDOFF 回引必须是 `state://cp-NNN`）。两层职责分离不合流——数据依赖与失败语义都不同。
 - **迭代状态文件**（新建 `docs/harness-iteration-loop.md`）：断点续跑单一事实源，含意图漂移基线 / 四阶段台账 / 验收基线 / 资产清单 / 已修复问题黑名单 / 失败模式库 / 发布契约 / 下轮入口。
 - **两个协议登记模板**（新建 `skills/research-orchestration-workflow/templates/`）：`cross-domain-combo.md`（三组合 fan-out 与仲裁链，86 个占位符）/ `result-envelope-v2.4.json`（16 键，与 `REQUIRED_FIELDS_V24` 逐字一致）。

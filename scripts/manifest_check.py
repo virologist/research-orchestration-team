@@ -83,12 +83,17 @@ CODEBUDDY_MARKETPLACE = ".codebuddy-plugin/marketplace.json"
 README = "README.md"
 
 # 两份 manifest 必须逐项一致的字段
+# R2 补充 description：两份描述曾漂移（cb 写 ACP+五角色矩阵、cl 写 v2.1.0 Harness
+# 措辞）而 C2 无校验不可察觉——用户在两个市场看到的插件介绍不同。统一后纳管。
+# keywords / author 有意不纳管：author 是嵌套 dict（允许平台差异化署名展示），
+# keywords 语义上是「搜索标签」允许按平台调优，强对等会造成无意义耦合。
 SHARED_FIELDS = (
     "name",
     "version",
     "license",
     "homepage",
     "repository",
+    "description",
     "agents",
     "skills",
 )
