@@ -531,13 +531,22 @@ def load_state_phases() -> list:
 def load_agent_ids() -> list | None:
     """读 agents/*.md 文件名集合（与 manifest C13 同源的成员真值源）。
 
-    返回 None = 目录不可读（selftest 副本态只复制单文件）→ 调用方应 SKIP，
-    不因环境缺文件而误报。空目录返回 []（fail-closed 交由调用方判红）。
+    包根定位不用 parents[N] 硬索引：Linux 的 tempfile 布局（/tmp/<dir>/file.py）
+    只有 3 层 parents，硬索引 parents[3] 会 IndexError——macOS 本机绿、CI 红
+    （FM-R2-05 同族的跨平台坑）。改为从本文件向上逐层找「目录下同时存在
+    agents/ 与 .codebuddy-plugin/」的包根；找不到（单文件副本态）返回 None，
+    调用方 SKIP 不误报。目录存在但为空 → 返回 []（fail-closed 交由调用方判红）。
     """
-    agents_dir = Path(__file__).resolve().parents[3] / "agents"
-    if not agents_dir.is_dir():
-        return None
-    return sorted(p.stem for p in agents_dir.glob("*.md") if p.is_file())
+    probe = Path(__file__).resolve().parent
+    for _ in range(6):
+        if (probe / "agents").is_dir() and (probe / ".codebuddy-plugin").is_dir():
+            agents_dir = probe / "agents"
+            return sorted(p.stem for p in agents_dir.glob("*.md") if p.is_file())
+        parent = probe.parent
+        if parent == probe:
+            break
+        probe = parent
+    return None
 
 
 def run_pipeline_tests() -> tuple:
