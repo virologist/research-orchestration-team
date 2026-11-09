@@ -23,6 +23,28 @@
 
 > 说明：以下 v2.2.0 补记的 5 条为**工程内证**——证据来源为本仓库真实 commit（short hash）、`CHANGELOG.md`、`README.md 版本历史` 与脚本 / 文件路径，不引用外部 DOI / PMID / URL；`observability` 因历史未逐任务采集，统一如实标注「未采集」，不自造数值。
 
+### [2026-11-09] / team-lead / v2.5.0 R2 覆盖矩阵盲区修复（语义锁定 + 幽灵成员门禁 + 负例补全）
+
+- **决策**：
+  - R2 主题定为**覆盖矩阵盲区审计**——「每一条门禁分支都要有一只『会红的测试』盯着」。用 16 组真实破坏实验逐条验证三层门禁，把 R1 的产出当作待验证对象而非既成事实
+  - 实锤并修复 **2 个 P0**（编排层上限语义失真 / 流水线幽灵成员无门禁）、**4 个 P1**（protocol selftest N6/N10 纯重复 / C8 七条规则无负例 / fail-熔断零 CI 覆盖 / C13 三分支无负例）、**1 个 P2**（跨市场 description 漂移）；同时排除 **4 个假阳性**（C8 豁免窗口边界 / C13 目录删除 / C11 三路径 / references 依赖）
+  - 发布链路同步根治：README「安装方式 3」改为指向 `releases/latest` 页面（去掉版本锚点），并补 4 条打包前强制检查，根治「每次发版都要改 README」的复发点
+- **证据**：
+  - 全量回归 **13/13 套全绿**（逐条独立取退出码）：manifest 74/74、manifest_selftest 30/30、harness 12/12、harness_selftest 14/14、routing 39/39、routing_selftest 12/12、phase_norm 26/26、vendor V1–V6 6/6、state_ceilings 4/4、protocol envelope 37/37(v2.4)+12/12(legacy)+conflict 5/5+阶段流水线 10/10+HANDOFF 8/8、protocol_selftest 14/14
+  - 6 组独立负向实锤（不采信 CHANGELOG 自报，每次破坏后还原、md5 与基线逐字节一致）：幽灵成员 `GHOST-MEMBER` → integration rc=1 并精确列出幽灵 ID；C2 description 漂移 → rc=1 并逐字段对照；熔断全链路 → `aborted` + advance rc=1 拒绝 + finish rc=0 但状态不改写；C13 三分支（`members[].role` 声明位互换 / 表格单元格重复 ID / `agents/*.md` 全删）→ 三分支各自 rc=1；C8 废弃表述注入 → 两条规则精确命中带行号
+  - CI run `42623476669` success（16 step 全执行）；发布产物 `rot-v2.5.0.tar.gz` 14689986 B，tag `v2.5.0` 落在 CI 绿 commit `4d6e7e0`
+  - 三源一致性：canonical / origin / OneDrive 镜像 / GitHub API 四处 HEAD 全等 `4d6e7e0`，两处工作树 `git status --porcelain` 均 0 项
+  - 本条为**工程内证**：证据来源为本仓库真实 commit / 脚本路径 / 实跑退出码，不引用外部 DOI / PMID / URL
+- **下一步**：
+  - R2 状态文件（`docs/harness-iteration-loop.md`）Phase D 已落盘：§1 元信息 / §1.1 R1 快照 / §3.1 漂移复检 / §4.2 R2 台账 / §4.3 R2 批次明细 / §5.2 R2 验收证据 / §8 FM-R2-01~06 / §10 改 R3 入口 / §10.3.2 负例验收纪律补录 / §10.5 R3 建议审计方向
+  - FM-R2-03 ~ FM-R2-06 四条失败模式已回流本文件，并入速查索引
+  - R3 的增量空间更可能在**断言交互**与**运行时序**（并发 / 重入 / 中断恢复），而非单条分支——建议方向见 §10.5
+- **observability**：
+  - 成功率：未采集
+  - 平均 tool call：未采集
+  - 重试次数：3（`manifest_check_selftest` 与 `routing_eval_selftest` 在前台被沙箱 SIGTERM 截断，改为后台独立运行 + 显式超时后通过）
+  - next_actions 字段存在率：未采集
+
 ### [2026-11-09] / team-lead / v2.4.1 发布介质自洽性补丁（tarball 与 tag 内容脱钩的根因修复）
 
 - **决策**：
@@ -406,6 +428,7 @@
 | FM-R2-03 | CHANGELOG「代码化」掩盖告警/终态语义分层 | 行为类描述必须区分「检测到」与「阻止」；破坏实验实测后再写 |
 | FM-R2-04 | 负例按大项配对 → 重复负例与分支盲区并存 | 每条负例对应一个可独立失效的分支；定期跑覆盖矩阵差集 |
 | FM-R2-05 | SKIP 容错让副本态负例假绿；YAML heredoc 顶格崩解析 | 负例强制非 SKIP 路径（整包副本）；heredoc 保持块缩进 + yaml.safe_load 验证 |
+| FM-R2-06 | 负例改错数据载体 → rc 未翻转；无关门禁抢先拦截致假检出 | 先读实现定位真实载体；rc 翻转 + 失败原因归属被测门禁才算有效 |
 
 ### [2026-11-09] / team-lead / lesson 组：发布介质自洽性 2 条失败模式（v2.4.1 补丁的根因）
 
@@ -450,6 +473,14 @@
 - **safe_retry_instruction**：给校验器加 SKIP 分支时必须同步问「负例如何强制走非 SKIP 路径？」——N11 的解法是整包副本（copytree 整个包再注入）；CI 内嵌 Python 一律用 `python3 - args <<'EOF'` 且 heredoc 内容保持块缩进，写入后必跑 `yaml.safe_load` 验证。
 - **explicit_stop_condition**：负例跑完后 rc 未翻转且输出含 SKIP 字样 → 该负例无效，禁止计为通过；CI YAML 修改后未经 `yaml.safe_load` 验证禁止 commit。
 - **已落地护栏**：`protocol_check_selftest.py` run_case 的 whole_pkg 分支 + N11；`.github/workflows/validate.yml` heredoc 缩进版（本地 `yaml.safe_load` + 熔断段全链路实测通过）。
+
+#### FM-R2-06 · 失败类别：第 2 类「门禁覆盖缺口」（负例数据载体误解）
+
+- **现象**：R2 收口的独立负向实锤中，「C13 声明位互换」负例**首版构造 rc=0**（应为 1）——连续两次构造都没让 rc 翻转，才暴露问题。第一版把「声明位」理解为 `agents[]` 数组中的位置，只交换了两项的先后顺序。
+- **root_cause_hint**：C13 是**集合**一致性门禁（比的是成员 ID 集合，不比数组顺序），真实的主理人声明位在 `members[].role == "lead"`，与数组位置无关。改数组顺序 → C13 判绿；更隐蔽的是 C2「双 manifest 字段对等」会因 `agents` 字段顺序不同而**抢先报红**——表面看 rc=1，实际失败原因根本不是 C13。若只看 rc 不看失败原因归属，会误以为「C13 已被证明能检出」。
+- **safe_retry_instruction**：构造负例前先读实现，确认被破坏的那条规则**实际读的是哪个字段/集合/位置**，再动手改那个载体。验收时同时看两件事：① rc 是否翻转；② 失败信息是否**归属于被测门禁**（如 C13 的报错前缀是「C13 …」）。被无关门禁抢先拦截的负例一律作废重做。
+- **explicit_stop_condition**：负例跑完 rc 未翻转 → 负例无效；若 rc 翻转但失败原因归属其他门禁 → **同样无效**。两种情况都不许计为通过。
+- **已落地护栏**：`docs/harness-iteration-loop.md` §5.2 负例 6（记录首版无效 + 修正后的正确构造）、§8 FM-R2-06、§10.3.2（负例验收纪律补录 3 条）。
 
 ### 写入位置与责任人
 
