@@ -33,6 +33,9 @@ python3 scripts/test_phase_normalization.py
 # 5b. 编排层四项硬上限语义锁定（4 条）：turns/tokens 触顶=告警、max_time/failures=终态熔断
 python3 tests/test_state_ceilings.py
 
+# 5c. state_io 输入护栏注入式验证（10 条）：checkpoint 归一化 / task_id 消毒 / 回归护栏
+python3 tests/test_state_io_guards.py
+
 # 6. 选题评分脚本边界测试
 python3 skills/research-orchestration-workflow/scripts/topic_scoring.py \
   --topic test --originality 11 --feasibility 7 --value-density 9 \

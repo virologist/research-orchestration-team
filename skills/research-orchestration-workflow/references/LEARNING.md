@@ -23,6 +23,27 @@
 
 > 说明：以下 v2.2.0 补记的 5 条为**工程内证**——证据来源为本仓库真实 commit（short hash）、`CHANGELOG.md`、`README.md 版本历史` 与脚本 / 文件路径，不引用外部 DOI / PMID / URL；`observability` 因历史未逐任务采集，统一如实标注「未采集」，不自造数值。
 
+### [2026-11-10] / team-lead / R3 输入护栏收口（半成品回归实锤 + 注入式护栏）
+
+- **决策**：
+  - 接手时发现另一工作线已落盘两处输入护栏修复但未提交、无测试、无文档；按「不擅自扩展诊断范围」原则，只收口已落盘修复与其引入的回归
+  - 实测实锤回归：`--checkpoint` 为可选参数，半成品把「未传」与「非法」都返回 `None` → 不带检查点的正常推进 rc=1（期望 0）；改为空值返回空串、非法值才返回 None
+  - 按 FM-R2-06 纪律补 10 条护栏用例：逐条独立临时目录 + rc，负例断言失败原因归属被测分支且无裸堆栈；包根向上逐层探测标志目录，不用 `parents[N]` 硬索引
+  - 代码行为变更但**未升版、未打 tag、未发 release**，升版与发布交由管家节点裁决
+- **证据**：
+  - `tests/test_state_io_guards.py` 10/10 全绿；3 组注入破坏实验证明会红（A 空值仍返回 None → G1/G9 红；B 去掉前缀剥离 → G2 红；C 短路 task_id 消毒 → G6/G7/G10 红）
+  - 实测：不带 checkpoint 的 advance 修复前 rc=1、修复后 rc=0；`state://cp-001` 归一化为 `checkpoints/cp-001.md` 且无 `state:` 目录；非法 task_id 统一入口 rc=2
+  - CI step 口径核到 step 名级：v2.4.x 12 门禁/18 总、v2.5.0 14 门禁/20 总、R3 15 门禁/21 总（差额 6 恒为平台 step）
+  - 本条为**工程内证**：证据来源为本仓库真实脚本路径、实跑退出码与 `gh run view` 输出，不引用外部 DOI / PMID / URL
+- **下一步**：
+  - R3 全轮 Phase A 再诊断 / GATE 裁决 / 台账完整落盘，待管家节点裁决
+  - 是否发 v2.5.1（代码行为已变更）待裁决；已发布 tag `v2.5.0` 不重写
+- **observability**：
+  - 成功率：未采集
+  - 平均 tool call：未采集
+  - 重试次数：未采集
+  - next_actions 字段存在率：未采集
+
 ### [2026-11-09] / team-lead / v2.5.0 R2 覆盖矩阵盲区修复（语义锁定 + 幽灵成员门禁 + 负例补全）
 
 - **决策**：
@@ -32,7 +53,7 @@
 - **证据**：
   - 全量回归 **13/13 套全绿**（逐条独立取退出码）：manifest 74/74、manifest_selftest 30/30、harness 12/12、harness_selftest 14/14、routing 39/39、routing_selftest 12/12、phase_norm 26/26、vendor V1–V6 6/6、state_ceilings 4/4、protocol envelope 37/37(v2.4)+12/12(legacy)+conflict 5/5+阶段流水线 10/10+HANDOFF 8/8、protocol_selftest 14/14
   - 6 组独立负向实锤（不采信 CHANGELOG 自报，每次破坏后还原、md5 与基线逐字节一致）：幽灵成员 `GHOST-MEMBER` → integration rc=1 并精确列出幽灵 ID；C2 description 漂移 → rc=1 并逐字段对照；熔断全链路 → `aborted` + advance rc=1 拒绝 + finish rc=0 但状态不改写；C13 三分支（`members[].role` 声明位互换 / 表格单元格重复 ID / `agents/*.md` 全删）→ 三分支各自 rc=1；C8 废弃表述注入 → 两条规则精确命中带行号
-  - CI run `42623476669` success（16 step 全执行）；发布产物 `rot-v2.5.0.tar.gz` 14689986 B，tag `v2.5.0` 落在 CI 绿 commit `4d6e7e0`
+  - CI run `42623476669` success（14 门禁 step / 20 总 step 全执行）；发布产物 `rot-v2.5.0.tar.gz` 14689986 B，tag `v2.5.0` 落在 CI 绿 commit `4d6e7e0`
   - 三源一致性：canonical / origin / OneDrive 镜像 / GitHub API 四处 HEAD 全等 `4d6e7e0`，两处工作树 `git status --porcelain` 均 0 项
   - 本条为**工程内证**：证据来源为本仓库真实 commit / 脚本路径 / 实跑退出码，不引用外部 DOI / PMID / URL
 - **下一步**：
@@ -56,7 +77,7 @@
 - **证据**：
   - 根因定位：修正「方式 3」链接的 commit `2f2b016` 发生在打 tag `v2.4.0`（指向 `90a1c36`）**之后**
   - v2.4.1 全量回归 12/12 套全绿（逐条独立取退出码）：manifest 73/73、manifest_selftest 26/26、harness 12/12、harness_selftest 14/14、routing 39/39、routing_selftest 12/12、phase_norm 26/26、vendor V1–V6 6/6、protocol envelope 37/37(v2.4)+12/12(legacy)+conflict 5/5+阶段流水线 9/9+HANDOFF 8/8、protocol_selftest 13/13、shim rc=0
-  - CI run `42561278912` **14 step 全部实际执行全绿**（核到 step 级，非仅看摘要）
+  - CI run `42561278912` **12 门禁 step / 18 总 step 全部实际执行全绿**（核到 step 级，非仅看摘要）
   - 资产自洽性实锤：`git archive v2.4.1` 打包 → 解包后 README 版本行为 `2.4.1`、方式 3 指向 v2.4.1 自身资产、双 manifest 均为 `2.4.1`；解包副本 manifest 73/73、protocol rc=0、shim rc=0
   - 发布产物：`rot-v2.4.1.tar.gz` 14673511 B（API 确认落地），tag `v2.4.1` 落在 CI 绿 commit `5a5aaa4`
   - 三源一致性：canonical / origin / mirror / GitHub API / tag **五方 HEAD 全等 `5a5aaa4`**，两处工作树 0 项未提交；镜像侧独立复跑 manifest 73/73 与 protocol 全套通过

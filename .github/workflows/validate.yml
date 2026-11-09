@@ -178,6 +178,12 @@ jobs:
       - name: State IO ceiling semantics lock (R2 P0-1)
         run: python3 tests/test_state_ceilings.py
 
+      # R3 P0-1 / P1-2：checkpoint 形态归一化 + task_id 消毒的输入护栏。
+      # 10 条用例（含「不带检查点的推进」回归护栏），逐条独立取 rc，
+      # 负例同时断言失败原因归属被测分支；3 组注入破坏证明护栏会红。
+      - name: State IO input guards (R3 P0-1/P1-2)
+        run: python3 tests/test_state_io_guards.py
+
 
       - name: Topic scoring edge cases
         run: |

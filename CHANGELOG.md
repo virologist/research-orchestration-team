@@ -2,6 +2,48 @@
 
 所有重要变更按版本倒序记录。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [2.5.1] - 2026-11-10
+
+> R3 输入护栏收口。Phase A 再诊断（断言交互 + 运行时序）实锤 1 个 P0
+> （checkpoint 形态契约断裂：协议标准形态触发裸 Traceback）+ 1 个 P1
+> （task_id / checkpoint 路径注入未消毒）；排除 4 个假候选（并发锁 /
+> 门禁语义 / 损坏检测 / 熔断叠加态均验证为设计正确）。本版还修复了
+> 修复过程中引入的一处回归（不带检查点的推进被误拒），并以 10 条
+> 注入式护栏锁定全部修复语义。
+
+### Fixed
+
+- **checkpoint 形态归一化（R3-P0-1）**：`cmd_advance` 旧实现只接受裸 `cp-NNN`；按协议文档传 `state://cp-001` 时会拼出 `checkpoints/state:/cp-001.md` → 父目录不存在导致裸 Traceback。新增 `_normalize_checkpoint_name`，两种形态归一到裸名，并拒绝路径元字符。
+- **task_id 消毒（R3-P1-2）**：`task_id` 直接拼进 runs 目录名，含路径分隔符可建子目录、`..` 可越界落盘。`main()` 统一入口用 `_validate_task_id` 拦截（rc=2 + 业务报错文案，无堆栈）。
+- **R3 修复引入的回归（本轮实测实锤）**：`--checkpoint` 为可选参数（`default=None`），半成品把「未传」与「非法形态」都返回 `None`，而 `cmd_advance` 用 `is None` 判错 → 不带检查点的正常推进被误拒（实测 rc=1，期望 0）。改为空值返回 `""`、非法值才返回 `None`，docstring 明确三态语义。
+- **状态文件元信息自指悖论**：§1 写「canonical HEAD = f6ed42e」，但写入该值的 commit 自身（`6bc2bbe`）让它在落盘瞬间失效。改为不记录 HEAD，以 tag 基线 + `git rev-parse HEAD` 为真值源；§5.2 同步去固化值。
+- **陈旧状态与数字口径**：§10.6「FM-R2-06 待回流 LEARNING」改已闭环（该文件第 40/431/477 行已有）；README 结构树两处 R2 遗漏计数（protocol selftest 13→14、manifest selftest 26→30）补齐。
+
+### Added
+
+- `tests/test_state_io_guards.py`（**10** 条）：不带检查点推进 / 前缀归一化 / 裸名兼容 / 两类非法 checkpoint / 两类非法 task_id / 合法边界 / 空串 / 超长。每条独立临时目录与 rc，负例同时断言「失败原因归属被测分支」且无裸堆栈（FM-R2-06 纪律）。**3 组注入破坏实验**证明护栏会红：A 空值仍返回 None → G1/G9 红；B 去掉前缀剥离 → G2 红；C 短路 task_id 消毒 → G6/G7/G10 红（主理人独立抽验破坏 C 复现：7/10 红、失败原因精确归属，还原后 md5 逐字节一致）。
+- CI 新增 `State IO input guards (R3 P0-1/P1-2)` step；门禁 step **14 → 15**（run 总 step 20 → 21）。全仓「14/16 step」旧计数统一，新增 `docs/harness-iteration-loop.md` §10.3.3 作为唯一真值源（实测 v2.4.x = 12 门禁/18 总、v2.5.0 = 14 门禁/20 总、R3 = 15 门禁/21 总；差额 6 恒为平台 step）。
+- `docs/harness-iteration-loop.md` §5.3：R3 验收证据（Phase A 6 组实验台账 + 14 套门禁全绿 + 独立负向实锤）。
+
+### Regression evidence（v2.5.1 部署前实测，14 套门禁逐条独立取 rc）
+
+| 套件 | 结果 |
+|------|------|
+| `manifest_check.py` / `_selftest.py` | 74/74 ✅ / 30/30 ✅ |
+| `harness_eval.py` / `_selftest.py` | 12/12 ✅ / 14/14 ✅ |
+| `routing_eval.py` / `_selftest.py` | 39/39 ✅ / 12/12 ✅ |
+| `tests/test_vendor_core.py` | V1–V6 6/6 ✅ |
+| `test_phase_normalization.py` | 26/26 ✅ |
+| `tests/test_state_ceilings.py` | 4/4 ✅ |
+| `tests/test_state_io_guards.py`（新增） | **10/10** ✅ |
+| `protocol_check.py` envelope / conflict / integration | 37/37(v2.4)+12/12(legacy) ✅ / 5/5 ✅ / 10/10+8/8 ✅ |
+| `protocol_check_selftest.py` | 14/14 ✅ |
+
+### Known limitations
+
+- 官方 `validate_expert.py` 本机不存在（环境性已知限制，同 v2.4.0 起）。
+- R3 全轮的 GATE 裁决与完整台账以 §5.3 + 本段为准；并发两工作线汇合的事实已在 §10.1 如实登记。
+
 ## [2.5.0] - 2026-11-09
 
 > R2 覆盖矩阵盲区修复版。主题：**每一条门禁分支都要有一只「会红的测试」盯着**。
@@ -55,7 +97,7 @@
 
 ### Changed
 
-- CI 新增 2 个 step（14 → 16 个门禁 step）：State IO circuit breaker 熔断段
+- CI 新增 2 个门禁 step（12 → 14）：State IO circuit breaker 熔断段
   （fail x5 → aborted → advance 拒绝 → finish 不改写）与 ceiling semantics lock
   （test_state_ceilings.py）。v2.4.0 的熔断特性此前只在本地手测过，CI 只走 happy path。
 - timeout 25 分钟维持不变（新增 step 为秒级）。
@@ -93,7 +135,7 @@
 ### Regression evidence（v2.4.1 部署前实测，12 套门禁逐条独立取 rc）
 
 与 v2.4.0 同一套门禁、同一结果：manifest **73/73** ✅ / manifest_selftest **26/26** ✅ / harness **12/12** ✅ / harness_selftest **14/14** ✅ / routing **39/39** ✅ / routing_selftest **12/12** ✅ / phase_norm **26/26** ✅ / vendor V1–V6 **6/6** ✅ / protocol envelope **37/37**(v2.4) + **12/12**(legacy) + conflict **5/5** + 阶段流水线 **9/9** + HANDOFF 回引覆盖 **8/8** ✅ / protocol_selftest **13/13** ✅ / shim `assemble_spawn_prompt.py --member synthesis-integrator` rc=0 ✅。
-CI run（14 step 全执行全绿）+ OneDrive 镜像独立复跑 manifest 73/73 与 protocol 全套通过。
+CI run（12 门禁 step / 18 总 step 全执行全绿）+ OneDrive 镜像独立复跑 manifest 73/73 与 protocol 全套通过。
 
 ### Known limitations
 

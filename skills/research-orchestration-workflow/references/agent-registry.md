@@ -260,6 +260,7 @@ plan_execution:
 | 负例 | `skills/research-orchestration-workflow/scripts/protocol_check_selftest.py` | **14 条** | 三个 suite 的退出码链路与判定分支真实有效（含 list 形态分支 N10 / 流水线幽灵成员 N11） |
 | 负例 | `scripts/test_phase_normalization.py` | **26 条** | `--phase` 阶段名归一化 shim 的映射与透传 |
 | 负例 | `tests/test_state_ceilings.py` | **4 条** | 编排层四项硬上限语义分层锁定（turns/tokens=告警、max_time/failures=终态） |
+| 负例 | `tests/test_state_io_guards.py` | **10 条** | state_io 输入护栏（checkpoint 形态归一化 / task_id 消毒 / 不带检查点推进的回归护栏）；3 组注入破坏证明会红（R3） |
 | 防漂移 | `tests/test_vendor_core.py` | **V1–V6（6 项）** | `vendor/shared-core/` 与联邦真源 sha256 比对（真源不可达时显式 SKIP，不计 FAIL） |
 
 **「注入式 selftest」的含义**：把仓库复制到临时目录 → 注入一处破坏 → 断言校验器 **rc=1** 且输出命中**预期的检查项文案**。第二个断言不可省略：只断言退出码会让「任何错误都算通过」，检查项本身失效也会被误判为通过——这正是本项目历史上假绿的成因。

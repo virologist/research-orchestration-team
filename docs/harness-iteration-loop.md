@@ -15,9 +15,10 @@
 | 执行者 | R1 = `agent-harness-architect`（Agent Harness 专家团 P1 架构师角色）；R2 = `team-lead`（主理人直做） |
 | 执行者裁决依据 | 指令 §0 指定「Agent Harness 架构设计师\|墨衡」，经全环境检索确认该专家不存在而冻结；管家节点 2026-11-08 裁决 **A**：改由 agent-harness-expert 的架构师角色执行，不虚拟身份 |
 | 迭代对象基线 | R1 = v2.3.0；**R2 = v2.4.1**（`5a5aaa4`） |
-| canonical HEAD | **`f6ed42e`**（docs(state): R2 Phase D 收口 — 状态文件落盘 + FM-R2-06 回流 LEARNING）；前序 `4d6e7e0`（fix(release): 打包前拦截资产内文档滞后） |
+| 发布基线 | **tag `v2.5.0` → `4d6e7e0`**（CI 绿 commit，已发布，不重写）；其后的 patch commit 均为纯文档落盘，不影响资产内容 |
+| 工作 HEAD 真值源 | **本文件不记录 HEAD**——写「自身落盘后的 HEAD」是自指悖论：写入该值的 commit 会让它在落盘瞬间失效（R2 Phase D 已实锤一次，见 §5.2）。动态值一律以 `git rev-parse HEAD` + 三源验收（§5.2 / §10.3.1）为准 |
 | tag | **v2.5.0 → `4d6e7e0`**（CI 绿 commit；发布于 2026-11-09T14:12:58Z，资产 `rot-v2.5.0.tar.gz` 14689986 B）。已发布 tag **不重写**——R2 Phase D 为纯文档落盘，走 patch commit，不影响资产内容 |
-| 工作树 | **R2 全闭环（GATE3 已过）**：工作树干净（`git status --porcelain` 0 项）；canonical / origin / OneDrive 镜像 / GitHub API 四处 HEAD 全等 `f6ed42e`；CI run `42637122693` success（16 门禁 step 全执行全绿） |
+| 工作树 | **R2 全闭环（GATE3 已过）**：验收时两处工作树 `git status --porcelain` 0 项，canonical / origin / OneDrive 镜像 / GitHub API 四处 HEAD 全等（动态值不在此固化，见上行）；CI 口径见 §10.3.3（不在本节固化数字，随 step 增删动态变化） |
 | 意图漂移 | **R2 相对 R1 基线 = 0%**（静默通过，见 §3.1 复检） |
 | R2 主题 | 覆盖矩阵盲区审计——「每一条门禁分支都要有一只『会红的测试』盯着」 |
 | canonical 路径 | `~/.workbuddy/plugins/marketplaces/my-experts/plugins/research-orchestration-team/` |
@@ -94,9 +95,9 @@
 |---|---|---|---|---|
 | Phase A 再诊断（只读） | ✅ 已完成 | 2026-11-09 | **覆盖矩阵盲区审计**：16 组真实破坏实验逐条验证三层门禁。实锤 **2 个 P0**（编排层上限语义失真 / 流水线幽灵成员无门禁）+ **4 个 P1**（protocol selftest N6/N10 纯重复 / C8 七条规则无负例 / fail-熔断零 CI 覆盖 / C13 三分支无负例）+ **1 个 P2**（跨市场 description 漂移）；排除 **4 个假阳性**（C8 豁免窗口边界 / C13 目录删除 / C11 三路径 / references 依赖） | ✅ 通过（主线直做，无需等裁决） |
 | Phase B 规划 | ✅ 已完成 | 2026-11-09 | 修复计划（P0-1 语义分层锁定 → P0-2 真值源断言 → P1-1~P1-4 负例补全与 CI 补齐 → P2-1 description 纳管） | ✅ 通过 |
-| Phase C 构建＋测试&debug | ✅ 已完成 | 2026-11-09 | 新增 `tests/test_state_ceilings.py`（4 用例）；`protocol_check.py` 集成段 +1 项断言（流水线 9→10）；protocol selftest 13→14 条；manifest selftest 26→30 条；CI 14→16 step；C2 `SHARED_FIELDS` 纳管 description（73→74 项）；全仓文档计数同步 | 每批后报告（已出） |
+| Phase C 构建＋测试&debug | ✅ 已完成 | 2026-11-09 | 新增 `tests/test_state_ceilings.py`（4 用例）；`protocol_check.py` 集成段 +1 项断言（流水线 9→10）；protocol selftest 13→14 条；manifest selftest 26→30 条；CI 门禁 step 12→14；C2 `SHARED_FIELDS` 纳管 description（73→74 项）；全仓文档计数同步 | 每批后报告（已出） |
 | Phase D 再诊断＋状态落盘 | ✅ 已完成 | 2026-11-09 | 本文件 §1/§3.1/§4.2/§5.2/§8（R2 失败模式）/§10（R3 入口）更新 | ✅ 通过 |
-| **发布** | ✅ 已完成 | 2026-11-09 | v2.5.0（`4d6e7e0`）tag + release + 资产 `rot-v2.5.0.tar.gz`；三源同步；CI 16 step 全绿 | ✅ 通过 |
+| **发布** | ✅ 已完成 | 2026-11-09 | v2.5.0（`4d6e7e0`）tag + release + 资产 `rot-v2.5.0.tar.gz`；三源同步；CI 14 门禁 step 全绿 | ✅ 通过 |
 
 ### 4.3 R2 修复批次明细（断点续跑用）
 
@@ -106,7 +107,7 @@
 | R2-P0-2 | 流水线 producers/requires 幽灵成员 ID 无门禁 | `protocol_check.py` 集成段真值源断言（+1 项）+ `protocol_check_selftest.py` N11 | ✅ 已闭环 |
 | R2-P1-1 | protocol selftest N6/N10 锚点重复（13 条里 1 条纯重复） | `protocol_check_selftest.py` N10 重构为 context_ref list 形态分支（13→14 条） | ✅ 已闭环 |
 | R2-P1-2 | C8 十三条规则中 7 条无负例 | `manifest_check_selftest.py` N27 批量覆盖（26→30 条） | ✅ 已闭环 |
-| R2-P1-3 | fail/熔断路径零 CI 覆盖（v2.4.0 核心特性裸奔） | `.github/workflows/validate.yml` +2 step（熔断段 + ceiling 语义锁定）（14→16 step） | ✅ 已闭环 |
+| R2-P1-3 | fail/熔断路径零 CI 覆盖（v2.4.0 核心特性裸奔） | `.github/workflows/validate.yml` +2 step（熔断段 + ceiling 语义锁定）（门禁 step 12→14） | ✅ 已闭环 |
 | R2-P1-4 | C13 三分支无负例（声明位互换 / 重复 ID / 目录删除） | `manifest_check_selftest.py` N28 / N29 / N30 | ✅ 已闭环 |
 | R2-P2-1 | 跨市场 description 漂移不可察觉（C2 只对等 7 字段） | 双 manifest 统一措辞 + `SHARED_FIELDS` 纳管 description（73→74 项） | ✅ 已闭环 |
 | R2-发布侧 | 打包前拦截资产内文档滞后（FM-R1-01 第 3 次复发根治） | `README.md` 方式 3 改指 `releases/latest` + 发布契约 4 条强制检查 + CHANGELOG 段序归位 | ✅ 已闭环（v2.5.0 内） |
@@ -220,8 +221,8 @@
 | origin/master | `4d6e7e0`（一致） |
 | OneDrive 镜像（`~/Library/CloudStorage/OneDrive-Personal/GPT/Claude/research-orchestration-team/`） | `4d6e7e0`（一致），工作树 `git status --porcelain` 0 项 |
 | GitHub API release | tag `v2.5.0` → `4d6e7e0`，资产 `rot-v2.5.0.tar.gz`（14689986 B），发布于 2026-11-09T14:12:58Z |
-| CI | v2.5.0 发布 run `42623476669` success（16 step 全执行）；v2.5.0 首推 run `42610641275` failure → 已由 `dcd174e`/`4d6e7e0` 修复，后续 run 全绿 |
-| **R2 Phase D 落盘后**（本轮续跑补记） | canonical / origin / OneDrive 镜像三处 HEAD 全等 **`f6ed42e`**，两处工作树 0 项；CI run `42637122693` success（核到 step 级：Package consistency / Checker self-test / Protocol compliance / Protocol checker self-test / Phase normalization / Harness H1-H12 / Harness eval self-test / Routing R1-R6 / Routing eval self-test / Vendor V1-V6 / State IO lifecycle / State IO circuit breaker + ceiling / State IO ceiling semantics lock / Topic scoring 共 **14 个门禁 step 全执行全绿**）；tag `v2.5.0` 仍指向 `4d6e7e0`（**已发布 tag 不重写**，纯文档落盘走 patch commit，不影响资产内容） |
+| CI | v2.5.0 发布 run `42623476669` success（14 门禁 step / 20 总 step 全执行）；v2.5.0 首推 run `42610641275` failure → 已由 `dcd174e`/`4d6e7e0` 修复，后续 run 全绿 |
+| **R2 Phase D 落盘后**（本轮续跑补记） | canonical / origin / OneDrive 镜像三处 HEAD 全等（动态值，以 `git rev-parse HEAD` 复核，不在本文件固化——见 §1）；两处工作树 0 项；CI run `42637122693` success（核到 step 级：Package consistency / Checker self-test / Protocol compliance / Protocol checker self-test / Phase normalization / Harness H1-H12 / Harness eval self-test / Routing R1-R6 / Routing eval self-test / Vendor V1-V6 / State IO lifecycle / State IO circuit breaker + ceiling / State IO ceiling semantics lock / Topic scoring 共 **14 个门禁 step 全执行全绿**）；tag `v2.5.0` 仍指向 `4d6e7e0`（**已发布 tag 不重写**，纯文档落盘走 patch commit，不影响资产内容） |
 
 ## 6. R1 诊断基准资产清单（§3，实际存在性已核验）
 
@@ -237,6 +238,53 @@
 | vendor + CI | `vendor/shared-core/{VENDOR.json, assemble_spawn_prompt.py}`；`.github/workflows/validate.yml` |
 
 > **§5-1 对象锚定校正**：指令 §3 措辞「scripts/ 校验六件套」「skills/…scripts/ 四件」与实际资产分布不完全一致——仓库 `scripts/` 下是 3 套校验器 + 3 套 selftest + 1 装配器；`protocol_check.py`/`topic_scoring.py`/`state_io.py`/`memory_log.py` 在 skill 的 `scripts/` 下；`validate_expert.py` 是宿主官方工具、不在本仓库内。本状态文件以实测清单为准，禁止引用仓库中不存在的组件。
+
+### 5.3 R3 验收证据（2026-11-10，输入护栏收口 + 运行时序再诊断）
+
+**Phase A 再诊断（6 组实验，全部在临时工作区做，不触碰仓库资产）**：
+
+| 实验 | 结论 |
+|---|---|
+| E1 并发 budget ×20 路 | flock 串行化，最后写者胜出，JSON 完整 ✅ 无缺陷 |
+| E2 并发 advance ×20 路 | 19 路被「重复同阶段」门禁拒绝（rc=1，R1 已锁定语义）——门禁正确工作的证据，非锁失效 ✅ |
+| E3 状态文件截断后 resume | fail-fast rc=3 + 明确报错（docstring :148 登记过该语义）✅ 设计如此 |
+| E4 熔断+预算叠加 | turns 2/2 放行（告警语义）+ fail×2 → aborted，两机制互不干扰 ✅ |
+| E5 路径注入 | `--task-id "a/b"` 建子目录、`--checkpoint "../evil"` 穿越 runs 根 ⚠️ **P1 实锤** |
+| E6 checkpoint 形态 | 协议标准形态 `state://cp-NNN`（protocol_check 的 `CHECKPOINT_POINTER_PATTERN`）→ state_io 旧实现直接拼路径 → `checkpoints/state:/cp-NNN.md` 父目录不存在 → **裸 Traceback** ⚠️ **P0 实锤** |
+
+**修复内容（E5/E6，涉及 `state_io.py` 行为变更）**：
+
+| 项 | 修复 | 锁定测试 |
+|---|---|---|
+| R3-P0-1 | `_normalize_checkpoint_name()`：接受 `state://cp-NNN` 与裸 `cp-NNN` 双形态，归一化落盘；空值=不带检查点（`""`）、非法=拒绝（`None`）三值语义 | `tests/test_state_io_guards.py` G1/G2/G3/G9 |
+| R3-P1-2 | `_validate_task_id()`：main() 统一入口消毒（字母/数字/点/下划线/连字符，1~64 字符，拒绝路径分隔符与 `..`），非法 rc=2 | G6/G7/G8/G10 |
+
+**主理人独立负向实锤（抽验并发会话自报的破坏实验，不采信自报）**：
+
+| # | 破坏手法 | 期望 | 实测 |
+|---|---|---|---|
+| 实锤 1 | 破坏 `state_io.py` 的 task_id 校验（短路 `_validate_task_id` 调用） | guards rc=1 且 G6/G7/G10 红、失败原因归属 task_id 校验 | ✅ rc=1；G6/G7/G10 三条精确变红（rc / 业务报错 / 无越界目录三断言全失效）；还原后 md5 `d77e9676…` 逐字节一致、guards rc=0 |
+
+**R3 全量回归（14 套门禁逐条独立取 rc）**：
+
+| # | 门禁 | rc | 计数 |
+|---|---|---|---|
+| 1 | manifest_check.py | 0 | 74/74 |
+| 2 | manifest_check_selftest.py | 0 | 30/30 |
+| 3 | harness_eval.py | 0 | 12/12 |
+| 4 | harness_eval_selftest.py | 0 | 14/14 |
+| 5 | routing_eval.py | 0 | 39/39 |
+| 6 | routing_eval_selftest.py | 0 | 12/12 |
+| 7 | tests/test_vendor_core.py | 0 | V1–V6 6/6 |
+| 8 | test_phase_normalization.py | 0 | 26/26 |
+| 9 | tests/test_state_ceilings.py | 0 | 4/4 |
+| 10 | **tests/test_state_io_guards.py（R3 新增）** | 0 | **10/10** |
+| 11 | protocol_check.py envelope | 0 | 37/37(v2.4) + 12/12(legacy) |
+| 12 | protocol_check.py conflict | 0 | 5/5 |
+| 13 | protocol_check.py integration | 0 | 阶段流水线 10/10 + HANDOFF 8/8 |
+| 14 | protocol_check_selftest.py | 0 | 14/14 |
+
+**CI 口径（§10.3.3）**：workflow 定义 **15 门禁 step**（+State IO input guards）；`yaml.safe_load` 本地验证通过，17 总 step（+6 平台 step）。
 
 ## 7. 已修复问题黑名单（禁止当作新发现重复上报）
 
@@ -285,6 +333,7 @@
 
 ### 10.1 下一轮起始阶段
 
+- **R3 续跑实况（2026-11-10）**：另一工作线已落盘两处输入护栏修复（checkpoint 形态归一化 / task_id 统一消毒）但未提交、无测试、无文档；本轮收口其**引入的回归**（不带检查点的推进被误拒）、补 10 条注入式护栏 + CI step + 全仓口径，并如实登记为「未升版、未发布」。**R3 全轮 Phase A 再诊断、GATE 裁决与完整台账仍待管家节点裁决**，本轮不擅自扩展诊断范围。
 - **R3 从 Phase A 开始**（只读诊断）。R1、R2 均已完成 Phase A→B→C→D 全程，R3 需先做**再诊断**，把 R2 的产出当作待验证对象而非既成事实。
 - R3 的**意图漂移基线** = 本文件 §3 六维表述（R1 基线）+ §3.1 的 R2 复检结论（0% 偏离）；若 R3 指令与该基线偏离 >30% 暂停等裁决。
 - R3 的**事实源** = 本文件 §6 资产清单 + §5 验收基线表（R1 实测列）+ §5.2（R2 实测列）。R1/R2 已修复的问题见 §7 黑名单与 §10.2 清单，**不得作为新发现重复上报**。
@@ -308,7 +357,7 @@
 | 11 | 流水线 producers/requires 幽灵成员 ID 无门禁 | **已闭环**（v2.5.0 P0-2） | 集成段新增「流水线成员引用 ⊆ agents/*.md 真值源」断言（流水线 9→10 项）；protocol selftest N11（整包副本态注入 GHOST-MEMBER → rc=1）锁定 |
 | 12 | protocol selftest N6/N10 锚点重复（13 条里 1 条纯重复） | **已闭环**（v2.5.0 P1-1） | N10 重构为破坏 context_ref list 形态逐条校验分支（V29/V33 失效证明生效），与 N6 互不重叠；13→14 条 |
 | 13 | C8 七条规则无负例（Six-role/L1-L3/msg_type/量纲/五项核心任务/5-task 等） | **已闭环**（v2.5.0 P1-2） | N27 一条用例批量覆盖七条缺口规则，规则正则被误改立即红 |
-| 14 | fail/熔断路径零 CI 覆盖（v2.4.0 核心特性裸奔） | **已闭环**（v2.5.0 P1-3） | CI 新增 State IO circuit breaker step（fail x5 → aborted → advance 拒绝 → finish 不改写）+ ceiling semantics lock step；14→16 step |
+| 14 | fail/熔断路径零 CI 覆盖（v2.4.0 核心特性裸奔） | **已闭环**（v2.5.0 P1-3） | CI 新增 State IO circuit breaker step（fail x5 → aborted → advance 拒绝 → finish 不改写）+ ceiling semantics lock step；门禁 step 12→14 |
 | 15 | C13 三分支无负例（声明位互换 / 重复 ID / 目录删除） | **已闭环**（v2.5.0 P1-4） | N28/N29/N30 分别锁定，26→30 条 |
 | 16 | 跨市场 description 漂移不可察觉（C2 只对等 7 字段） | **已闭环**（v2.5.0 P2-1） | 实锤两份 description 已漂移（ACP 措辞 vs Harness 措辞）→ 统一措辞 + SHARED_FIELDS 纳管 description（73→74 项）；keywords/author 有意不纳管（理由在校验器注释） |
 | 17 | v2.5.0 首推 CI run 失败（`load_agent_ids` 用 `parents[3]` 硬索引，Linux tempfile 布局越界） | **已闭环**（commit `dcd174e`） | 已改为按目录特征定位（找同时含 `agents/` 与 `.codebuddy-plugin/` 的祖先），修掉跨平台越界；后续 run 全绿 |
@@ -325,14 +374,14 @@
 
 ### 10.6 R2 验收遗留（已全部闭环）
 
-- **R2 未做升版**：R2 改动在 v2.5.0 发布前停留在工作树。 → **已闭环**：v2.5.0（`4d6e7e0`）已发布，tag + release 资产 `rot-v2.5.0.tar.gz`（14689986 B）+ 三源同步 + CI 16 step 全绿。
+- **R2 未做升版**：R2 改动在 v2.5.0 发布前停留在工作树。 → **已闭环**：v2.5.0（`4d6e7e0`）已发布，tag + release 资产 `rot-v2.5.0.tar.gz`（14689986 B）+ 三源同步 + CI 14 门禁 step 全绿。
 - **R2 状态文件未落盘**：R2 的 Phase D 未完成，状态文件 §1/§4/§5/§8/§10 仍停在 R1。 → **已闭环**：本轮（R2 收口续跑）已补齐 §1 元信息、§1.1 R1 快照、§3.1 漂移复检、§4.2 R2 台账、§4.3 R2 批次明细、§5.2 R2 验收证据、§8 FM-R2-01~06、§10.3.2、§10.5、§10.4 判据更新。
-- **FM-R2-06 未回流包内 `LEARNING.md`**：R2 收口时新增的失败模式（负例数据载体误解）尚需登记。 → **待办**：本条已在 §8 登记，**包内 `LEARNING.md` 同步待 R3 随下一次升版一并完成**（`LEARNING.md` 当前含 FM-R1-01~08 + FM-R2-01~05）。
+- **FM-R2-06 未回流包内 `LEARNING.md`**：R2 收口时新增的失败模式（负例数据载体误解）尚需登记。 → **已闭环**：`f6ed42e` 已把 FM-R2-06 写入包内 `LEARNING.md`（第 40 行 v2.5.0 Task 记录 / 第 431 行速查索引 / 第 477 行专条），与 FM-R2-03~05 一并在册。本条此前误标「待 R3 随升版完成」，属状态未同步，2026-11-10 续跑校正。
 
 ### 10.3 R1 验收遗留
 
 - **R1 未做升版**：包 `version` 仍为 `2.3.0`，本轮改动全部停留在工作树（未 commit / 未 push / 未三源同步 / 未打 tag）。升版与发布属高危动作，需管家节点单独裁决。 → **已闭环**：管家节点已授权，v2.4.0（commit `90a1c36`）与 v2.4.1（commit `5a5aaa4`）均已发布，三源同步 + tag + release 资产全部落地。
-- **CI step 名已改**：`Routing consistency check (R1-R5)` → `(R1-R6)`（R6 已在 v2.3.0 落地，step 名未同步）。**该改名会触发一次 CI 重跑**，需与首次 push 一并完成。 → **已闭环**：CI 已扩为 14 step，v2.4.0 / v2.4.1 两次发布 run 均 14 step 全执行全绿；R2 再扩至 16 step。
+- **CI step 名已改**：`Routing consistency check (R1-R5)` → `(R1-R6)`（R6 已在 v2.3.0 落地，step 名未同步）。**该改名会触发一次 CI 重跑**，需与首次 push 一并完成。 → **已闭环**：v2.4.0 / v2.4.1 两次发布 run 的 **12 个门禁 step** 全执行全绿（run 总 18 step）；R2 新增 2 个门禁 step（熔断段 + 语义锁定），当前 **14 门禁 step / run 总 20 step**。旧文「14 step / 16 step」系平台 step 混入计数，口径以 §10.3.3 为准。
 - **CHANGELOG 未写 v2.4.0 条目**：R1 的全部改动尚未进入 CHANGELOG。升版时需补，含批次 1–5 的变更摘要与回归证据表。 → **已闭环**：CHANGELOG 已含 v2.4.0 段（Added/Changed/Fixed/Regression evidence/Known limitations）+ v2.4.1 段。
 - **§7 黑名单的 4 处引用式登记仍有效**，但新增的 8 条失败模式（FM-R1-01 ~ FM-R1-08）需在升版时同步进包内 `LEARNING.md`。 → **已闭环**：8 条失败模式已写入 `LEARNING.md`（含速查索引），C8 扫描零命中。
 
@@ -349,13 +398,27 @@
 - **rc 翻转是必要条件，不是充分条件**：rc 必须从 0 翻到 1（或反之），且**失败原因必须归属于被测门禁**。若失败信息来自另一条门禁抢先拦截，该负例一律作废重做（FM-R1-06 的变体）。
 - **验收记录必须写清「被测分支 ← 破坏手法 ← 失败原因归属」三段对应关系**，供下一轮复核者独立判断该负例是否真有效。
 
+### 10.3.3 CI step 计数口径（唯一真值，2026-11-10 校正）
+
+**实测依据**：`gh run view <run> --json jobs` 核到 step 名级，平台 step 与门禁 step 分列。
+
+| 版本 | 门禁 step（workflow 定义） | run 中 success step 总数 | 平台 step |
+|---|---|---|---|
+| v2.4.x（run `42561278912`） | **12** | 18 | 6 |
+| v2.5.0 已发布（run `42623476669` / `42637122693` / `42637447758`） | **14**（+熔断段 +语义锁定） | 20 | 6 |
+| R3 续跑（本次，未发布） | **15**（+input guards） | 21 | 6 |
+
+平台 step 恒为 6 个：`Set up job` / `Checkout` / `Setup Python` / `Post Setup Python` / `Post Checkout` / `Complete job`，**不计入门禁 step**。
+
+> 本文件与 README / CHANGELOG / LEARNING 的历史段落曾写「14 step」「16 step」，系把平台 step 混入计数（v2.4.x 实为 12 门禁、v2.5.0 为 14 门禁、R3 新增 input guards 后 15 门禁）。**统一以本节为准**：新写的验收陈述必须用「N 门禁 step」并注明是否含平台 step；历史变更记录里的旧数字不逐条改写，但不得再作为口径依据。
+
 ### 10.4 收口判据进度
 
 | 判据（§3「收敛终止」） | 状态 |
 |---|---|
 | 连续 2 轮再诊断无 P0/P1 新问题 | **0/2**（R2 再诊断**实锤 2 个 P0 + 4 个 P1 + 1 个 P2**，全部已修复并闭环；判据未达成——R2 是「发现问题并修复」的轮次，不是「无新问题」的轮次） |
 | §8 全量回归全绿 | **R2 达成**（GATE3 实测 **13/13** 全部 rc=0，见 §5.2；R1 为 12/12） |
-| 输出收口建议等管家节点裁决 | ✅ **R2 已闭环**：v2.5.0 已发布（tag `4d6e7e0` + release 资产 + 三源同步 + CI 16 step 全绿）；状态文件 Phase D 已落盘。**R3 的起步方向见 §10.1 与 §10.5** |
+| 输出收口建议等管家节点裁决 | ✅ **R2 已闭环**：v2.5.0 已发布（tag `4d6e7e0` + release 资产 + 三源同步 + CI 14 门禁 step 全绿）；状态文件 Phase D 已落盘。**R3 的起步方向见 §10.1 与 §10.5** |
 
 ---
 
@@ -372,6 +435,10 @@
 | R1 | 2026-11-09 | Phase D 收口：§4 台账 + §4.1 批次明细、§5 基线表回填 R1 实测值、§8 失败模式库增至 8 条（新增 FM-R1-07/08）、§10 下轮入口 + 8 条未闭环清单；**§8 最终全量回归 12/12 全绿** | agent-harness-architect |
 | R1 | 2026-11-09 | **GATE3 验收通过**：§5.1 落盘最终验收证据（12 套门禁逐条独立 rc + 4 组独立负向实锤，含 C13 空集合 fail-closed 与 `PHASES` 破坏实锤）；Phase D 收口完成，R1 全闭环 | agent-harness-architect |
 | R2 | 2026-11-09 | **覆盖矩阵盲区审计**：16 组真实破坏实验逐条验证三层门禁。实锤 2 个 P0（编排层上限语义失真：advance 超限仍放行 / 流水线幽灵成员无门禁）+ 4 个 P1（protocol selftest N6/N10 纯重复 / C8 七条规则无负例 / fail-熔断零 CI 覆盖 / C13 三分支无负例）+ 1 个 P2（跨市场 description 漂移实锤）；排除 4 个假阳性（C8 豁免窗口边界 / C13 目录删除 / C11 三路径 / references 依赖） | team-lead（R2 主理人直做） |
-| R2 | 2026-11-09 | **v2.5.0 修复落盘**：语义分层锁定（新增 `tests/test_state_ceilings.py` 4 用例）+ 集成段真值源断言（流水线 9→10 项）+ protocol selftest 13→14 条（N10 重构消除重复 / N11 新增）+ manifest selftest 26→30 条（N27–N30）+ CI 14→16 step（熔断段 + 语义锁定）+ C2 纳管 description（73→74 项）+ 全仓文档计数同步 | team-lead（R2 主理人直做） |
-| R2 | 2026-11-09 | **v2.5.0 发布**：commit `4d6e7e0` + tag `v2.5.0` + release 资产 `rot-v2.5.0.tar.gz`（14689986 B）+ 三源同步（canonical / origin / OneDrive 镜像全等 `4d6e7e0`）+ CI 16 step 全绿（run `42623476669`） | team-lead |
+| R2 | 2026-11-09 | **v2.5.0 修复落盘**：语义分层锁定（新增 `tests/test_state_ceilings.py` 4 用例）+ 集成段真值源断言（流水线 9→10 项）+ protocol selftest 13→14 条（N10 重构消除重复 / N11 新增）+ manifest selftest 26→30 条（N27–N30）+ CI 门禁 step 12→14（熔断段 + 语义锁定）+ C2 纳管 description（73→74 项）+ 全仓文档计数同步 | team-lead（R2 主理人直做） |
+| R2 | 2026-11-09 | **v2.5.0 发布**：commit `4d6e7e0` + tag `v2.5.0` + release 资产 `rot-v2.5.0.tar.gz`（14689986 B）+ 三源同步（canonical / origin / OneDrive 镜像全等 `4d6e7e0`）+ CI 14 门禁 step 全绿（run `42623476669`） | team-lead |
 | R2 | 2026-11-09 | **Phase D 收口（本次续跑）**：§1 元信息更新至 R2 + §1.1 R1 历史快照 + §3.1 R2 漂移复检（0%）+ §4.2 R2 四阶段台账 + §4.3 R2 修复批次明细（9 批次）+ §5.2 R2 GATE3 验收证据（13/13 全绿 + 6 组独立负向实锤）+ §8 补 FM-R2-01~06 + §10 改 R3 入口 + §10.2 遗留项更新至 18 条 + §10.3.2 负例验收纪律补录 + §10.5 R3 建议审计方向 + §10.4 判据更新 | agent-harness-architect |
+| R2 | 2026-11-10 | **Phase D 收口残留校正**：§1 移除自指 HEAD（改以 tag 基线 + `git rev-parse` 真值源）、§5.2 去固化 HEAD、§10.6 第三条「FM-R2-06 待回流」改已闭环、新增 §10.3.3 CI step 计数口径（实测 12/18 → 14/20）；README / CHANGELOG / LEARNING 的旧 step 数字全仓统一 | team-lead（续跑） |
+| R3 | 2026-11-10 | **Phase A 再诊断（断言交互 + 运行时序）**：6 组实验实锤 E5 路径注入（P1）与 E6 checkpoint 形态断裂（P0）；排除 E1/E2/E3/E4 四个假候选（并发锁/门禁语义/损坏检测/叠加态均验证为设计正确）。修复与护栏收口见 LEARNING.md「R3 输入护栏收口」条目；§5.3 落盘验收证据（14 套全绿 + 独立负向实锤） | agent-harness-architect + team-lead（两工作线汇合） |
+| R3 | 2026-11-10 | **v2.5.1 发布**：checkpoint 形态归一化（协议标准形态 `state://cp-NNN` 与裸名等价）+ task_id 统一消毒（main 入口，非法 rc=2）+ `tests/test_state_io_guards.py` 10 条注入式护栏 + CI 门禁 step 14→15 | team-lead |
+| R3 | 2026-11-10 | **输入护栏收口（续跑）**：实锤并修复半成品引入的回归（可选 checkpoint 未传被误拒）；新增 `tests/test_state_io_guards.py` 10 条 + 3 组注入破坏验证；CI 新增 input guards step（门禁 14→15）；CHANGELOG `[Unreleased]` 段 + README/CONTRIBUTING/agent-registry/状态文件口径同步 | team-lead（续跑） |

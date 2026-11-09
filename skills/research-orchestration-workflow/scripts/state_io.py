@@ -162,6 +162,7 @@ import contextlib
 import datetime
 import json
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -209,6 +210,44 @@ def runs_dir(workspace: Path) -> Path:
 
 def state_path(workspace: Path, task_id: str) -> Path:
     return runs_dir(workspace) / task_id / "_state.json"
+
+
+# checkpoint / task_id 的合法名字（R3-P0-1 + R3-P1-2）
+#   checkpoint：裸 cp-NNN（3 位以上数字）。协议标准形态 state://cp-NNN 在
+#   cmd_advance 入口先剥前缀再校验——两个组件对同一 pointer 的形态约定
+#   必须一致（R3 再诊断实锤：直接拼路径会产出 checkpoints/state:/x.md）。
+#   task_id：用于目录名，禁止路径分隔符与 ..（防 runs 根外的任意落盘）。
+_CP_NAME_RE = re.compile(r"^cp-\d{3,}$")
+_TASK_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
+
+
+def _normalize_checkpoint_name(raw) -> str | None:
+    """归一化 checkpoint 名：接受 `state://cp-NNN` 与裸 `cp-NNN`。
+
+    返回值有三种语义，**调用方必须区分**：
+      - `""`   = 本次推进不带检查点（raw 为 None / 空串 / 全空白）——合法；
+      - 裸名   = 合法检查点（如 `cp-001`），调用方据此落盘；
+      - `None` = 非法形态（路径元字符、前缀剥除后不匹配等）——调用方判错。
+
+    把「未传」也返回 None 会让 `cmd_advance` 误拒不带检查点的正常推进
+    （R3 续跑实测 rc=1、期望 0），因此空值与非法值必须分开。
+    """
+    if raw is None or not str(raw).strip():
+        return ""
+    name = str(raw).strip()
+    if name.startswith("state://"):
+        name = name[len("state://"):]
+    return name if _CP_NAME_RE.match(name) else None
+
+
+def _validate_task_id(task_id: str) -> str | None:
+    """消毒 task_id：仅字母数字/点/下划线/连字符，1~64 字符，不以符号开头后接。
+
+    返回原值（合法）或 None（非法）。非法时调用方优雅报错 rc=2。
+    """
+    if task_id and _TASK_ID_RE.match(task_id):
+        return task_id
+    return None
 
 
 def _atomic_write(path: Path, text: str) -> None:
@@ -489,6 +528,19 @@ def cmd_advance(args) -> int:
             print("❌ --force 需要同时给非空 --force-reason（否则禁止越级推进）",
                   file=sys.stderr)
             return 1
+        # ── checkpoint 形态归一化与消毒（R3-P0-1）──
+        # 协议标准形态是 `state://cp-NNN`（protocol_check.py 的
+        # CHECKPOINT_POINTER_PATTERN 即此形态），本函数此前的实现却按
+        # 「裸 cp-NNN」设计：直接把参数拼进文件路径。主理人按协议文档
+        # 传 `state://cp-002` 时，拼出 `checkpoints/state:/cp-002.md`——
+        # 父目录不存在 → 裸 Traceback（rc=1 但输出是堆栈，无业务报错）。
+        # 本块把两种形态归一到裸 cp-NNN，并拒绝任何路径元字符（防穿越）。
+        cp_name = _normalize_checkpoint_name(args.checkpoint)
+        if cp_name is None:
+            print(f"❌ 非法 checkpoint 名 {args.checkpoint!r}（归一化后须匹配 "
+                  f"cp-\\d{{3,}}；接受 `state://cp-NNN` 或裸 `cp-NNN`；"
+                  f"禁止路径分隔符与 ..）", file=sys.stderr)
+            return 1
         skipped = args.phase != expected
         if skipped and not force:
             print(f"❌ 越级推进被拒：当前阶段 {cur}，目标阶段 {args.phase}，"
@@ -503,15 +555,15 @@ def cmd_advance(args) -> int:
         state["budget"]["turns_used"] = state["turn"]
         cp = {"turn": state["turn"], "phase": args.phase,
               "ts": now_iso(), "snapshot_ref": None}
-        if args.checkpoint:
+        if cp_name:
             # state://cp-NNN ≡ .harness-runs/<task_id>/checkpoints/cp-NNN.md
-            cp["snapshot_ref"] = f"state://{args.checkpoint}"
+            cp["snapshot_ref"] = f"state://{cp_name}"
             cp_dir = runs_dir(ws) / args.task_id / "checkpoints"
             cp_dir.mkdir(parents=True, exist_ok=True)
-            marker = cp_dir / f"{args.checkpoint}.md"
+            marker = cp_dir / f"{cp_name}.md"
             if not marker.exists():
                 marker.write_text(
-                    f"# {args.checkpoint}\n\n- phase: {args.phase}\n- ts: {cp['ts']}\n"
+                    f"# {cp_name}\n\n- phase: {args.phase}\n- ts: {cp['ts']}\n"
                     f"- note: {args.note or ''}\n\n"
                     f"（本文件为检查点指针：阶段产物应落盘于此目录，指针可被 resume 解析）\n",
                     encoding="utf-8")
@@ -525,8 +577,8 @@ def cmd_advance(args) -> int:
                   f"（期望 {expected if expected else '（末阶段，已无后继）'}）｜理由: {reason}")
         save_state(ws, args.task_id, state)
     print(f"✅ 已推进到 {args.phase}（turn {state['turn']}/{state['budget']['turns_max']}）")
-    if args.checkpoint:
-        print(f"   检查点: {cp['snapshot_ref']} → checkpoints/{args.checkpoint}.md")
+    if cp_name:
+        print(f"   检查点: {cp['snapshot_ref']} → checkpoints/{cp_name}.md")
     if force:
         if skipped:
             print(f"⚠️ 越级推进（force）: {cur} → {args.phase}"
@@ -798,6 +850,16 @@ def main(argv=None) -> int:
     p.set_defaults(fn=cmd_fail)
 
     args = parser.parse_args(argv)
+    # ── task_id 统一消毒（R3-P1-2）──
+    # task_id 直接拼进 runs/<task_id>/ 目录名。实锤：`--task-id "a/b"` 会
+    # 在 runs 根下建子目录、`..` 可穿越到 runs 外。所有子命令入口在此
+    # 统一拦截，非法值优雅报错 rc=2（与「任务未初始化」同语义层）。
+    if not hasattr(args, "task_id"):
+        return parser.error("内部错误：子命令缺少 task_id")
+    if _validate_task_id(args.task_id) is None:
+        print(f"❌ 非法 task_id {args.task_id!r}（仅允许字母/数字/点/下划线/连字符，"
+              f"1~64 字符，禁止路径分隔符与 ..）", file=sys.stderr)
+        return 2
     return args.fn(args)
 
 
