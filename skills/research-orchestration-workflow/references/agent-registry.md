@@ -178,12 +178,40 @@
 
 ## Loop 终止硬上限（circuit breaker）
 
-| 上限 | 数值 | 说明 |
+| 上限 | 数值 | 说明 | 代码落点（`skills/research-orchestration-workflow/scripts/state_io.py`） |
+|------|------|------|-----------------------------------|
+| max_turns | 30 | 单任务总轮次 | 常量 `DEFAULT_MAX_TURNS` → 落盘 `budget.turns_max`；`budget` 子命令触顶告警；覆写 `--max-turns` |
+| max_time | 1800s (30 分钟) | 单任务总时长 | 常量 `DEFAULT_MAX_TIME` → 落盘 `budget.max_time_sec`（起算点 `budget.started_at`，与 `created_at` 同值）；`advance` / `resume` / `budget` 超时即拒绝推进并置 `status=aborted`；覆写 `--max-time` |
+| max_token | 200,000 | 单任务总 token 消耗 | 常量 `DEFAULT_MAX_TOKENS` → 落盘 `budget.tokens_max`；`budget` 子命令触顶告警；覆写 `--max-tokens` |
+| circuit_breaker | 失败 5 次 | 同一 task 失败 5 次 → 熔断 + 升级用户 | 常量 `DEFAULT_MAX_FAILURES` → 落盘 `budget.max_failures`；`fail` 子命令累计 `budget.failures`，达上限即熔断；覆写 `--max-failures` |
+
+> **`--max-*` 的生效范围**：仅 `init` 与 `budget` 子命令接受覆写；`advance` / `resume` / `finish` 传入会被忽略并告警（避免中途改预算导致前后不可比）。
+
+### 按序推进门禁
+
+`state_io.py advance` 强制**按 `PHASES` 顺序推进**，跳级即拒绝（rc=1）：
+
+| 情形 | 判定 | 退出码 |
+|------|------|--------|
+| init 后第一次 advance 到 `FREEZE` | 合法（`turn == 0` 且 checkpoints 为空且 `phase == PHASES[0]`） | 0 |
+| 跳级（如 FREEZE 直接到 EXECUTE） | 拒绝 | 1 |
+| 重复推进同一阶段 | 拒绝 | 1 |
+| 顺序推进到下一阶段 | 通过 | 0 |
+
+**逃生阀**：`--force` 可跳过顺序门禁，但**必须**同时给 `--force-reason`（非空）。`--force` 缺 reason → rc=1；`--force-reason` 非空即隐含 force（无需再写 `--force`）。逃生阀的每次使用都必须记入 `issues` 与 `LEARNING.md`，否则视为绕过门禁。
+
+### 熔断后的状态语义（`status: aborted`）
+
+| 字段 | 取值 | 含义 |
 |------|------|------|
-| max_turns | 30 | 单任务总轮次 |
-| max_time | 1800s (30 分钟) | 单任务总时长 |
-| max_token | 200,000 | 单任务总 token 消耗 |
-| circuit_breaker | 失败 5 次 | 同一 task 失败 5 次 → 熔断 + 升级用户 |
+| `status` | `running` / `done` / `aborted` | `aborted` = 熔断归档，**不可再推进** |
+| `abort_reason` | `null` / `max_time` / `circuit_breaker` | 熔断原因 |
+
+熔断后的行为约定：
+- `advance` / `fail` 一律 rc=1（不再接受任何推进与失败计数）。
+- `finish` **仍可执行**（用于归档 metrics 与写收尾备注），但**不得改写** `status=aborted`——收尾不等于翻案。
+
+
 
 ---
 
@@ -205,12 +233,35 @@ plan_execution:
 
 ### 必须收集的 4 个 metrics
 
-| 指标 | 含义 |
-|------|------|
-| 成功率 | 每个任务类型的成功数 / 总数 |
-| 平均 tool call 次数 / 任务 | 工具调用频次 |
-| 重试次数 / 任务 | 错误回流统计 |
-| 失败时 next_actions 字段存在率 | 错误路径设计质量 |
+| 指标 | 含义 | 落盘键 | 推导 vs 上报 |
+|------|------|--------|-----------|
+| 成功率 | 每个任务类型的成功数 / 总数 | `metrics.success_rate` | **可推导**——由状态文件的成功/失败计数算出 |
+| 平均 tool call 次数 / 任务 | 工具调用频次 | `metrics.avg_tool_calls_per_task` | **仅上报**——脚本无从推断（调用记录分散在成员信封里），须主理人显式上报 |
+| 重试次数 / 任务 | 错误回流统计 | `metrics.retries_per_task` | **可推导**——由 `budget.failures` 算出 |
+| 失败时 next_actions 字段存在率 | 错误路径设计质量 | `metrics.next_actions_presence_rate` | **仅上报**——同上，脚本拿不到 `next_actions` 字段 |
+
+**未上报记 `null`，禁止编造**：4 个键中凡主理人未上报的，落盘一律为 `null`（不是 0、不是空串）。编造数值比缺失更危险——缺失会被发现，编造会被当真的用。
+
+**上报方式**：`state_io.py finish --task-id <id> --workspace <ws> --tool-calls <n> [--next-actions-present | --next-actions-missing]`（可重复调用；后一次不带上报参数会**保留**上次已上报的真实值，不会擦成 `null`）。
+
+### 门禁体系现状
+
+本包的发布门禁分三层：**正向校验器**（干净仓库应全绿）、**注入式负例自测**（证明校验器不是永远返回 0）、**联邦防漂移门禁**（防 vendor 副本被静默改写）。各层条数以脚本实测为准：
+
+| 层 | 门禁 | 检查项 | 覆盖什么 |
+|----|------|--------|---------|
+| 正向 | `scripts/manifest_check.py` | **C1–C13（73 项）** | 双 manifest 对等 / 资产完整性 / 版本一致 / 废弃表述 / 契约章节 / frontmatter 结构 / **成员 ID 五处一致性** / Team settings.json |
+| 正向 | `scripts/harness_eval.py` | **H1–H12（12 项）** | Harness Engineering 设计模式退化（路由单一事实源、Loop 硬停止、per-step verification 等） |
+| 正向 | `scripts/routing_eval.py` | **R1–R6（39 项）** | 成员集合 / 触发词 / 条目结构 / 工具名形态 / 工具集合双向相等 / 真实 MCP 清单对照（R6 清单不可得时显式 SKIP，不计 FAIL） |
+| 正向 | `skills/research-orchestration-workflow/scripts/protocol_check.py` | **信封 37 / 冲突仲裁 5 / 集成仿真 9** | 协议合规三层判定（信封字段 + 证据链 + HANDOFF 回引覆盖） |
+| 负例 | `scripts/manifest_check_selftest.py` | **26 条** | 见下方「注入式负例」 |
+| 负例 | `scripts/harness_eval_selftest.py` | **14 条** | H1–H12 每项被破坏时都能检出 |
+| 负例 | `scripts/routing_eval_selftest.py` | **12 条** | R1–R6 各类路由破坏（含 raw_probe 未归一化护栏，不计入用例数） |
+| 负例 | `skills/research-orchestration-workflow/scripts/protocol_check_selftest.py` | **13 条** | 三个 suite 的退出码链路与判定分支真实有效 |
+| 负例 | `scripts/test_phase_normalization.py` | **26 条** | `--phase` 阶段名归一化 shim 的映射与透传 |
+| 防漂移 | `tests/test_vendor_core.py` | **V1–V6（6 项）** | `vendor/shared-core/` 与联邦真源 sha256 比对（真源不可达时显式 SKIP，不计 FAIL） |
+
+**「注入式 selftest」的含义**：把仓库复制到临时目录 → 注入一处破坏 → 断言校验器 **rc=1** 且输出命中**预期的检查项文案**。第二个断言不可省略：只断言退出码会让「任何错误都算通过」，检查项本身失效也会被误判为通过——这正是本项目历史上假绿的成因。
 
 ### 注入式负例
 
@@ -219,7 +270,16 @@ plan_execution:
 - **14 条注入式负例（N1-N13 + R1）**：`python3 scripts/harness_eval_selftest.py`（逐条把仓库复制到临时目录、注入一处破坏，断言校验器 rc=1 且命中预期检查项文案；R1 为语义不变的反向放行用例）
   - N13 删除整个 `### moderate` 权限档章节（标题+正文），验证 H6 已改为按 `^### (safe|moderate|dangerous)` 章节标题判定，不再被 Changelog 里的兜底词放行
 - `scripts/routing_eval_selftest.py` 为 12 条（P1 + N1~N10 + N12；N11 并入 P1 正例），其中 `raw_probe` 是准备阶段护栏、不计入用例数，作用是对未归一化的原始副本直跑 `routing_eval.py`，防止 `sanitize_pristine` 自愈夹具掩盖真实仓库的 R2/R4 缺陷。R5 已扩展到全部 8 个成员（非 atomic 走 ①②③ 类解析、零工具授权，跳过误报率高的 ④ 槽位分支）；R6 对照真实 MCP 清单校验 registry 全部 `mcp__` 名，清单不可得的 CI/git-clone 态显式 SKIP 且不计 FAIL。
-- `scripts/manifest_check_selftest.py` 为 21 条，含 N21 验证 C8 的 rglob 扫描覆盖隐藏目录下的 `.claude-plugin/marketplace.json`。
+- `scripts/manifest_check_selftest.py` 为 26 条，含 N21 验证 C8 的 rglob 扫描覆盖隐藏目录下的 `.claude-plugin/marketplace.json`、N22/N23 验证 C8 声明式豁免（负例拦截 / 正例护栏）、N24/N25/N26 验证 C13 成员 ID 五处一致性（协议 §1 角色矩阵 / registry 团队成员一览 / team-lead 成员表 / 双 manifest 的 agents[]、members[].id、teamInfo 与 `agents/*.md` 文件名真值源对齐）。
+- `skills/research-orchestration-workflow/scripts/protocol_check_selftest.py` 为 13 条注入式负例（P1/N1/N2/P2 + N3–N7 + P3 + N8/N9/N10），逐条把脚本复制到临时目录、注入一处破坏、断言 rc 翻转（0→1）且命中预期检查项文案；P3 另以干净副本跑全量 suite 断言 rc=0，防「负例全红」掩盖校验器整体失效。
+- `scripts/test_phase_normalization.py` 为 26 条，验证 `assemble_spawn_prompt.py` 的 `--phase` 参数归一化：8 个阶段名 × 两种写法（`--phase X` / `--phase=X`）、大小写不敏感、整数透传、非法值透传给 argparse 报错（rc=2）、缺值不崩溃。
+
+### 相关模板
+
+| 模板 | 用途 |
+|------|------|
+| `../templates/cross-domain-combo.md` | 上节「交叉领域组合路由模板」的可填执行单（biomed×ai / biomed×general / ai×general 三组合的 fan-out、依赖链、仲裁链、硬上限登记与自检清单） |
+| `../templates/result-envelope-v2.4.json` | result_envelope v2.4 的空白信封模板（6 必填字段名与 `../scripts/protocol_check.py` 的 `REQUIRED_FIELDS_V24` 逐字一致） |
 
 ---
 

@@ -3,7 +3,7 @@
 > **团队名称**：科研价值驱动研究编排团 / Research Value-Driven Research Orchestration Team
 > **专家类型**：Team 型（8 人协作团 · v2.3.0 工具真实性门禁 R1-R6）
 > **行业分类**：12-IndustryConsultant（跨学科咨询）
-> **版本**：2.3.0
+> **版本**：2.4.0
 > **许可证**：MIT
 > **仓库**：[github.com/virologist/research-orchestration-team](https://github.com/virologist/research-orchestration-team)
 
@@ -68,19 +68,23 @@ research-orchestration-team/
 │       │   └── LEARNING.md                         # Ralph Loop 跨会话记忆载体
 │       ├── scripts/
 │       │   ├── topic_scoring.py                    # 选题评分卡生成器
-│       │   ├── protocol_check.py                   # 协议合规单元测试
+│       │   ├── protocol_check.py                   # 协议合规校验（三套 suite：信封 / 冲突仲裁 / 集成仿真）
+│       │   ├── protocol_check_selftest.py          # 协议合规注入式负例自测 · 13 条
 │       │   ├── memory_log.py                       # 持久记忆自动写入
-│       │   └── state_io.py                         # v2.2.0 状态持久化与断点续跑
+│       │   └── state_io.py                         # 状态机持久化 · 六命令 init/advance/resume/budget/fail/finish（含预算与熔断语义）
 │       └── templates/
-│           └── topic-scoring-card.md               # 选题评分卡模板
+│           ├── topic-scoring-card.md               # 选题评分卡模板
+│           ├── cross-domain-combo.md               # 跨域组合编排模板 · biomed×ai / biomed×general / ai×general
+│           └── result-envelope-v2.4.json           # result_envelope v2.4 空白信封模板
 ├── scripts/
 │   ├── assemble_spawn_prompt.py                    # 成员人设注入装配器（联邦两级查找 shim）
-│   ├── manifest_check.py                           # 包一致性校验 C1–C12（含 Team settings.json）
-│   ├── manifest_check_selftest.py                  # 注入式负例自测（21 条）
-│   ├── harness_eval.py                             # Harness Engineering 12 项设计检查
+│   ├── manifest_check.py                           # 包一致性校验 C1–C13（含成员 ID 一致性与 Team settings.json）
+│   ├── manifest_check_selftest.py                  # 注入式负例自测（26 条）
+│   ├── harness_eval.py                             # Harness Engineering H1–H12 设计检查
 │   ├── harness_eval_selftest.py                    # harness 注入式负例自测（14 条）
-│   ├── routing_eval.py                             # v2.2.0 路由结构一致性评估
-│   └── routing_eval_selftest.py                    # v2.2.0 路由注入式负例自测（10 条 · 含 raw_probe 未归一化护栏）
+│   ├── routing_eval.py                             # v2.2.0 路由结构一致性评估 R1–R6
+│   ├── routing_eval_selftest.py                    # v2.2.0 路由注入式负例自测（12 条 · 含 raw_probe 未归一化护栏）
+│   └── test_phase_normalization.py                 # 阶段名归一化自测 · 26 条
 ├── vendor/shared-core/                              # 联邦共享件兜底副本 + VENDOR.json 清单
 ├── tests/
 │   └── test_vendor_core.py                         # 防漂移门禁 V1–V6
@@ -88,7 +92,8 @@ research-orchestration-team/
 ├── docs/
 │   ├── REDTEAM-REPORT.md                           # 红队审查报告（5 维度 · 缺陷 · 回归证据）
 │   ├── arbitration-L4L5-live-test.md               # 冲突仲裁 L4/L5 真实团队实测记录
-│   └── harness-eval-report-v2.0.2.md               # Harness 改造前基线（0/12）
+│   ├── harness-eval-report-v2.0.2.md               # Harness 改造前基线（0/12）
+│   └── harness-iteration-loop.md                   # Harness 迭代闭环状态文件 · 断点续跑 SSOT
 ├── .gitignore
 ├── README.md
 ├── CHANGELOG.md                                     # 版本变更历史
@@ -107,6 +112,48 @@ research-orchestration-team/
 3. 信息不足时调度问清源做 5 轮×5 问澄清
 4. 信息充分时按 SOP 进入 ALIGN → EXECUTE → REVIEW
 5. 严复回主导复评闭环，必给维持/升档/降档/止损四项决策之一
+
+## 门禁体系现状
+
+本包的门禁分三层：**正向校验器**（干净仓库应全绿）、**注入式负例自测**（证明校验器不是永远返回 0）、**联邦防漂移门禁**（防 vendor 副本被静默改写）。
+
+### 第一层 · 正向校验器（4 套）
+
+| 校验器 | 检查项 | 防什么 |
+|--------|--------|--------|
+| `scripts/manifest_check.py` | **C1–C13** | 双 manifest 对等 / 资产完整性 / 版本一致 / 废弃表述扫描 / 契约章节 / frontmatter 结构 / 成员 ID 五处一致性 / Team settings.json |
+| `scripts/harness_eval.py` | **H1–H12** | Harness Engineering 12 项设计模式（路由单一事实源、Loop 硬停止、per-step verification、失败熔断等）退化 |
+| `scripts/routing_eval.py` | **R1–R6** | 路由结构一致性：成员集合 / 触发词 / 条目结构 / 工具名形态 / 工具集合双向相等 / 真实 MCP 清单对照（R6 需真实 MCP 清单，CI/git-clone 态显式 SKIP 且不计 FAIL） |
+| `skills/research-orchestration-workflow/scripts/protocol_check.py` | **三个 suite** | 协议合规：信封 **37** / 冲突仲裁 **5** / 集成仿真 **9** |
+
+### 第二层 · 注入式负例自测（4 套）+ 阶段名归一化自测（1 套）
+
+| 自测脚本 | 用例数 | 证明什么 |
+|----------|--------|----------|
+| `scripts/manifest_check_selftest.py` | **26** 条 | manifest / 资产 / 版本 / 术语 / 市场清单 / settings.json / 成员 ID 各类破坏都能被检出 |
+| `scripts/harness_eval_selftest.py` | **14** 条 | H1–H12 每项设计检查被破坏时都能被检出 |
+| `scripts/routing_eval_selftest.py` | **12** 条 | R1–R6 各类路由破坏都能被检出（含 raw_probe 未归一化护栏，该护栏为准备阶段防自愈夹具掩盖真实缺陷，不计入用例数） |
+| `skills/research-orchestration-workflow/scripts/protocol_check_selftest.py` | **13** 条 | 协议三个 suite 的退出码链路与判定分支都真实有效 |
+| `scripts/test_phase_normalization.py` | **26** 条 | 阶段名归一化 shim 的映射与透传行为正确 |
+
+### 第三层 · 联邦防漂移门禁（1 套）
+
+| 门禁 | 检查项 | 防什么 |
+|------|--------|--------|
+| `tests/test_vendor_core.py` | **V1–V6** | 比对 `vendor/shared-core/` 与联邦真源的 sha256 清单，防 vendor 副本被静默漂移；联邦真源缺失时显式 SKIP 且不计 FAIL |
+
+### 为什么必须有注入式负例
+
+只测正向（干净仓库 rc=0）无法区分「真的在检查」与「永远返回 0」——**这正是本项目历史上假绿的成因**：CI 的术语清单曾写成精确串，真实存在的违规因插入词而漏检，校验器照样返回 0。
+
+每条负例的做法是：把仓库复制到临时目录 → 注入一处破坏 → 断言校验器 **rc=1** 且输出命中**预期的检查项文案**。第二个断言不可省略：只断言退出码会让「任何错误都算通过」，检查项本身失效也会被误判为通过。
+
+### 负例设计的两条硬纪律
+
+这两条是本项目反复踩坑换来的，任何新增负例都必须遵守：
+
+1. **锚点唯一命中 + 替换后落盘校验**：注入前断言目标锚点在文件中只出现一次，注入后断言旧串消失、新串出现。否则锚点没命中会静默空转，测试仍然绿——假绿。
+2. **一条负例只承载一个失败维度**：反例若自带无关的失败原因，那么无论被破坏的规则是否生效都会判「检出」——假绿。例如覆盖类校验必须让「覆盖完整」与「形态非法」两个维度正交。
 
 ## 适用场景
 
@@ -133,8 +180,9 @@ research-orchestration-team/
 - **v2.1.2** (2026-09-30)：atomic 拆分残留补全（4 处死引用、六/八阶段表述、maxTurns 消歧义）；协议统一为 result_envelope v2.4；CI 纳入 harness 校验。回归 12/12 + 63/63 + 17/17 + 13/13。
 - **v2.2.0** (2026-11-07)：从零独立诊断后的补全完善版。恢复包根 `settings.json`（官方校验 0 error）+ manifest C12 护栏；新增 `state_io.py` 状态持久化与断点续跑（治协议 §3 纸面 schema）；harness_eval 根定位修复；routing_eval 结构一致性评估；README/CHANGELOG/LEARNING 历史欠账补齐。两轮独立交叉验证后修复 3 个门禁假绿（R3/H6 权限档章节漏检、routing selftest 自愈夹具掩盖真实缺陷）与 1 个方向性错误（protocol_check 校验废弃 ACP v2.0），并补齐文档计数与两份 marketplace.json 的八agent 描述。详见 [CHANGELOG.md](./CHANGELOG.md)。
 - **v2.3.0** (2026-11-08)：残留风险工程化收口。routing_eval 升至 **R1-R6 共 39 项**——R5 工具集合一致性扩展到全部 8 个成员（分级解析：atomic 四类 + 双向相等；非 atomic 零工具授权，①②③ 类 token 即 FAIL，跳过对中文叙述误报率高的 ④ `+` 槽位分支）；新增 **R6 工具真实性校验**（对照真实 MCP 清单硬校验 registry 全部 `mcp__` 名，清单不可得的 CI/git-clone 态显式 SKIP 且不计 FAIL）；selftest 增至 12 例（N10 非 atomic 注入 / N12 伪造 server 名 + 真实清单 fixture）。官方 `validate_expert.py` 的安装路径限制已在本文档化。详见 [CHANGELOG.md](./CHANGELOG.md)。
+- **v2.4.0** (2026-11-09)：Harness 迭代进化 R1 首轮全闭环。四阶段硬门控走完一轮，门禁体系从一层升为**三层**（正向校验器 / 注入式负例自测 5 套 91 条 / 联邦防漂移）：manifest 升至 **C1–C13**（新增 C13 成员 ID 集合一致性，以 `agents/*.md` 文件名为机器真值源逐处比对 8 个目标）、protocol 主套件 16 → **37**、新增 `protocol_check_selftest.py`（13 条）与 `test_phase_normalization.py`（26 条）；`state_io.py` 状态机代码化（按序推进 / 熔断 / 预算 / metrics / `fail` 子命令）；C8 豁免机制声明化；shim 命中 core 加 sha256 硬校验。新建 `docs/harness-iteration-loop.md` 作为迭代断点续跑的单一事实源。回归 **12 套门禁全绿** + 4 组独立负向实锤。详见 [CHANGELOG.md](./CHANGELOG.md)。
 
-## 安装方式（三套并存）
+## 安装方式（四种并存）
 
 ### 方式 1 · Marketplace 一键添加（推荐）
 
@@ -168,9 +216,11 @@ cp -r research-orchestration-team ~/.claude/skills/research-orchestration-team
 
 ### 方式 3 · GitHub Release tarball
 
-下载 [v2.2.0 release](https://github.com/virologist/research-orchestration-team/releases/tag/v2.2.0) 的 `research-orchestration-team-2.2.0.tar.gz` → 解压 → 按方式 2 拷贝。
+下载 [v2.1.2 release](https://github.com/virologist/research-orchestration-team/releases/tag/v2.1.2) 的 `rot-v2.1.2.tar.gz` → 解压 → 按方式 2 拷贝。
 
 > tarball 内容与 `git clone` 一致（含 `avatars/` 与包根 `settings.json`），已剔除编辑备份等本地产物。
+> **注意资产名不统一**：各 release 的资产命名不完全遵循 `research-orchestration-team-<版本>.tar.gz` 约定（v2.1.2 为 `rot-v2.1.2.tar.gz`），下载前请先在 release 页面确认实际资产名。
+> **当前限制**：v2.2.0 与 v2.3.0 两个 release **未附带 tarball 资产**，故方式 3 目前只能安装到 v2.1.2 版本；要装最新版请用方式 1 或方式 2。
 
 ### 方式 4 · 开发测试（`--plugin-dir`）
 
@@ -217,6 +267,8 @@ claude --plugin-dir ./research-orchestration-team
 |------|------|
 | [docs/REDTEAM-REPORT.md](./docs/REDTEAM-REPORT.md) | 红队审查报告：5 维度诊断、缺陷清单与根因、修复方案、回归证据 |
 | [docs/arbitration-L4L5-live-test.md](./docs/arbitration-L4L5-live-test.md) | 冲突仲裁协议 §7 第 4/5 层（升级主理人 / 用户裁决）的真实团队实测记录 |
+| [docs/harness-eval-report-v2.0.2.md](./docs/harness-eval-report-v2.0.2.md) | Harness 改造前基线快照：v2.0.2 在 12 项设计模式上 0/12 符合 |
+| [docs/harness-iteration-loop.md](./docs/harness-iteration-loop.md) | Harness 迭代进化状态文件：每轮「诊断 → 构建 → 测试&debug → 再诊断」闭环的断点续跑单一事实源 |
 
 ## §5 · OneDrive 镜像同步（云备份契约）
 
@@ -244,16 +296,18 @@ git rev-parse HEAD    # 确认与 remote master 一致
 
 # 3. 健康检查（本地跑全部校验脚本 + 官方校验器）
 cd ~/.workbuddy/plugins/marketplaces/my-experts/plugins/research-orchestration-team
-python3 scripts/manifest_check.py                 # C1–C12，含 Team settings.json
+python3 scripts/manifest_check.py                 # C1–C13，含成员 ID 一致性与 Team settings.json
 python3 scripts/manifest_check_selftest.py        # 注入式负例
 python3 scripts/harness_eval.py                   # H1–H12（根定位已改为 __file__，任意目录可调）
 python3 scripts/harness_eval_selftest.py          # harness 注入式负例
 python3 scripts/routing_eval.py                   # 路由结构一致性 R1-R6（R6 需真实 MCP 清单，CI 态显式 SKIP）
 python3 scripts/routing_eval_selftest.py          # 路由注入式负例自测
 python3 tests/test_vendor_core.py                 # 联邦防漂移 V1–V6
-python3 skills/research-orchestration-workflow/scripts/protocol_check.py envelope    # v2.4 主套件 16 + legacy 12
+python3 skills/research-orchestration-workflow/scripts/protocol_check.py envelope    # v2.4 主套件 37 + legacy 12
 python3 skills/research-orchestration-workflow/scripts/protocol_check.py conflict    # 冲突仲裁 5/5
-python3 skills/research-orchestration-workflow/scripts/protocol_check.py integration # 集成仿真 8/8
+python3 skills/research-orchestration-workflow/scripts/protocol_check.py integration # 集成仿真 9/9
+python3 skills/research-orchestration-workflow/scripts/protocol_check_selftest.py    # 协议注入式负例自测 13 条
+python3 scripts/test_phase_normalization.py                                          # 阶段名归一化自测 26 条
 python3 skills/research-orchestration-workflow/scripts/state_io.py resume --help     # 状态持久化工具存在性自检
 python3 skills/research-orchestration-workflow/scripts/topic_scoring.py --topic probe \
   --originality 8 --feasibility 7 --value-density 9 --data-availability 7 \

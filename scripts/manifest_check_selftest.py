@@ -22,9 +22,14 @@ CI 的术语清单写成了精确串，导致真实存在的违规因插入词�
   B 组（N9–N11） 契约章节（C9）
   C 组（N12–N17）市场清单（C10）
   D 组（N18–N19）Team 型 settings.json（C12）
+  E 组（N20–N21）旧团队规模表述（C8 规则扩充）
+  F 组（N22–N23）C8 声明式豁免（负例拦截 / 正例护栏）
+  G 组（N24–N26）成员 ID 集合一致性（C13）
 
 其中 N11 是**反向用例**：破坏一种契约标记但保留另一种，期望校验器**放行**（rc=0），
 用于确认 C9 接受三种等价命名，而不是只认一种。
+N23 同为**正向用例**：注入带豁免标记的审计文档，期望 rc=0 且 C8 汇总出现豁免计数，
+用于确认「带标记放行」没有退化成「什么都不扫」。
 
 ## 用法
 
@@ -46,6 +51,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -242,6 +248,208 @@ def n21(root):
     )
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 case("N21", "marketplace.json 旧 Six-agent 规模表述回归", "旧团队规模表述", n21)
+
+
+# ── F 组：C8 声明式豁免（N22 负例 / N23 正例护栏）──────────────────────────
+# 负例注入的废弃词用运行时拼接构造：避免本文件源码里出现连续字面量被 C8 自检
+# 扫到（自指假红）。拼接结果命中 C8「旧状态机表述」规则，形态单一、不误伤其它规则。
+_C8_LEGACY_TERM = "六" + "阶段"
+_C8_EXEMPT_MARKER = "<!-- c8-exempt: audit-history -->"
+
+
+def _inject_audit_md(root: Path, with_marker: bool) -> None:
+    """在临时副本 docs/ 下注入一份审计类 md，并断言注入真的落盘。
+
+    锚点错配 / 路径写错会静默 no-op，负例会「什么都没注入却仍按预期失败」形成假绿，
+    因此每条注入后都回读文件，校验废弃词与豁免标记的实际存在状态。
+    """
+    docs = root / "docs"
+    # 副本通常已含 docs/，仅在缺失时才建目录：某些宿主沙箱的 Path.mkdir 会对
+    # 已存在目录抛 FileExistsError（即使 exist_ok=True），能不调用就不调用。
+    if not docs.is_dir():
+        docs.mkdir(parents=True, exist_ok=True)
+    path = docs / "c8-audit-injected.md"
+    lines = []
+    if with_marker:
+        lines.append(_C8_EXEMPT_MARKER)
+    lines += ["# C8 注入用例", "复述历史失败模式术语：" + _C8_LEGACY_TERM]
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    written = path.read_text(encoding="utf-8")
+    assert _C8_LEGACY_TERM in written, f"{path.name}: 废弃词未落盘"
+    assert (_C8_EXEMPT_MARKER in written) is with_marker, f"{path.name}: 豁免标记落盘状态不符"
+
+
+def n22(root):
+    _inject_audit_md(root, with_marker=False)
+case("N22", "未标记审计文档含废弃表述（应拦截）", "旧状态机表述", n22)
+
+
+def n23(root):
+    _inject_audit_md(root, with_marker=True)
+# 正向护栏：不仅断言 rc=0，还断言 C8 汇总里出现「声明式豁免文件」计数，
+# 证明文件是「被标记豁免」而非「压根没进扫描」。
+case("N23", "带声明式豁免标记的审计文档（应放行且计数）", "声明式豁免文件", n23, expect_rc=0)
+
+
+# ── G 组：成员 ID 集合一致性（C13）────────────────────────────────────────
+# 注入纪律（本项目反复踩坑的点，务必照做）：
+#   1. 锚点唯一命中 —— 改之前先断言锚点串在文件中只出现一次，否则用例报错退出。
+#      锚点改错位置会造成「注入无效但测试仍绿」的假绿。
+#   2. 替换后落盘校验 —— 替换完重新读文件，断言旧串已消失、新串已出现。
+#
+# 成员 ID 不写死成字面量：探针 ID 一律从 agents/*.md 文件名集合里动态取出，
+# 避免脚本里出现一份「手抄的成员名单」——那份名单本身就是漂移的来源。
+
+C13_PROTOCOL_REL = "skills/research-orchestration-workflow/references/agent-protocol.md"
+C13_REGISTRY_REL = "skills/research-orchestration-workflow/references/agent-registry.md"
+C13_CODEBUDDY_MANIFEST = ".codebuddy-plugin/plugin.json"
+
+
+def _c13_truth_ids(root: Path) -> list[str]:
+    """从 agents/*.md 文件名取成员 ID 真值源（与 C13 校验器同源）。"""
+    return sorted(p.stem for p in (root / "agents").glob("*.md") if p.is_file())
+
+
+def _c13_replace_once(path: Path, old: str, new: str) -> None:
+    """唯一命中替换 + 落盘校验；锚点不唯一或替换未生效都直接断言失败。"""
+    text = path.read_text(encoding="utf-8")
+    assert text.count(old) == 1, (
+        f"锚点在 {path.name} 中出现 {text.count(old)} 次（应恰为 1 次），"
+        "拒绝注入以防改错位置造成假绿"
+    )
+    path.write_text(text.replace(old, new), encoding="utf-8")
+    written = path.read_text(encoding="utf-8")
+    assert old not in written, f"{path.name}: 旧锚点未消失"
+    assert new in written, f"{path.name}: 新锚点未落盘"
+
+
+def _c13_pick_probe(root: Path) -> str:
+    """从真值源里挑一个非主理人的成员 ID 作为注入探针。
+
+    「谁是主理人」不靠成员 ID 字面量判断，而是读 manifest 的 members[].role
+    字段（role == "lead" 即主理人）—— 探针本身仍从 agents/*.md 文件名集合取，
+    脚本里不出现任何手抄的成员名单。
+    """
+    manifest = root / C13_CODEBUDDY_MANIFEST
+    data = json.loads(manifest.read_text(encoding="utf-8"))
+    lead_ids = {
+        m.get("id") for m in (data.get("members") or [])
+        if isinstance(m, dict) and m.get("role") == "lead"
+    }
+    truth = set(_c13_truth_ids(root))
+    candidates = [i for i in truth if i not in lead_ids]
+    assert candidates, "真值源里找不到非主理人的探针成员 ID"
+    return sorted(candidates)[0]
+
+
+def n24(root):
+    """协议 §1 角色矩阵：删掉一行里的一个成员 ID。
+
+    探针取「角色矩阵里成员 ID 列含多个 <br> 分隔 ID」的数据行，删掉其中一个 ID
+    后该行少一个成员 → 与真值源集合不等 → C13 必须报出「缺少」。
+    """
+    path = root / C13_PROTOCOL_REL
+    text = path.read_text(encoding="utf-8")
+    lines = text.splitlines()
+
+    # 限定在 §1 小节内（到下一个「## 」为止），避免误收协议其它章节的表格
+    body: list[str] = []
+    in_section = False
+    for line in lines:
+        if line.startswith("## 1. 角色矩阵"):
+            in_section = True
+            continue
+        if in_section and line.startswith("## "):
+            break
+        if in_section:
+            body.append(line)
+
+    truth = set(_c13_truth_ids(root))
+    target_line = None
+    for line in body:
+        if not line.startswith("|"):
+            continue
+        cells = [c.strip() for c in line.strip().split("|")[1:-1]]
+        if len(cells) < 2:
+            continue
+        if set(cells[0]) <= set("-: "):       # 分隔行
+            continue
+        ids = re.findall(r"`([A-Za-z0-9][A-Za-z0-9._-]*)`", cells[1])
+        if len(ids) >= 2 and all(i in truth for i in ids):
+            target_line = line
+            break
+    assert target_line is not None, "协议 §1 里找不到含多个成员 ID 的数据行"
+
+    cells = [c.strip() for c in target_line.strip().split("|")[1:-1]]
+    ids = re.findall(r"`([A-Za-z0-9][A-Za-z0-9._-]*)`", cells[1])
+    # 删掉第一个 ID，保留其余 ID 及其 <br> 分隔结构
+    new_cell = "<br>".join(f"`{i}`" for i in ids[1:])
+    old_cell = cells[1]
+    assert old_cell != new_cell, "目标单元格重建后与原值相同"
+
+    # 锚点用整行：整行在全文中唯一（断言后 replace 才安全）
+    assert text.count(target_line) == 1, (
+        f"协议 §1 目标行在全文出现 {text.count(target_line)} 次（应恰为 1 次），"
+        "拒绝注入以防改错位置造成假绿"
+    )
+    new_line = target_line.replace(old_cell, new_cell, 1)
+    assert new_line != target_line, "目标行重建后与原值相同"
+
+    path.write_text(text.replace(target_line, new_line), encoding="utf-8")
+    written = path.read_text(encoding="utf-8")
+    assert target_line not in written, "协议 §1 旧行未消失"
+    assert new_line in written, "协议 §1 新行未落盘"
+
+
+case("N24", "协议 §1 角色矩阵少一个成员 ID", "C13 成员 ID 集合不一致", n24)
+
+
+def n25(root):
+    """registry 团队成员一览：把某一行的 agent_id 改成一个不存在的 ID。
+
+    探针取真值源里第一个成员 ID，用它定位 registry 里的那一行并改写。
+    """
+    path = root / C13_REGISTRY_REL
+    probe = _c13_pick_probe(root)
+    old_row = f"| `{probe}` |"
+    assert path.read_text(encoding="utf-8").count(old_row) == 1, (
+        f"registry 里的探针行不唯一: {old_row!r}"
+    )
+    # 伪造一个不存在的成员 ID（运行时拼接，非手抄成员名单）
+    ghost = "nonexistent-" + "agent"
+    new_row = f"| `{ghost}` |"
+    _c13_replace_once(path, old_row, new_row)
+
+
+case("N25", "registry 团队成员一览出现不存在的成员 ID", "C13 成员 ID 集合不一致", n25)
+
+
+def n26(root):
+    """WorkBuddy manifest：members[] 里删掉一个成员。"""
+    path = root / C13_CODEBUDDY_MANIFEST
+    data = json.loads(path.read_text(encoding="utf-8"))
+    members = data.get("members") or []
+    assert len(members) >= 2, "members[] 成员不足，无法构造删除用例"
+    # 探针成员 ID 从真值源取（不写死字面量），且必须是 lead 之外的那一个
+    truth = set(_c13_truth_ids(root))
+    victim = None
+    for member in members:
+        mid = member.get("id")
+        if mid in truth and member.get("role") != "lead":
+            victim = mid
+            break
+    assert victim is not None, "members[] 里找不到可删除的非 lead 成员"
+
+    data["members"] = [m for m in members if m.get("id") != victim]
+    path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    written = json.loads(path.read_text(encoding="utf-8"))
+    written_ids = [m.get("id") for m in (written.get("members") or [])]
+    assert victim not in written_ids, "members[] 删除未落盘"
+    assert len(written_ids) == len(members) - 1, "members[] 删除数量不符"
+
+
+case("N26", "WorkBuddy manifest members[] 少一个成员", "C13 成员 ID 集合不一致", n26)
 
 
 def make_copy(src: Path, dst: Path) -> None:

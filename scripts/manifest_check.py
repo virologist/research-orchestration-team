@@ -26,6 +26,8 @@
   C10 市场描述文件 marketplace.json 存在且指向本插件（缺它则一键安装失效）
   C11 每个 agent 的 MD 具备结构合法的 YAML frontmatter（宿主据此注册代理）
   C12 Team 型包根 settings.json 存在且单键 agent 指向主理人（官方 validate_expert 硬要求）
+  C13 成员 ID 集合一致性（真值源 = agents/*.md 文件名；比对协议 §1 角色矩阵 /
+      registry 团队成员一览 / 主理人名册表 / 双 manifest 的 agents[]、members[].id、teamInfo）
 
 ## C11 的动机与解析范围（重要）
 
@@ -112,6 +114,30 @@ SCAN_EXEMPT = {
     "scripts/manifest_check_selftest.py",    # 自测宿主：负例需构造违规文本
 }
 
+# ── C8 声明式豁免 ───────────────────────────────────────────────────────────
+# 动机：C8 原本只靠 SCAN_EXEMPT 这个硬编码文件名白名单放行「引用历史术语」的
+# 审计类文档。但 R1 迭代闭环要求状态文件 / 失败模式库记录历史缺陷术语名，任何
+# 新增审计文档只要抄录旧术语就会假红（FM-R1-01，实测 63 通过 / 3 失败，基线 64/64）；
+# 每加一份审计文档都得改校验器源码，白名单不可持续。改为声明式：文档在头部自己
+# 声明豁免意图，校验器无需预知文件名。标记窗口限定在文件头（前 3 行且不超过前
+# 512 字节，取先到者），避免「正文任意位置冒出一句标记就整文件放行」的滥用。
+# 注意：SCAN_EXEMPT 白名单继续保留作兼容，两条豁免路径并行生效。
+C8_EXEMPT_MARKER = "<!-- c8-exempt: audit-history -->"
+C8_EXEMPT_HEAD_LINES = 3
+C8_EXEMPT_HEAD_BYTES = 512
+
+
+def _head_has_exempt_marker(text: str) -> bool:
+    """全文头部是否声明 C8 豁免标记。
+
+    窗口 = 前 C8_EXEMPT_HEAD_LINES 行 ∩ 前 C8_EXEMPT_HEAD_BYTES 字节（取先到者）：
+    先按字节截到 512，丢弃尾部可能被截断的半个多字节字符，再取前 3 行。
+    标记是纯 ASCII，只要落在窗口内即可稳定命中。
+    """
+    head = text.encode("utf-8")[:C8_EXEMPT_HEAD_BYTES].decode("utf-8", errors="ignore")
+    return any(C8_EXEMPT_MARKER in line for line in head.splitlines()[:C8_EXEMPT_HEAD_LINES])
+
+
 # 已废弃表述（正则）。这些是历史版本用语，正文中出现即为回归。# 注意：用宽松模式而非精确串，避免「三级冲突仲裁」这类插入词导致漏检。
 FORBIDDEN_PATTERNS = (
     (r"三级[^，。；\n]{0,6}仲裁", "旧仲裁层级表述（现为五级仲裁）"),
@@ -170,6 +196,221 @@ BLOCK_SCALAR_INDICATORS = {"|", ">", "|-", ">-", "|+", ">+"}
 
 # 流式集合的配对括号
 FLOW_PAIRS = {"[": "]", "{": "}"}
+
+# ── C13 成员 ID 一致性 ───────────────────────────────────────────────────────
+# 动机：C1–C12 全部只校验 manifest **自身内部**是否自洽（C6 比的是 teamInfo 与
+# agents 的对应关系），**没有一条**把 manifest 里的成员集合与仓库里真实存在的
+# agent 文件、协议文档、registry 对齐。历史上出现过「成员增删/改名只改了文档、
+# 没改 manifest」或反之的漂移 —— 宿主加载的代理集合与文档描述的团队对不上。
+# C13 把「成员集合的唯一事实源」钉死为 agents/*.md 的文件名集合。
+#
+# 成员 ID 的定义（协议 §1「成员 ID 取值规则」）：成员 ID = 对应
+# agents/<成员ID>.md 的文件名（去 .md）。因此**文件在磁盘上存在**是成员身份的
+# 唯一判定依据，文档里的成员表与 manifest 里的成员列表都只是它的投影。
+#
+# 本检查的核心纪律：任何「解析出来的集合是空的」一律判红（fail-closed）。
+# 解析失败恰好让实际集合为空、而真值源也恰好为空时会形成假绿 —— 空集合必须
+# 先于集合比较被拦下，绝不静默跳过。
+
+AGENTS_DIR = "agents"
+
+# 文档比对目标：(显示名, 相对路径, 小节标题, 表头单元格文本)
+#   先按小节切分，再在小节内找表头匹配的第一张表 —— 不能把整篇 markdown 当表格
+#   扫，否则会把协议文档其它章节的表格误收进来。
+C13_DOC_TARGETS = (
+    (
+        "协议 §1 角色矩阵",
+        "skills/research-orchestration-workflow/references/agent-protocol.md",
+        "## 1. 角色矩阵",
+        "成员 ID",
+    ),
+    (
+        "registry 团队成员一览",
+        "skills/research-orchestration-workflow/references/agent-registry.md",
+        "## 团队成员一览",
+        "agent_id",
+    ),
+)
+
+# 主理人名册表的表头单元格文本（该表位于主理人 agent MD 的前部）
+C13_ROSTER_HEADER = "成员 ID"
+
+# ID 单元格里反引号包裹的成员 ID（成员 ID 允许字母、数字、点、下划线、连字符）
+C13_ID_TOKEN_RE = re.compile(r"`([A-Za-z0-9][A-Za-z0-9._-]*)`")
+
+# 表格单元格内的换行标记（一个单元格可承载多个成员 ID）
+C13_BREAK_RE = re.compile(r"<br\s*/?>", re.IGNORECASE)
+
+
+def _c13_split_row(line: str) -> list[str]:
+    """把一行 markdown 表格行拆成单元格列表；非表格行返回空列表。"""
+    stripped = line.strip()
+    if not stripped.startswith("|"):
+        return []
+    parts = stripped.split("|")
+    if parts and not parts[0].strip():
+        parts = parts[1:]          # 去掉行首竖线产生的空槽
+    if parts and not parts[-1].strip():
+        parts = parts[:-1]         # 去掉行尾竖线产生的空槽
+    return [p.strip() for p in parts]
+
+
+def _c13_is_separator(cells: list[str]) -> bool:
+    """判断是否为表格分隔行（形如 |---|---|）。"""
+    return bool(cells) and all(
+        re.fullmatch(r":?-+:?", c.replace(" ", "")) for c in cells
+    )
+
+
+def _c13_extract_section(lines: list[str], heading: str) -> list[str] | None:
+    """切出以 heading 开头的二级小节的正文行（不含标题行）。
+
+    小节边界 = 下一个以「## 」开头的行。形如「### 」的三级标题不截断小节。
+    找不到标题返回 None（交由调用方 fail-closed 处理）。
+    """
+    start = None
+    for i, line in enumerate(lines):
+        if line.startswith(heading):
+            start = i
+            break
+    if start is None:
+        return None
+    body: list[str] = []
+    for line in lines[start + 1:]:
+        if line.startswith("## "):
+            break
+        body.append(line)
+    return body
+
+
+def _c13_extract_table(lines: list[str], header_key: str):
+    """在给定行集内定位表头行并收集其后的数据行。
+
+    返回 (列索引, 数据行的单元格列表, 错误原因)：
+      - 表头行在行集内出现多次 → 报错（表头不唯一时无法确定取哪一列）
+      - 表头行找不到 → 报错
+      - 列索引 = 表头里 header_key 所在的列下标（表头文本变了会直接报错，
+        而不是悄悄取第一列）
+    """
+    header_positions = []
+    for i, line in enumerate(lines):
+        cells = _c13_split_row(line)
+        if not cells:
+            continue
+        if header_key in cells:
+            header_positions.append((i, cells.index(header_key)))
+
+    if not header_positions:
+        return -1, [], f"未找到表头含「{header_key}」的表格行"
+    if len(header_positions) > 1:
+        return -1, [], (
+            f"表头含「{header_key}」的表格行出现 {len(header_positions)} 次（应唯一），"
+            "无法确定取哪一列"
+        )
+
+    header_i, col = header_positions[0]
+    rows: list[list[str]] = []
+    seen_data = False
+    j = header_i + 1
+    while j < len(lines):
+        cells = _c13_split_row(lines[j])
+        if not cells:
+            if seen_data:
+                break                       # 空行 → 表格结束
+            j += 1
+            continue
+        if _c13_is_separator(cells):
+            if seen_data:
+                break                       # 又一条分隔行 → 下一张表开始
+            j += 1
+            continue
+        rows.append(cells)
+        seen_data = True
+        j += 1
+    return col, rows, ""
+
+
+def _c13_ids_from_cell(cell: str):
+    """从一个 ID 单元格解析出成员 ID 列表。返回 (ids, 错误原因)。
+
+    支持两种形态：单个 ID（`xxx`）、多个 ID 用 <br> 分隔（`a`<br>`b`）。
+    单元格内容不是「反引号包裹的成员 ID」时报错而非静默跳过。
+    """
+    ids: list[str] = []
+    for part in C13_BREAK_RE.split(cell):
+        part = part.strip()
+        if not part:
+            continue                          # 空片段（ID 被删掉后残留的 <br>）
+        tokens = C13_ID_TOKEN_RE.findall(part)
+        if not tokens:
+            return [], f"单元格内容不是反引号包裹的成员 ID: {part[:40]!r}"
+        bare = part.strip("`").strip()
+        if len(tokens) != 1 or bare != tokens[0]:
+            return [], f"单元格内不是一个纯净的成员 ID: {part[:40]!r}"
+        ids.append(tokens[0])
+    return ids, ""
+
+
+def _c13_ids_from_rows(rows: list[list[str]], col: int):
+    """从表格数据行里取指定列的成员 ID。返回 (ids, 错误原因)。"""
+    ids: list[str] = []
+    for n, cells in enumerate(rows, start=1):
+        if col >= len(cells):
+            return [], f"第 {n} 行缺少第 {col + 1} 列，无法取成员 ID"
+        part_ids, err = _c13_ids_from_cell(cells[col])
+        if err:
+            return [], f"第 {n} 行 {err}"
+        ids.extend(part_ids)
+    return ids, ""
+
+
+def _c13_report(chk: Checker, label: str, expected: set[str], actual: list[str]) -> None:
+    """比对一处目标的成员 ID 集合，并逐项列出差异。"""
+    actual_set = set(actual)
+    duplicates = sorted({i for i in actual if actual.count(i) > 1})
+    if duplicates:
+        chk.fail(f"C13 成员 ID 重复出现: {label} —— {duplicates}")
+    extra = sorted(actual_set - expected)
+    missing = sorted(expected - actual_set)
+    if not extra and not missing:
+        chk.ok(f"C13 成员 ID 集合一致: {label}（{len(actual_set)} 个成员）")
+        return
+    chk.fail(
+        f"C13 成员 ID 集合不一致: {label}\n"
+        f"       期望(真值源 {AGENTS_DIR}/*.md): {sorted(expected)}\n"
+        f"       实际({label}): {sorted(actual_set)}\n"
+        f"       多出: {extra}\n"
+        f"       缺少: {missing}"
+    )
+
+
+def _c13_manifest_agent_ids(data: dict) -> list[str] | None:
+    """从 manifest 的 agents[] 取成员 ID 列表（basename 去 .md）；结构非法返回 None。"""
+    agents = data.get("agents")
+    if not isinstance(agents, list) or not agents:
+        return None
+    ids: list[str] = []
+    for entry in agents:
+        if not isinstance(entry, str) or not entry.strip():
+            return None
+        ids.append(Path(entry.strip()).stem)
+    return ids
+
+
+def _c13_manifest_member_ids(data: dict) -> list[str] | None:
+    """从 manifest 的 members[].id 取成员 ID 列表；结构非法返回 None。"""
+    members = data.get("members")
+    if not isinstance(members, list) or not members:
+        return None
+    ids: list[str] = []
+    for member in members:
+        if not isinstance(member, dict):
+            return None
+        mid = member.get("id")
+        if not isinstance(mid, str) or not mid.strip():
+            return None
+        ids.append(mid.strip())
+    return ids
 
 
 class Checker:
@@ -411,9 +652,11 @@ def check_c7_version(chk: Checker, manifests: dict) -> None:
 
 
 def check_c8_forbidden(chk: Checker) -> None:
-    """C8 扫描废弃表述。"""
+    """C8 扫描废弃表述（硬编码白名单 + 头部声明式标记双路径豁免）。"""
     chk.section("C8 废弃表述扫描")
     offenders: dict[str, list[str]] = {}
+    scanned = 0       # 实际进入正则扫描的文件数（诊断量，不因豁免而虚减）
+    exempted = 0      # 因头部声明式标记而跳过的文件数
 
     for path in sorted(chk.root.rglob("*")):
         if not path.is_file() or path.suffix not in SCAN_SUFFIXES:
@@ -430,6 +673,12 @@ def check_c8_forbidden(chk: Checker) -> None:
             # 表述会完全绕过 C8，属静默假绿。改为显式 FAIL，保证扫描覆盖率。
             chk.fail(f"待扫描文件无法读取，C8 覆盖率不完整：{rel}（{type(exc).__name__}）")
             continue
+        # 声明式豁免：审计类文档在头部声明标记后整文件跳过。判定放在全文读入之后、
+        # 正则循环之前，保证「读失败显式 FAIL」护栏依旧覆盖所有待扫文件（护栏不动）。
+        if _head_has_exempt_marker(text):
+            exempted += 1
+            continue
+        scanned += 1
         for pattern, desc in FORBIDDEN_PATTERNS:
             for hit in re.finditer(pattern, text):
                 line_no = text.count("\n", 0, hit.start()) + 1
@@ -438,7 +687,10 @@ def check_c8_forbidden(chk: Checker) -> None:
                 )
 
     if not offenders:
-        chk.ok(f"未发现废弃表述（扫描 {len(FORBIDDEN_PATTERNS)} 条规则）")
+        chk.ok(
+            f"未发现废弃表述（扫描 {len(FORBIDDEN_PATTERNS)} 条规则 / {scanned} 个文件，"
+            f"{exempted} 个声明式豁免文件）"
+        )
         return
 
     for desc, lines in offenders.items():
@@ -835,6 +1087,211 @@ def check_c12_settings(chk: Checker, manifests: dict) -> None:
     chk.ok(f"settings.json 合法（agent={agent}）")
 
 
+def check_c13_member_ids(chk: Checker, manifests: dict) -> None:
+    """C13 成员 ID 集合在「文件真值源」与「五处投影」之间必须完全一致。
+
+    真值源：agents/ 目录下所有 *.md 的文件名（去 .md）。这是成员身份的唯一
+    判定依据 —— 协议 §1 明确「成员 ID = 对应 agents/<成员ID>.md 的文件名」。
+
+    比对目标（五处投影 + 一处 manifest 自洽）：
+      1. 协议 §1 角色矩阵的「成员 ID」列（一个单元格可含多个 <br> 分隔的 ID）
+      2. registry 团队成员一览的 agent_id 列
+      3. 主理人名册表的「成员 ID」列
+      4. .claude-plugin/plugin.json 的 agents[]
+      5. .codebuddy-plugin/plugin.json 的 agents[] / members[].id / teamInfo
+
+    fail-closed 纪律：真值源为空、或任一处解析不出 ID，一律判红。空集合恰好
+    等于「期望集合为空」时会形成假绿，因此空集合必须先被拦下。
+    """
+    chk.section("C13 成员 ID 集合一致性")
+
+    # ── 真值源：agents/*.md 文件名 ──────────────────────────────────────────
+    agents_dir = chk.root / AGENTS_DIR
+    if not agents_dir.is_dir():
+        chk.fail(f"C13 真值源目录不存在: {AGENTS_DIR}/")
+        return
+    truth = sorted(p.stem for p in agents_dir.glob("*.md") if p.is_file())
+    if not truth:
+        chk.fail(
+            f"C13 真值源为空: {AGENTS_DIR}/ 下没有任何 *.md 文件，"
+            "无法判定成员集合（空集合一律判红）"
+        )
+        return
+    truth_set = set(truth)
+    chk.ok(f"C13 真值源: {AGENTS_DIR}/*.md 共 {len(truth)} 个成员")
+
+    # ── 目标 1 / 2：协议 §1 角色矩阵、registry 团队成员一览 ─────────────────
+    for label, rel_path, heading, header_key in C13_DOC_TARGETS:
+        path = chk.root / rel_path
+        if not path.is_file():
+            chk.fail(f"C13 目标文件缺失: {rel_path}（{label}）")
+            continue
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (UnicodeDecodeError, OSError) as exc:
+            chk.fail(f"C13 目标文件无法读取: {rel_path}（{type(exc).__name__}）")
+            continue
+
+        body = _c13_extract_section(text.splitlines(), heading)
+        if body is None:
+            chk.fail(f"C13 未找到小节「{heading}」: {rel_path}（{label}）")
+            continue
+
+        col, rows, err = _c13_extract_table(body, header_key)
+        if err:
+            chk.fail(f"C13 表格解析失败: {rel_path}（{label}）—— {err}")
+            continue
+        if not rows:
+            chk.fail(f"C13 表格无数据行: {rel_path}（{label}）")
+            continue
+
+        ids, err = _c13_ids_from_rows(rows, col)
+        if err:
+            chk.fail(f"C13 成员 ID 解析失败: {rel_path}（{label}）—— {err}")
+            continue
+        if not ids:
+            chk.fail(
+                f"C13 解析出的成员 ID 集合为空: {rel_path}（{label}）"
+                "（空集合一律判红）"
+            )
+            continue
+        _c13_report(chk, f"{label} @ {rel_path}", truth_set, ids)
+
+    # ── 目标 3：主理人名册表 ───────────────────────────────────────────────
+    # 名册表用「表头单元格含『成员 ID』」定位，扫全部 agent MD —— 不靠文件名字面量
+    # 猜哪一个是主理人（主理人改名/换文件名时本检查仍能工作）。
+    roster_candidates: list[tuple[str, list[str]]] = []
+    for path in sorted(agents_dir.glob("*.md")):
+        if not path.is_file():
+            continue
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (UnicodeDecodeError, OSError):
+            continue
+        col, rows, err = _c13_extract_table(text.splitlines(), C13_ROSTER_HEADER)
+        if err:
+            if "未找到表头" in err:
+                continue                      # 该文件没有名册表 —— 正常
+            chk.fail(f"C13 名册表解析失败: {path.name} —— {err}")
+            continue
+        if not rows:
+            chk.fail(f"C13 名册表无数据行: {path.name}")
+            continue
+        ids, err = _c13_ids_from_rows(rows, col)
+        if err:
+            chk.fail(f"C13 成员 ID 解析失败: {path.name}（主理人名册表）—— {err}")
+            continue
+        if not ids:
+            chk.fail(
+                f"C13 解析出的成员 ID 集合为空: {path.name}（主理人名册表）"
+                "（空集合一律判红）"
+            )
+            continue
+        roster_candidates.append((path.name, ids))
+
+    if not roster_candidates:
+        chk.fail(
+            f"C13 未找到任何主理人名册表（在 {AGENTS_DIR}/*.md 中扫描表头"
+            f"「{C13_ROSTER_HEADER}」无果）"
+        )
+    elif len(roster_candidates) > 1:
+        chk.fail(
+            f"C13 找到 {len(roster_candidates)} 张主理人名册表（应恰为 1 张）："
+            f"{[name for name, _ in roster_candidates]}"
+        )
+    else:
+        name, ids = roster_candidates[0]
+        _c13_report(chk, f"主理人名册表 @ {name}", truth_set, ids)
+
+    # ── 目标 4 / 5：双 manifest 的 agents[]、members[].id、teamInfo ─────────
+    for label, data in manifests.items():
+        if not data:
+            chk.fail(f"C13 跳过 {label} manifest：无法解析（见 C1）")
+            continue
+
+        agents_ids = _c13_manifest_agent_ids(data)
+        if agents_ids is None:
+            chk.fail(f"C13 {label} manifest 的 agents[] 结构非法或为空")
+        else:
+            _c13_report(chk, f"{label} manifest agents[]", truth_set, agents_ids)
+
+    codebuddy = manifests.get("WorkBuddy")
+    if not codebuddy:
+        chk.fail("C13 跳过 WorkBuddy manifest：无法解析（见 C1）")
+    else:
+        member_ids = _c13_manifest_member_ids(codebuddy)
+        if member_ids is None:
+            chk.fail("C13 WorkBuddy manifest 的 members[].id 结构非法或为空")
+        else:
+            _c13_report(chk, "WorkBuddy manifest members[].id", truth_set, member_ids)
+
+        # teamInfo：leadAgent 必须是主理人成员且在 agents 里；memberAgents 必须
+        # 等于真值源去掉 lead 后的其余成员集合。
+        team = codebuddy.get("teamInfo")
+        if not isinstance(team, dict):
+            chk.fail("C13 WorkBuddy manifest 缺 teamInfo 或结构非法")
+            return
+
+        lead = team.get("leadAgent")
+        member_agents = team.get("memberAgents")
+
+        # manifest 自己的 agents[] 列表（lead 必须在其中）
+        manifest_agent_ids = set()
+        cb_agents = codebuddy.get("agents")
+        if isinstance(cb_agents, list):
+            manifest_agent_ids = {
+                Path(a).stem for a in cb_agents if isinstance(a, str) and a.strip()
+            }
+
+        valid_lead = None
+        if not isinstance(lead, str) or not lead.strip():
+            chk.fail("C13 WorkBuddy manifest 的 teamInfo.leadAgent 缺失或为空")
+        else:
+            lead = lead.strip()
+            # 「谁是主理人」不靠成员 ID 字面量判断：manifest 的 members[].role == "lead"
+            # 即主理人声明位。leadAgent 必须与该声明位一致 —— 否则「leadAgent 指向
+            # 某个普通成员」这种漂移不会被发现（lead 仍是合法成员，只是角色错了）。
+            declared_leads = {
+                m.get("id") for m in (codebuddy.get("members") or [])
+                if isinstance(m, dict) and m.get("role") == "lead"
+            }
+            if lead not in truth_set:
+                chk.fail(
+                    f"C13 teamInfo.leadAgent 不在真值源内: {lead}\n"
+                    f"       真值源({AGENTS_DIR}/*.md): {truth}"
+                )
+            elif lead not in manifest_agent_ids:
+                chk.fail(
+                    f"C13 teamInfo.leadAgent 不在 WorkBuddy manifest 的 agents[] 中: {lead}"
+                )
+            elif declared_leads and lead not in declared_leads:
+                chk.fail(
+                    f"C13 teamInfo.leadAgent 与 manifest 的主理人声明位不一致: "
+                    f"leadAgent={lead}，members[].role=lead 声明的是 {sorted(declared_leads)}"
+                )
+            else:
+                valid_lead = lead
+                chk.ok(f"C13 teamInfo.leadAgent 在真值源内且在 agents[] 中: {lead}")
+
+        if not isinstance(member_agents, list) or not member_agents:
+            chk.fail("C13 WorkBuddy manifest 的 teamInfo.memberAgents 缺失或为空")
+        elif valid_lead is None:
+            # leadAgent 本身非法 → 无法确定「其余成员」应是谁，跳过集合比较但仍判红
+            # （不静默放过：leadAgent 的失败已把整体拉到 rc=1）
+            chk.fail(
+                "C13 跳过 teamInfo.memberAgents 集合比较："
+                "teamInfo.leadAgent 非法，无法确定应排除的主理人成员"
+            )
+        else:
+            cleaned = [m.strip() for m in member_agents if isinstance(m, str) and m.strip()]
+            _c13_report(
+                chk,
+                "WorkBuddy manifest teamInfo.memberAgents",
+                truth_set - {valid_lead},
+                cleaned,
+            )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="专家包一致性校验：manifest 对等 / 资产完整性 / 版本一致 / 废弃表述",
@@ -865,6 +1322,7 @@ def main() -> int:
     check_c10_marketplace(chk, manifests)
     check_c11_frontmatter(chk, manifests)
     check_c12_settings(chk, manifests)
+    check_c13_member_ids(chk, manifests)
 
     print("\n" + "=" * 72)
     if chk.failures:

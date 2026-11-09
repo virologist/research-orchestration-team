@@ -1,0 +1,36 @@
+{
+  "agent_id": "{{成员ID，如 domain-expert-biomed}}",
+  "task_id": "{{任务ID，与 trace_id 对应}}",
+  "phase": "{{阶段名，如 CLARIFY / ALIGN / EXECUTE}}",
+  "status": "{{status 四选一：success | partial | failed | blocked}}",
+  "confidence": 0,
+  "deliverable_summary": "{{一句话摘要：这一条消息交付了什么}}",
+  "type": "{{TASK | RESULT | CLARIFY | REVIEW | ERROR | STATUS | HANDOFF}}",
+  "trace_id": "trace-{{task_id}}-{{seq}}",
+  "msg_id": "msg-{{seq}}-{{from}}",
+  "parent_msg_id": "msg-{{seq}}-{{parent}}",
+  "context_ref": {
+    "mode": "{{full | summary | ref}}",
+    "pointer": "state://cp-{{NNN}}"
+  },
+  "evidence": [
+    {
+      "type": "{{source | skill_ref | prior_artifact}}",
+      "ref": "{{PMID | DOI | arXiv ID | URL | 落盘路径}}",
+      "used_for": "{{该证据支撑哪条结论}}",
+      "claim": "{{与 used_for 同一句话（GRADE 校验按 claim 字段读）}}",
+      "grade": "{{GRADE：1a | 1b | 2a | 2b | 3a | 3b | 4 | 5}}",
+      "recency": "{{近6月 | 近12月 | >12月}}"
+    }
+  ],
+  "issues": [],
+  "next_agent_hint": "{{建议下游成员 agent_id}}",
+  "metrics": {
+    "duration_ms": 0,
+    "retry_count": 0
+  },
+  "payload": {
+    "_role_note": "{{按角色定制：本字段是唯一允许承载自然语言的位置}}",
+    "_result": "{{本角色交付物正文或结构化结论}}"
+  }
+}

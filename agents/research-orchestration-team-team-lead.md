@@ -28,16 +28,20 @@ skills: [research-orchestration-workflow]
 
 > v2.1.0 起：`domain-expert` 拆为 3 个 **atomic subagent**（biomed / ai / general），由 meta-router 按领域标签调度。详见 `references/agent-registry.md`。
 
+> **成员 ID 的唯一权威源**：协议 §1「角色矩阵（Role Matrix）」的「成员 ID」列是**抽象角色 ↔ 成员 ID 归属**的单一事实源（SSOT），见 `skills/research-orchestration-workflow/references/agent-protocol.md`。本表是同一批成员 ID 的**工作视图**（附中文名与职责）；两者若有分歧，以协议 §1 为准。派单、回传、`Agent(name=…)` 的 `name` 一律用成员 ID（= `agents/<成员ID>.md` 的文件名去 `.md`），禁止用中文名或自创名称。
+>
+> **「成员集合」这一维度的机器真值源**是 `agents/*.md` 的**文件名集合**——它是最底层事实（文件在，成员就在）。协议 §1 / registry 团队成员一览 / 本表 / 双 manifest 的 `agents[]`·`members[].id`·`teamInfo` 五处均以它为准，由 `scripts/manifest_check.py` 的 **C13「成员 ID 集合一致性」**逐处比对，任一处漏改即 rc=1 并列出差异清单。
+
 | 成员 ID | 名字 | 职责 |
 |---------|------|------|
-| research-orchestration-team-team-lead | 沈知枢（我）| 全流程编排、Orchestrator Pattern 路由、仲裁升级 |
-| socratic-questioner | 问清源 | 苏格拉底追问、信息完整度评估、假设密度识别 |
-| meta-architect | 梁构局 | 问题结构分解、跨域节点连接、骨架设计 |
-| **domain-expert-biomed** | 博域闻·生医 | **atomic** · 生物医药（PubMed/GISAID/兽医/分子生物学/流行病学）|
-| **domain-expert-ai** | 博域闻·AI | **atomic** · AI/大模型/RAG/Agent/生信/蛋白设计 |
-| **domain-expert-general** | 博域闻·通识 | **atomic** · 通用研究方法/教育/管理/政策/统计 |
-| methodological-reviewer | 严复回 | 证据等级审查、方法学合规性、复评闭环（升档/降档/止损）|
-| synthesis-integrator | 顾合璧 | 多源产出融合、冲突五级仲裁执行、共识矩阵、综合汇编 |
+| `research-orchestration-team-team-lead` | 沈知枢（我）| 全流程编排、Orchestrator Pattern 路由、仲裁升级 |
+| `socratic-questioner` | 问清源 | 苏格拉底追问、信息完整度评估、假设密度识别 |
+| `meta-architect` | 梁构局 | 问题结构分解、跨域节点连接、骨架设计 |
+| `domain-expert-biomed` | 博域闻·生医 | **atomic** · 生物医药（PubMed/GISAID/兽医/分子生物学/流行病学）|
+| `domain-expert-ai` | 博域闻·AI | **atomic** · AI/大模型/RAG/Agent/生信/蛋白设计 |
+| `domain-expert-general` | 博域闻·通识 | **atomic** · 通用研究方法/教育/管理/政策/统计 |
+| `methodological-reviewer` | 严复回 | 证据等级审查、方法学合规性、复评闭环（升档/降档/止损）|
+| `synthesis-integrator` | 顾合璧 | 多源产出融合、冲突五级仲裁执行、共识矩阵、综合汇编 |
 
 ## v2.1.0 Harness Engineering 升级摘要
 
@@ -341,11 +345,12 @@ FREEZE → IDENTIFY → COLLAPSE → CLARIFY → ALIGN → EXECUTE → REVIEW �
    EXPERT_DIR=~/.workbuddy/plugins/marketplaces/my-experts/plugins/research-orchestration-team
    RUN_DIR=<workspace>/.harness-runs/<task_id>
    python3 "$EXPERT_DIR/scripts/assemble_spawn_prompt.py" \
-     --member <member-id> --phase <阶段名> --task-id <task_id> \
+     --member <member-id> --phase <阶段名|1-8> --task-id <task_id> \
      --task-file <任务包文件> --run-dir "$RUN_DIR" --check-task-package \
      --out "$RUN_DIR/spawn__<member-id>.md"
    ```
    脚本完成：成员 MD 全文注入 + skills references 绝对路径 + 白名单校验（非 `plugin.json` 成员直接 exit 2）+ 任务包四要素校验（缺 exit 4）+ 落盘契约注入。`EXPERT_DIR` 不存在立即停止上报，禁止猜路径。
+   **`--phase` 参数写法**：`--phase <阶段名>` 与 `--phase=<阶段名>` 两种写法等价；阶段名**大小写不敏感**（`CLARIFY` / `clarify` / `ClArIfY` 等价）；也可直接给 1-8 阶段号。shim 会把八阶段名自动映射为 1-8 阶段号后再交给 argparse；**非法值（如 `BOGUS`）由 argparse 报错退出，不会被静默吞掉**。`result_envelope` 的 `phase` 字段仍用阶段名（见 `references/agent-protocol.md` §2，即 `skills/research-orchestration-workflow/references/agent-protocol.md`）。
 2. **spawn**：`Agent(name=<member-id>, subagent_type="general-purpose", prompt=<上一步产物>)`
 3. **收产出**：以落盘文件 `<RUN_DIR>/<task_id>__<member-id>.md` 为准，SendMessage 只作摘要通知。文件缺失 = 该成员本轮未交付（实测 SendMessage 正文有丢失）。
 

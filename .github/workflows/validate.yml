@@ -20,6 +20,9 @@ on:
       - '.github/workflows/validate.yml'
       - 'README.md'
       - 'CHANGELOG.md'
+      # CONTRIBUTING.md 同属随发布变动的顶层文档（README.md / CHANGELOG.md 已
+      # 在列），漏掉会导致改它不触发 CI。
+      - 'CONTRIBUTING.md'
       - 'settings.json'
   pull_request:
     branches: [master, main]
@@ -29,11 +32,12 @@ jobs:
   validate:
     name: Validate Plugin Package
     runs-on: ubuntu-latest
-    # v2.2.0：三套 mutation-based selftest 会在临时目录反复复制整个包体，
-    # 本机实测合计约 350s（近 6 分钟）；本轮又新增 N8 / N13 / N21 三条负例，
-    # 时长还会上升。CI 共享 runner 需另留 checkout / setup 与波动余量，
-    # 原 10 分钟偏紧，提到 15。
-    timeout-minutes: 15
+    # v2.4.0：五套 mutation-based selftest 会在临时目录反复复制整个包体
+    # （manifest 26 条 / harness 14 条 / routing 12 条），本机实测合计约 350s
+    # IO（近 6 分钟）；本轮又新增 protocol 13 条 + phase_norm 26 条共 39 条
+    # 负例，时长还会上升。CI 共享 runner 需另留 checkout / setup 与波动余量，
+    # 原 15 分钟偏紧，提到 25。
+    timeout-minutes: 25
 
     steps:
       - name: Checkout
@@ -64,6 +68,19 @@ jobs:
           python3 protocol_check.py conflict
           python3 protocol_check.py integration
 
+      # 协议门禁的注入式负例：证明 protocol_check.py 的三个 suite 真会拦截破坏
+      # 而非永远返回 0。v2.4.0 起纳入 CI。
+      # 脚本内部按 __file__ 解析自身与校验器位置，不依赖 working-directory，
+      # 故无需像上方 Protocol compliance tests 那样先 cd。
+      - name: Protocol checker self-test (mutation-based)
+        run: python3 skills/research-orchestration-workflow/scripts/protocol_check_selftest.py
+
+      # 阶段名归一化 shim 的自测：8 阶段名 × 2 种写法 + 大小写 + 整数 + 非法值
+      # 的映射与透传行为必须正确，否则 spawn 装配第一步按官方文档执行必然失败。
+      # 同样按 __file__ 解析包根，不依赖 working-directory。
+      - name: Phase normalization self-test
+        run: python3 scripts/test_phase_normalization.py
+
       # v2.1.2 起 CI 纳入 Harness Engineering 12 项设计检查 + 注入式负例
       # （v2.2.0 为 14 条：N1-N13 + R1）。此前仅本地手动跑，改一行文档即可
       # 无声破坏（Step 4 对标发现的执行层缺口）。
@@ -73,12 +90,13 @@ jobs:
       - name: Harness eval self-test (mutation-based)
         run: python3 scripts/harness_eval_selftest.py
 
-      # 成员集合 / 触发词 / 条目结构 / 工具名形态 / 工具集合一致性（R1-R5），
+      # 成员集合 / 触发词 / 条目结构 / 工具名形态 / 工具集合双向相等 / 真实 MCP 清单对照（R1-R6），
       # 防「文档加了成员但 MD/manifest 没同步」「MD 工具名漂移或伪造」的假绿。
-      - name: Routing consistency check (R1-R5)
+      # R6 需要真实 MCP 清单，CI / git-clone 态不可得时显式 SKIP 且不计 FAIL。
+      - name: Routing consistency check (R1-R6)
         run: python3 scripts/routing_eval.py
 
-      # 注入式负例证明 R1-R5 真会拦截破坏而非永远返回 0，防门禁退化成假绿。
+      # 注入式负例证明 R1-R6 真会拦截破坏而非永远返回 0，防门禁退化成假绿。
       - name: Routing eval self-test (mutation-based)
         run: python3 scripts/routing_eval_selftest.py
 

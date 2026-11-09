@@ -2,6 +2,59 @@
 
 所有重要变更按版本倒序记录。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [2.4.0] - 2026-11-09
+
+> Harness 迭代进化 R1 首轮全闭环版。主题：**机制 → 门禁 → 文档 → 状态落盘**。
+> 四阶段硬门控闭环（诊断 → 构建 → 测试&debug → 再诊断）走完一轮；13 个批次全部落盘，
+> 12 套门禁 12/12 全绿；新增「断点续跑单一事实源」让迭代可中断可续跑。
+
+### Added
+
+- **C13 成员 ID 集合一致性门禁**：`manifest_check.py` 新增第 13 项校验——以 `agents/*.md` 的文件名集合（最底层事实）为机器真值源，逐处比对 8 个目标：协议 §1 角色矩阵「成员 ID」列 / registry「团队成员一览」`agent_id` 列 / team-lead 成员表 / `.claude-plugin` 的 `agents[]` / `.codebuddy-plugin` 的 `agents[]` / `.codebuddy-plugin` 的 `members[].id` / `teamInfo.leadAgent` / `teamInfo.memberAgents`。任一不匹配即 rc=1，并**逐处列出「多出 / 缺少」差异**。8 类解析失败路径（含真值源为空）全部 fail-closed——空集合一律判红。成员增删从此只需改 `agents/` 一处。
+- **协议注入式负例自测**（新建 `skills/research-orchestration-workflow/scripts/protocol_check_selftest.py`，**13** 条）：证明 `protocol_check.py` 的三个 suite 真会拦截破坏，而非永远返回 0。
+- **阶段名归一化自测**（新建 `scripts/test_phase_normalization.py`，**26** 条）：覆盖 8 个阶段名 × 2 种写法 + 大小写不敏感 + 整数直传 + 非法值透传。
+- **编排层状态机代码化**（`state_io.py` 327 → 805 行）：`init` / `advance` / `resume` / `budget` / `fail` / `finish` 六命令；按序推进门禁（跳级 rc=1，逃生阀 `--force` 必须配非空 `--force-reason`）；失败熔断达阈值 → `status: aborted` + `abort_reason`；4 个 metrics 落盘且未上报记 `null` 禁编造；编排层硬上限（30 轮 / 1800s / 200000 token / 熔断 5 次）代码化，与平台层 `maxTurns: 180` 分层表述、两层都保留。
+- **两层 pointer 校验**：信封层判「字段在不在」（4 种合法形态 + `full`/`summary` 可空 / `ref` 必填），覆盖层判「覆盖全不全」（HANDOFF 回引必须是 `state://cp-NNN`）。两层职责分离不合流——数据依赖与失败语义都不同。
+- **迭代状态文件**（新建 `docs/harness-iteration-loop.md`）：断点续跑单一事实源，含意图漂移基线 / 四阶段台账 / 验收基线 / 资产清单 / 已修复问题黑名单 / 失败模式库 / 发布契约 / 下轮入口。
+- **两个协议登记模板**（新建 `skills/research-orchestration-workflow/templates/`）：`cross-domain-combo.md`（三组合 fan-out 与仲裁链，86 个占位符）/ `result-envelope-v2.4.json`（16 键，与 `REQUIRED_FIELDS_V24` 逐字一致）。
+- **shim core 哈希校验**：`assemble_spawn_prompt.py` 命中 core 后立即比对 `vendor/shared-core/VENDOR.json` 登记的 sha256，不一致即拒绝加载并退出（exit 4），阻断「祖先目录里的旧版/被篡改同名文件被静默加载并绕过哈希门禁」。
+
+### Changed
+
+- **门禁体系从「一层」升为「三层」**：第一层正向校验器（manifest C1–C13 / harness H1–H12 / routing R1–R6 / protocol 三 suite）、第二层注入式负例自测（5 套，共 91 条）、第三层联邦防漂移（V1–V6）。README 新增「门禁体系现状」节逐层说明，并固化**负例设计两条硬纪律**：①锚点唯一命中 + 替换后落盘校验 ②一条负例只承载一个失败维度。
+- **C8 废弃表述扫描豁免机制声明化**：由硬编码文件名白名单扩为「白名单 + 文件头声明式标记」双路径，标记窗口限定在前 3 行 ∩ 前 512 字节。新增审计类文档不再需要改校验器源码。
+- `protocol_check.py` 主套件 16 → **37**（v2.4 六必填 + legacy 12）；集成段去除硬编码自证，改为真读 `state_io.py` 的 `PHASES` 并交叉比对。
+- 双 manifest version 2.3.0 → **2.4.0**；README 头部版本行与结构树同步。
+- CI（`.github/workflows/validate.yml`）新增 2 个 step 纳入两套新注入式负例；timeout 15 → 25 分钟（5 套 selftest 在本地实测合计约 350s IO）。
+
+### Fixed
+
+- README 安装方式 3 的 tarball 链接指向已下线的资产（实测 HTTP 404）：改指实际存在的历史资产名，并补「资产名不统一 / 当前版本无 tarball」的限制说明。
+- README「安装方式」标题写「三套并存」但实际列 4 种方式（自 v2.0 引入即错）：改为「四种并存」。
+- CI step 名 `Routing consistency check (R1-R5)` 与实际的 R1–R6 不符：改为 `(R1-R6)`。
+- 协议 §1 与 team-lead 对「成员集合真值源」的表述互为循环：两端统一拆成两层——归属 SSOT = 协议 §1；**集合维度的机器真值源 = `agents/*.md` 文件名集合**，由 C13 强制。
+
+### Regression evidence（v2.4.0 部署前实测，12 套门禁逐条独立取 rc）
+
+| 套件 | 结果 |
+|------|------|
+| `manifest_check.py` | **73/73** ✅（新增 C13 贡献 9 项）|
+| `manifest_check_selftest.py` | **26/26** ✅（新增 N24/N25/N26）|
+| `harness_eval.py` / `harness_eval_selftest.py` | 12/12 ✅ / 14/14 ✅ |
+| `routing_eval.py` / `routing_eval_selftest.py` | 39/39 ✅ / 12/12 ✅ |
+| `tests/test_vendor_core.py` | V1–V6 **6/6** ✅（安装态 0 SKIP）|
+| `test_phase_normalization.py` | **26/26** ✅ |
+| `protocol_check.py` | envelope **37/37**(v2.4) + **12/12**(legacy) ✅ / conflict **5/5** ✅ / integration 阶段流水线 **9/9** + HANDOFF 回引覆盖 **8/8** 检查点 ✅ |
+| `protocol_check_selftest.py` | **13/13** ✅ |
+| 独立负向实锤（4 组，每次还原后 md5 与基线逐字节一致） | 改协议 §1 成员 ID → rc=1 且逐项列差异 ✅；清空 `agents/*.md` → rc=1（真值源为空一律判红）✅；破坏 `state_io.py` 的 `PHASES` → integration rc=1 且列两侧序列差异 ✅；状态机 9 条路径 rc 各自符合设计语义 ✅ |
+| shim 哈希校验 | 联邦命中 rc=0 ✅ / vendor 兜底 rc=0 ✅ / 任一路径篡改 → rc=4 拒绝加载 ✅ / VENDOR.json 缺失 → 告警放行 rc=0 ✅ |
+
+### Known limitations
+
+- 官方 `validate_expert.py` 本机不存在（宿主未随包分发）→ 以包内 `manifest_check.py` + `tests/test_vendor_core.py` V5/V6 安装态冒烟替代。
+- `protocol_check.py` 集成段的 `cp-001~cp-008` 检查点清单仍为硬编码：当前已与 `state_io.py` 的阶段序列交叉比对（真断言），但 cp 清单本身未动态化，成员增删 cp 编号变动时需同步。
+- selftest 约 350s IO 耗时（每条负例在临时目录复制整个包体）：可用硬链接替代复制提速。
+
 ## [2.3.0] - 2026-11-08
 
 > 发布后残留风险的工程化收口版。主题：**登记的残留 → 门禁化的消除**。

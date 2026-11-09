@@ -12,10 +12,10 @@
 
 ```bash
 # 1. 包一致性校验（双 manifest 对等 / 市场清单 / agents 与头像资产 / teamInfo 自洽 /
-#    README 版本一致 / 废弃表述 / 契约章节完整性）—— 单一事实来源，共 64 项（C1–C12）
+#    README 版本一致 / 废弃表述 / 契约章节完整性 / 成员 ID 五处一致性）—— 单一事实来源，共 73 项（C1–C13）
 python3 scripts/manifest_check.py -v
 
-# 2. 校验器自测（注入式负例 21 条）：证明上面的校验器真的会失败，而不是永远返回 0
+# 2. 校验器自测（注入式负例 26 条）：证明上面的校验器真的会失败，而不是永远返回 0
 python3 scripts/manifest_check_selftest.py
 
 # 3. 协议合规单元测试
@@ -23,14 +23,20 @@ python3 skills/research-orchestration-workflow/scripts/protocol_check.py envelop
 python3 skills/research-orchestration-workflow/scripts/protocol_check.py conflict
 python3 skills/research-orchestration-workflow/scripts/protocol_check.py integration
 
-# 4. 选题评分脚本边界测试
+# 4. 协议合规注入式负例自测（13 条）：证明上面三个 suite 不是永远返回 0
+python3 skills/research-orchestration-workflow/scripts/protocol_check_selftest.py
+
+# 5. 阶段名归一化自测（26 条）：--phase 阶段名 / 数字 / 大小写 / 非法值的归一化行为
+python3 scripts/test_phase_normalization.py
+
+# 6. 选题评分脚本边界测试
 python3 skills/research-orchestration-workflow/scripts/topic_scoring.py \
   --topic test --originality 11 --feasibility 7 --value-density 9 \
   --data-availability 7 --competition 6 --cognition 8 --resource-fit 7 --sustainability 7
 # 期望：退出码 1 + "评分超出有效范围"
 ```
 
-> `scripts/manifest_check.py` 的校验项为 C1–C12，全部为**硬失败**（`rc=1`）。
+> `scripts/manifest_check.py` 的校验项为 C1–C13，全部为**硬失败**（`rc=1`）。
 > 其中 C8 的废弃术语清单是本仓库的**单一事实来源**，请勿在 workflow 或别处另抄一份
 > —— 历史上正是因为另抄了一份「精确串」清单，某个在关键词中间插了字的旧表述逃过匹配，
 > 造成了 CI 假绿。
