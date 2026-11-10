@@ -3,7 +3,7 @@
 > **团队名称**：科研价值驱动研究编排团 / Research Value-Driven Research Orchestration Team
 > **专家类型**：Team 型（8 人协作团 · v2.3.0 工具真实性门禁 R1-R6）
 > **行业分类**：12-IndustryConsultant（跨学科咨询）
-> **版本**：2.5.5
+> **版本**：2.5.6
 > **许可证**：MIT
 > **仓库**：[github.com/virologist/research-orchestration-team](https://github.com/virologist/research-orchestration-team)
 
@@ -71,7 +71,7 @@ research-orchestration-team/
 │       │   ├── protocol_check.py                   # 协议合规校验（三套 suite：信封 / 冲突仲裁 / 集成仿真）
 │       │   ├── protocol_check_selftest.py          # 协议合规注入式负例自测 · 14 条
 │       │   ├── memory_log.py                       # 持久记忆自动写入
-│       │   └── state_io.py                         # 状态机持久化 · 六命令 init/advance/resume/budget/fail/finish（四项硬上限语义分层：turns/tokens 触顶告警，max_time/failures 终态熔断，tests/test_state_ceilings.py 锁定）
+│       │   └── state_io.py                         # 状态机持久化 · 六命令 init/advance/resume/budget/fail/finish（四项硬上限语义分层：turns/tokens 触顶告警，max_time/failures 终态熔断，tests/ 下四套运行时护栏锁定）
 │       └── templates/
 │           ├── topic-scoring-card.md               # 选题评分卡模板
 │           ├── cross-domain-combo.md               # 跨域组合编排模板 · biomed×ai / biomed×general / ai×general
@@ -89,7 +89,10 @@ research-orchestration-team/
 ├── tests/
 │   ├── test_vendor_core.py                         # 防漂移门禁 V1–V6
 │   ├── test_state_ceilings.py                      # 编排层上限语义锁定 · 4 条
-│   └── test_state_io_guards.py                     # state_io 输入护栏注入式验证 · 10 条
+│   ├── test_state_io_guards.py                     # state_io 输入护栏注入式验证 · 10 条
+│   ├── test_lead_source_of_truth.py                # 主理人双重事实源一致性 · 6 条
+│   ├── test_state_runtime_sequencing.py            # 运行时序 / 终态污染 / 观测一致性 · 8 条
+│   └── test_state_file_robustness.py               # 状态文件健壮性 / cp 编号 / 孤儿 tmp · 12 条
 ├── avatars/                                         # 8 名成员头像 + 团队头像（随 git 分发）
 ├── docs/
 │   ├── REDTEAM-REPORT.md                           # 红队审查报告（5 维度 · 缺陷 · 回归证据）
@@ -128,7 +131,7 @@ research-orchestration-team/
 | `scripts/routing_eval.py` | **R1–R6** | 路由结构一致性：成员集合 / 触发词 / 条目结构 / 工具名形态 / 工具集合双向相等 / 真实 MCP 清单对照（R6 需真实 MCP 清单，CI/git-clone 态显式 SKIP 且不计 FAIL） |
 | `skills/research-orchestration-workflow/scripts/protocol_check.py` | **三个 suite** | 协议合规：信封 **37** / 冲突仲裁 **5** / 集成仿真 **10**（含流水线成员真值源断言） |
 
-### 第二层 · 注入式负例自测（4 套）+ 阶段名归一化自测（1 套）+ 运行时护栏（2 套）
+### 第二层 · 注入式负例自测（4 套）+ 阶段名归一化自测（1 套）+ 运行时护栏（5 套）
 
 | 自测脚本 | 用例数 | 证明什么 |
 |----------|--------|----------|
@@ -141,6 +144,12 @@ research-orchestration-team/
 另有 `tests/test_state_ceilings.py`（**4** 条）：锁定编排层四项硬上限的语义分层——turns/tokens 触顶为告警（不截断）、max_time/failures 为终态熔断，任何一层的语义被误改立即红。
 
 另有 `tests/test_state_io_guards.py`（**10** 条，R3）：state_io 输入护栏——checkpoint 形态归一化（`state://cp-NNN` 与裸名等价）、task_id 消毒（拒绝路径穿越）、不带检查点推进的回归护栏。逐条独立取 rc，负例同时断言失败原因归属被测分支且无裸堆栈；3 组注入破坏实验证明会红。
+
+另有 `tests/test_lead_source_of_truth.py`（**6** 条，R5）：主理人双重事实源一致性——C12 的 `agentName` 必须与 C13 的声明位（`leadAgent` + `members[].role=lead`）一致，合法换主理人放行、单字段漂移精确变红，`settings.json` 跟随。
+
+另有 `tests/test_state_runtime_sequencing.py`（**8** 条，R6）：运行时序护栏——终态（`done` / `aborted`）不得被事后超时翻案、熔断阈值只收紧不放宽、`turns_used` 取 `max(已落盘值, turn)` 不冲掉上报观测值。3 组注入破坏实验证明会红。
+
+另有 `tests/test_state_file_robustness.py`（**12** 条，R7）：状态文件结构健壮性——合法 JSON 但缺关键字段一律 rc=3 且逐条指名字段、不静默重建、被拒后状态文件逐字节未变；触顶文案归属告警层；cp 编号必须等于阶段序号且不可复用、marker 每次重写；SIGKILL 留下的已确认孤儿 tmp 被清理。4 组注入破坏实验证明会红。
 
 ### 第三层 · 联邦防漂移门禁（1 套）
 
@@ -189,11 +198,12 @@ research-orchestration-team/
 - **v2.4.0** (2026-11-09)：Harness 迭代进化 R1 首轮全闭环。四阶段硬门控走完一轮，门禁体系从一层升为**三层**（正向校验器 / 注入式负例自测 5 套 91 条 / 联邦防漂移）：manifest 升至 **C1–C13**（新增 C13 成员 ID 集合一致性，以 `agents/*.md` 文件名为机器真值源逐处比对 8 个目标）、protocol 主套件 16 → **37**、新增 `protocol_check_selftest.py`（13 条）与 `test_phase_normalization.py`（26 条）；`state_io.py` 状态机代码化（按序推进 / 熔断 / 预算 / metrics / `fail` 子命令）；C8 豁免机制声明化；shim 命中 core 加 sha256 硬校验。新建 `docs/harness-iteration-loop.md` 作为迭代断点续跑的单一事实源。回归 **12 套门禁全绿** + 4 组独立负向实锤。详见 [CHANGELOG.md](./CHANGELOG.md)。
 - **v2.4.1** (2026-11-09)：发布介质自洽性补丁。v2.4.0 的 release 资产 `rot-v2.4.0.tar.gz` 已补齐，但其 tag 指向 `90a1c36`——**早于**修正「安装方式 3」链接的 commit，导致 tarball 内的 README 仍写「方式 3 只能安装到 v2.1.2」，介质与自身文档矛盾。按发布纪律（tag 不重写、不重打已发布资产以免「资产内容 ≠ tag 内容」）不改 v2.4.0，改发本补丁版：方式 3 改指 v2.4.1 资产。协议、运行时、门禁**行为无变更**。
 - **v2.5.0** (2026-11-09)：R2 覆盖矩阵盲区修复。16 组真实破坏实验逐条验证「每条门禁分支都有会红的测试盯着」，修复：编排层上限语义失真（turns/tokens 触顶=告警，max_time/failures=终态熔断，新增 `tests/test_state_ceilings.py` 4 用例锁定）；流水线幽灵成员无门禁（集成段新增真值源断言 9→10 项）；protocol selftest N10 重构（消除与 N6 的重复）+ N11 新增（13→14 条）；manifest selftest 补 N27（C8 七条缺口规则批量回归）+ N28/N29/N30（C13 声明位互换/重复 ID/目录删除）（26→30 条）；CI 补熔断段 + 语义锁定 step（门禁 step 12→14）；跨市场 description 漂移实锤并统一，C2 对等校验纳管 description（73→74 项）。详见 [CHANGELOG.md](./CHANGELOG.md)。
-- **v2.5.5** (2026-11-10)：R7 状态文件健壮性审计。11 组状态文件实验实锤 **2 个 P0 + 3 个 P1**：① **半损坏状态文件 → 裸 Traceback**——`load_state` 原先只做 JSON 解析层校验，文件是合法 JSON 但缺关键字段时（被外部改写 / 旧版本状态文件 / 部分写盘后编辑），下游子命令直接 `state["phase"]` / `state["status"]` → 裸 `KeyError`，实测 **13 组子命令 × 损坏形态组合全部命中**；② **缺 status 时 budget/fail 假绿**——rc=0 放行，把「未知状态」静默当成 running 继续写盘，等于凭空替主理人断言状态；③ **budget 触顶文案宣称「熔断」实为告警**——registry 明确 turns/tokens 是告警层、只有 max_time/failures 才是终态熔断层，原文案会让调用方误以为 status 已变 aborted（FM-R2-03 同族复发）；④ **检查点编号与阶段序号解耦**——协议 §3 约定 cp 编号 = 阶段序号，原实现只校验形态，编号可乱写 / 可复用 / marker 因 `if not marker.exists()` 永不重写，三者都会破坏 protocol_check 的 HANDOFF 跨层校验；⑤ **SIGKILL 崩溃留下孤儿 tmp**——`_state.json.tmp.<pid>` 永久残留，反复崩溃即无界堆积的磁盘泄漏。修复：新增结构层校验 `_validate_state_shape`（缺字段 / 类型非法 / 取值非法一律 rc=3 且逐条指名字段，**不静默重建**）、触顶文案改为「告警层」、`advance` 强制 cp 编号 = turn 对应编号（乱写与复用均 rc=1 拒绝）+ marker 每次重写、写盘前清理**已确认孤儿**的 tmp（`os.kill(pid,0)` 探测持有进程已死才删）。新增 `tests/test_state_file_robustness.py` 12 条锁定（4 组注入破坏实锤证明会红）；CI 门禁 step 17→18。
-- **v2.5.4** (2026-11-10)：R6 运行时序审计。13 组运行时序实验实锤 **2 个 P0 + 2 个 P1**：① **终态污染**——`resume`/`budget` 的 `max_time` 守卫只排除 `aborted` 漏了 `done`，且 `budget` 完全没有终态守卫，导致已 finish 成功的任务事后超时会**被翻成 `aborted`**（`success_rate=1` 与 `status=aborted` 自相矛盾）；② **熔断可绕过**——`fail --max-failures` 能抬高阈值，「每次 fail 自带更大阈值」让熔断彻底失效（实测 8 次失败后仍 `running`）；③ **观测数据静默丢失**——`advance` 用 `turn` 覆盖 `turns_used`，把主理人上报的观测值冲回小值。修复：新增 `_is_terminal()` 统一终态判定 + `budget` 补守卫；熔断阈值改为**只收紧不放宽**；`turns_used` 改取 `max(已落盘值, turn)`。新增 `tests/test_state_runtime_sequencing.py` 8 条锁定（3 组注入破坏证明会红）；CI 门禁 step 16→17。其余 7 组运行时序实验验证为设计正确（8 路并发无丢更新、init 幂等、JSON 损坏全 fail-fast 等）。
-- **v2.5.3** (2026-11-10)：R5 组合态盲区修复。断言组合态审计（11 组实验）实锤 C12×C13 **主理人双重事实源**：`agentName`（C12 读）与 `leadAgent`+`members[].role=lead` 声明位（C13 读）是两个独立事实源——三处同步漂移到同一普通成员时 74 项门禁全绿（合法换主理人无从与劫持区分）。修复：C12 以 C13 的声明位为唯一事实源，`agentName` 降级为兼容字段（存在但 ≠ 声明位即红）。新增 `tests/test_lead_source_of_truth.py` 6 条锁定（M1 基线 / M2 合法换主理人放行 / M3-M5 三种单字段漂移精确红 / M6 settings 跟随）；CI 门禁 step 15→16。其余 10 组组合实验验证为设计正确（熔断×force、熔断×init 幂等、done×resume、集合语义等）。
-- **v2.5.2** (2026-11-10)：R4 遗留双闭环。① cp 检查点清单动态化——集成段的 `cp-001~cp-008` 硬编码改为从 `state_io.PHASES` 长度生成（检查点编号 = 阶段序号），成员增删阶段时两侧自动同步，单侧漂移由「阶段序列一致」断言拦截（双向破坏实锤）；PHASES 加载失败 fail-closed 判红不静默回退。② selftest IO 提速——`make_copy` 首选 APFS `cp -cR`（clonefile 写时复制，0.39s/次 vs copytree 3.0s/次），CoW 写时断链使 mutate 天然不回流 pristine；回退链 cp -cR → Python 硬链接（detach 防回流）→ copytree。实测 manifest selftest **330s → 48s**、routing selftest **64s → 10s**。行为无变更（测试基建优化）。
 - **v2.5.1** (2026-11-10)：R3 输入护栏收口。Phase A 再诊断（断言交互 + 运行时序）实锤：checkpoint 形态契约断裂——协议标准形态 `state://cp-NNN`（protocol_check 的 `CHECKPOINT_POINTER_PATTERN`）传给 `state_io.py` 旧实现会拼出 `checkpoints/state:/cp-NNN.md` → 裸 Traceback（P0）；task_id 含 `/` 或 `..` 可越界落盘（P1）。修复：`_normalize_checkpoint_name` 双形态归一（空值=不带、非法=拒绝三态语义）+ `main()` 统一入口 task_id 消毒（非法 rc=2）；同步修复修复过程引入的回归（不带检查点的推进被误拒）。新增 `tests/test_state_io_guards.py` 10 条注入式护栏（3 组破坏实验证明会红）；CI 门禁 step 14→15。详见 [CHANGELOG.md](./CHANGELOG.md)。
+- **v2.5.2** (2026-11-10)：R4 遗留双闭环。① cp 检查点清单动态化——集成段的 `cp-001~cp-008` 硬编码改为从 `state_io.PHASES` 长度生成（检查点编号 = 阶段序号），成员增删阶段时两侧自动同步，单侧漂移由「阶段序列一致」断言拦截（双向破坏实锤）；PHASES 加载失败 fail-closed 判红不静默回退。② selftest IO 提速——`make_copy` 首选 APFS `cp -cR`（clonefile 写时复制，0.39s/次 vs copytree 3.0s/次），CoW 写时断链使 mutate 天然不回流 pristine；回退链 cp -cR → Python 硬链接（detach 防回流）→ copytree。实测 manifest selftest **330s → 48s**、routing selftest **64s → 10s**。行为无变更（测试基建优化）。
+- **v2.5.3** (2026-11-10)：R5 组合态盲区修复。断言组合态审计（11 组实验）实锤 C12×C13 **主理人双重事实源**：`agentName`（C12 读）与 `leadAgent`+`members[].role=lead` 声明位（C13 读）是两个独立事实源——三处同步漂移到同一普通成员时 74 项门禁全绿（合法换主理人无从与劫持区分）。修复：C12 以 C13 的声明位为唯一事实源，`agentName` 降级为兼容字段（存在但 ≠ 声明位即红）。新增 `tests/test_lead_source_of_truth.py` 6 条锁定（M1 基线 / M2 合法换主理人放行 / M3-M5 三种单字段漂移精确红 / M6 settings 跟随）；CI 门禁 step 15→16。其余 10 组组合实验验证为设计正确（熔断×force、熔断×init 幂等、done×resume、集合语义等）。
+- **v2.5.4** (2026-11-10)：R6 运行时序审计。13 组运行时序实验实锤 **2 个 P0 + 2 个 P1**：① **终态污染**——`resume`/`budget` 的 `max_time` 守卫只排除 `aborted` 漏了 `done`，且 `budget` 完全没有终态守卫，导致已 finish 成功的任务事后超时会**被翻成 `aborted`**（`success_rate=1` 与 `status=aborted` 自相矛盾）；② **熔断可绕过**——`fail --max-failures` 能抬高阈值，「每次 fail 自带更大阈值」让熔断彻底失效（实测 8 次失败后仍 `running`）；③ **观测数据静默丢失**——`advance` 用 `turn` 覆盖 `turns_used`，把主理人上报的观测值冲回小值。修复：新增 `_is_terminal()` 统一终态判定 + `budget` 补守卫；熔断阈值改为**只收紧不放宽**；`turns_used` 改取 `max(已落盘值, turn)`。新增 `tests/test_state_runtime_sequencing.py` 8 条锁定（3 组注入破坏证明会红）；CI 门禁 step 16→17。其余 7 组运行时序实验验证为设计正确（8 路并发无丢更新、init 幂等、JSON 损坏全 fail-fast 等）。
+- **v2.5.5** (2026-11-10)：R7 状态文件健壮性审计。11 组状态文件实验实锤 **2 个 P0 + 3 个 P1**：① **半损坏状态文件 → 裸 Traceback**——`load_state` 原先只做 JSON 解析层校验，文件是合法 JSON 但缺关键字段时（被外部改写 / 旧版本状态文件 / 部分写盘后编辑），下游子命令直接 `state["phase"]` / `state["status"]` → 裸 `KeyError`，实测 **13 组子命令 × 损坏形态组合全部命中**；② **缺 status 时 budget/fail 假绿**——rc=0 放行，把「未知状态」静默当成 running 继续写盘，等于凭空替主理人断言状态；③ **budget 触顶文案宣称「熔断」实为告警**——registry 明确 turns/tokens 是告警层、只有 max_time/failures 才是终态熔断层，原文案会让调用方误以为 status 已变 aborted（FM-R2-03 同族复发）；④ **检查点编号与阶段序号解耦**——协议 §3 约定 cp 编号 = 阶段序号，原实现只校验形态，编号可乱写 / 可复用 / marker 因 `if not marker.exists()` 永不重写，三者都会破坏 protocol_check 的 HANDOFF 跨层校验；⑤ **SIGKILL 崩溃留下孤儿 tmp**——`_state.json.tmp.<pid>` 永久残留，反复崩溃即无界堆积的磁盘泄漏。修复：新增结构层校验 `_validate_state_shape`（缺字段 / 类型非法 / 取值非法一律 rc=3 且逐条指名字段，**不静默重建**）、触顶文案改为「告警层」、`advance` 强制 cp 编号 = turn 对应编号（乱写与复用均 rc=1 拒绝）+ marker 每次重写、写盘前清理**已确认孤儿**的 tmp（`os.kill(pid,0)` 探测持有进程已死才删）。新增 `tests/test_state_file_robustness.py` 12 条锁定（4 组注入破坏实锤证明会红）；CI 门禁 step 17→18。
+- **v2.5.6** (2026-11-10)：发布介质自洽性补丁（纯文档，运行时与门禁行为无变更）。R3–R7 连续五轮快速迭代后，已发布的 `rot-v2.5.5.tar.gz` 内 README / CONTRIBUTING 的门禁计数、结构树与提交前清单滞后于仓库实际（结构树缺 R5/R6/R7 三套测试、集成仿真 `9/9` 与协议负例 `13 条` 两处自相矛盾、版本历史段逆序）；`LEARNING.md` 的 Task 记录停在 R3；状态文件 §10.1 仍写「R7 起始状态」且 §10 章节编号错乱。按发布纪律「已发布 tag 不重写、已发布资产不重打包」，不改 v2.5.5，改发本补丁版：文档口径全量对齐、示例资产名去掉版本字面量（根治复发点）、提交前必跑清单补齐 18 个门禁 step 对应命令、状态文件推进到 R8 入口、LEARNING 补 R4–R7 四轮回流并新增 FM-R2-07。详见 [CHANGELOG.md](./CHANGELOG.md)。
 
 ## 安装方式（四种并存）
 
@@ -229,7 +239,7 @@ cp -r research-orchestration-team ~/.claude/skills/research-orchestration-team
 
 ### 方式 3 · GitHub Release tarball
 
-下载 [最新 release](https://github.com/virologist/research-orchestration-team/releases/latest) 页面的 tarball（资产名约定 `rot-<版本>.tar.gz`，如本版 `rot-v2.5.5.tar.gz`）→ 解压 → 按方式 2 拷贝。
+下载 [最新 release](https://github.com/virologist/research-orchestration-team/releases/latest) 页面的 tarball（资产名形如 `rot-vX.Y.Z.tar.gz`，实际版本以 release 页面为准）→ 解压 → 按方式 2 拷贝。
 
 > tarball 内容与 `git clone` 一致（含 `avatars/` 与包根 `settings.json`），已剔除编辑备份等本地产物。
 > **链接不写死版本（v2.5.0 起）**：统一指向 `releases/latest` 页面，避免每次发版都要改 README。此前方式 3 写死 `rot-v2.4.1.tar.gz`，v2.4.0 曾因同类滞后专门发过 v2.4.1 补丁版——这是该复发点的根治。下载前请在 release 页面确认实际资产名。
@@ -301,6 +311,7 @@ claude --plugin-dir ./research-orchestration-team
 2. **资产必须 `git archive <tag>` 生成**，禁止手工修改资产内容——保证「资产内容 == tag 内容」。v2.4.0 的教训：重打已发布资产比文档过期更严重。
 3. **打包前确认 README「方式 3」不含具体版本字面量**（已改为 `releases/latest` 通用链接）；CHANGELOG 版本段保持倒序。
 4. **解包核对**：资产内 README 头部版本行 == tag 版本、关键门禁脚本齐全、无 `.git/` 与本地备份产物，之后才上传。
+5. **全量文档差集核对（v2.5.6 起，FM-R2-07 根治项）**：逐项比对 `tests/` 真实文件清单 ↔ README 结构树 ↔ 门禁体系现状 ↔ CONTRIBUTING 提交前必跑清单；CI workflow 的 `- name:` 清单 ↔ 本地命令清单；用例数 ↔ CHANGELOG 回归证据表；版本历史段顺序；状态文件 `docs/harness-iteration-loop.md` §10.1 的入口轮次与 §10 章节编号；`LEARNING.md` 的 Task 记录最新轮次。**若已发布 tag 的资产内文档滞后，不改该 tag / 不重打包，改发纯文档补丁版**。
 
 ```bash
 # 1. 在 canonical 仓库推送
@@ -328,9 +339,14 @@ python3 scripts/routing_eval_selftest.py          # 路由注入式负例自测
 python3 tests/test_vendor_core.py                 # 联邦防漂移 V1–V6
 python3 skills/research-orchestration-workflow/scripts/protocol_check.py envelope    # v2.4 主套件 37 + legacy 12
 python3 skills/research-orchestration-workflow/scripts/protocol_check.py conflict    # 冲突仲裁 5/5
-python3 skills/research-orchestration-workflow/scripts/protocol_check.py integration # 集成仿真 9/9
-python3 skills/research-orchestration-workflow/scripts/protocol_check_selftest.py    # 协议注入式负例自测 13 条
+python3 skills/research-orchestration-workflow/scripts/protocol_check.py integration # 集成仿真 10/10
+python3 skills/research-orchestration-workflow/scripts/protocol_check_selftest.py    # 协议注入式负例自测 14 条
 python3 scripts/test_phase_normalization.py                                          # 阶段名归一化自测 26 条
+python3 tests/test_state_ceilings.py               # 编排层上限语义锁定 4 条（R2）
+python3 tests/test_state_io_guards.py              # state_io 输入护栏 10 条（R3）
+python3 tests/test_lead_source_of_truth.py         # 主理人双重事实源 6 条（R5）
+python3 tests/test_state_runtime_sequencing.py     # 运行时序 / 终态污染 8 条（R6）
+python3 tests/test_state_file_robustness.py        # 状态文件健壮性 / cp 编号 12 条（R7）
 python3 skills/research-orchestration-workflow/scripts/state_io.py resume --help     # 状态持久化工具存在性自检
 python3 skills/research-orchestration-workflow/scripts/topic_scoring.py --topic probe \
   --originality 8 --feasibility 7 --value-density 9 --data-availability 7 \

@@ -2,6 +2,93 @@
 
 所有重要变更按版本倒序记录。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [2.5.6] - 2026-11-10
+
+> **发布介质自洽性补丁（纯文档）**。R3–R7 连续五轮快速迭代、每轮都发版，但每轮只同步「本轮改动直接涉及的文档」，
+> 未做「资产内文档 ↔ 仓库实际」的全量差集核对。R7 收口后核实：`rot-v2.5.5.tar.gz` 内的
+> README / CONTRIBUTING 与 master 同版（`git diff v2.5.5..master` 仅 1 行 docs 差异），
+> 因此下列滞后**确已进入已发布资产**。按「已发布 tag 不重写、已发布资产不重打包」纪律，
+> 不改 v2.5.5，改发本补丁版。
+>
+> **运行时、协议、门禁行为均无变更**；CI 门禁 step 仍为 **18**（平台 step 6，总 24）。
+
+### Fixed
+
+- **README 结构树缺 3 套测试（R5/R6/R7）**：`tests/` 实际有 6 个测试文件，结构树只列 3 个。
+  补齐 `test_lead_source_of_truth.py`（6 条）/ `test_state_runtime_sequencing.py`（8 条）/
+  `test_state_file_robustness.py`（12 条），并把 `state_io.py` 注释里「仅 `test_state_ceilings.py` 锁定」
+  改为「`tests/` 下四套运行时护栏锁定」。
+- **README 两处计数自相矛盾**：门禁段写「集成仿真 **10** / 协议负例 **14** 条」，
+  「本地跑门禁」命令清单却仍写 `集成仿真 9/9` 与 `协议注入式负例自测 13 条`。
+  统一到唯一真值源（实跑用例数）：`10/10` 与 `14 条`。
+- **README 门禁段与本地命令清单缺 R2–R7 六套护栏**：第二层标题「运行时护栏（2 套）」改为（5 套），
+  补 R5/R6/R7 三段说明；本地命令清单补 5 套运行时护栏命令。
+- **README 版本历史段 v2.5.1–v2.5.5 逆序堆积**：R3–R7 每次追加都插在 v2.5.0 之后，
+  形成「升序主干 + 局部降序」。重排为严格时间升序，并追加 v2.5.6 条目。
+- **README 方式 3 示例资产名带本版号**：每次发版都要改 README 的复发点（v2.5.0 时登记为低优先残留）。
+  改为 `rot-vX.Y.Z.tar.gz` 通用形态 + 「实际版本以 release 页面为准」，**根治**该复发点；
+  下载链接本身仍是 `releases/latest`，不含版本字面量。
+- **CONTRIBUTING「提交前必跑（强制 CI）」与 CI 不对齐**：原清单只覆盖 6 类命令，
+  缺 `harness_eval` / `harness_eval_selftest` / `routing_eval` / `routing_eval_selftest` /
+  `test_vendor_core` 以及 R5/R6/R7 三套。重写为按 workflow 顺序排列的 18 条本地等价命令，
+  并注明 State IO lifecycle smoke / 熔断两段为 workflow 内嵌脚本、退出码分层语义（FM-R1-08）。
+- **`LEARNING.md` 跨会话回流停在 R3**：R4/R5/R6/R7 四轮 Task 记录缺失，
+  与「每个任务结束必须追加 task 记录」的写入规则不符。按模板补 4 条 + 本轮收口 1 条，
+  含决策 / 证据 / 下一步 / observability 四段，observability 如实标「未采集」。
+- **状态文件 §10 章节编号错乱、入口未推进**：`docs/harness-iteration-loop.md` 的
+  10.5 / 10.6 被插在 10.2 与 10.3 之间；§10.1 仍写「R7 从 Phase A 开始」（R7 已完整闭环）；
+  变更记录表末尾 R4/R3/R3 三行错位。修复：§10 按编号元组重排为
+  10.1→10.2→10.3→10.3.1→10.3.2→10.3.3→10.4→10.5→10.6，标题改为「R8 起始状态」，
+  §10.1 改写为 R8 入口（含 R7 实况、v2.5.6 收口、基线 / 事实源 / 失败模式比对 / 建议主题），
+  变更记录表 23 行按轮次稳定排序并追加收口行。
+
+### Added
+
+- **FM-R2-07「资产内文档口径累计滞后」**：写入 `LEARNING.md` 专条 + 速查索引，
+  并写入状态文件 §8 失败模式库（9 列完整登记）。根因 = 发布契约只覆盖版本指向与资产齐全，
+  不覆盖结构树 / 用例计数 / 提交前清单 / 跨会话回流 / SSOT 入口轮次；v2.4.1、v2.5.0 同族，
+  本次为**累计型**复发。
+- **README 发布契约第 5 条「全量文档差集核对」**（v2.5.6 起）：逐项列明
+  `tests/` 清单 ↔ 结构树 ↔ 门禁段 ↔ 提交前清单、CI `- name:` ↔ 本地命令清单、
+  用例数 ↔ CHANGELOG 回归表、版本历史顺序、§10.1 入口轮次与 §10 章节编号、
+  LEARNING 最新轮次；并规定「资产内文档滞后 → 不改 tag / 不重打包，改发纯文档补丁版」。
+- **状态文件 §10.2 #29**：如实登记「文档口径无自动化门禁」为**未闭环 · 设计缺口 · 留待 R8**，
+  FM-R2-07 按「部分闭环」标注（护栏目前是文档契约条款，不是可复跑的校验器），不写「已修复」。
+- **§10.3.3 CI step 计数表补 v2.5.6 行**：18 门禁 step / 24 总 step / 6 平台 step。
+
+### Changed
+
+- 版本号三处同步：两份 `plugin.json` + README 头部 → **2.5.6**（C7 校验）。
+- `docs/harness-iteration-loop.md` §10.4 判据表更新：v2.5.6 不计入「再诊断」轮次
+  （连续 2 轮无 P0/P1 仍为 0/2）、全量回归补 16 套、收口建议判据补 v2.5.6 已闭环。
+
+### Regression evidence（v2.5.6 部署前实测，16 套门禁逐条独立取 rc）
+
+| 套件 | 结果 |
+|------|------|
+| `manifest_check.py` / `_selftest.py` | 74/74 ✅ / 30/30 ✅ |
+| `harness_eval.py` / `_selftest.py` | 12/12 ✅ / 14/14 ✅ |
+| `routing_eval.py` / `_selftest.py` | 39/39 ✅ / 12/12 ✅ |
+| `tests/test_vendor_core.py` | V1–V6 6/6 ✅ |
+| `test_phase_normalization.py` | 26/26 ✅ |
+| `tests/test_state_ceilings.py` | 4/4 ✅ |
+| `tests/test_state_io_guards.py` | 10/10 ✅ |
+| `tests/test_lead_source_of_truth.py` | 6/6 ✅ |
+| `tests/test_state_runtime_sequencing.py` | 8/8 ✅ |
+| `tests/test_state_file_robustness.py` | 12/12 ✅ |
+| `protocol_check.py` envelope / conflict / integration | 37/37(v2.4)+12/12(legacy) ✅ / 5/5 ✅ / 10/10+8/8 ✅ |
+| `protocol_check_selftest.py` | 14/14 ✅ |
+
+> 本轮**无代码改动**，故不新增注入破坏实验；负例护栏沿用 v2.5.0–v2.5.5 已证明会红的矩阵。
+> 发布链证据（CI run / tag / 资产 sha256 / 八处一致）在推送后补入 `docs/harness-iteration-loop.md` 变更记录。
+
+### Known limitations（设计语义 · 登记备查，非缺陷）
+
+- **文档口径仍无自动化门禁**（§10.2 #29 / FM-R2-07）：本轮靠人工全量差集对齐并写入发布契约第 5 条，
+  补自动化校验器需定义检查范围与历史段落豁免清单，属设计裁决，留待 R8。
+- #22（`init` / `budget` 可主动放宽熔断阈值）与 #28（协议层 ↔ 落盘状态跨层校验）
+  两项仍为**属设计裁决**的未闭环项，须先取得管家节点确认，不在本补丁版范围内。
+
 ## [2.5.5] - 2026-11-10
 
 > R7 状态文件健壮性审计版。主题：**状态文件半损坏时会怎样？检查点编号与阶段序号绑不绑得住？崩溃后会不会留垃圾？**

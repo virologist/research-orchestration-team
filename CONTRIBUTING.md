@@ -11,15 +11,19 @@
 ## 提交前必跑（强制 CI）
 
 ```bash
-# 1. 包一致性校验（双 manifest 对等（含 description）/ 市场清单 / agents 与头像资产 / teamInfo 自洽 /
-#    README 版本一致 / 废弃表述 / 契约章节完整性 / 成员 ID 五处一致性）—— 单一事实来源，共 74 项（C1–C13）
+# CI 共 18 个门禁 step（另有 6 个平台 step 不计入），以下按 workflow 顺序给出本地等价命令。
+# 逐条独立取 rc；rc=0 通过 / rc=1 校验失败 / rc=2 文件不存在 / rc=3 参数缺失。
+# rc≠0/1 一律先查命令、路径、参数，不直接归因为门禁失效（见 LEARNING.md 的 FM-R1-08）。
+
+# 1. 包一致性（C1–C13，74 项：双 manifest 对等含 description / 市场清单 / agents 与头像 /
+#    团队 settings 自洽 / README 版本一致 / 废弃表述 / 契约章节 / 成员 ID 五处一致性）
 python3 scripts/manifest_check.py -v
 
 # 2. 校验器自测（注入式负例 30 条，含 C8 全规则矩阵 N27 / C13 分支 N28–N30）：
 #    证明上面的校验器真的会失败，而不是永远返回 0
 python3 scripts/manifest_check_selftest.py
 
-# 3. 协议合规单元测试
+# 3. 协议合规（信封 37 + legacy 12 / 仲裁 5 / 集成 10 + HANDOFF 8）
 python3 skills/research-orchestration-workflow/scripts/protocol_check.py envelope
 python3 skills/research-orchestration-workflow/scripts/protocol_check.py conflict
 python3 skills/research-orchestration-workflow/scripts/protocol_check.py integration
@@ -30,13 +34,36 @@ python3 skills/research-orchestration-workflow/scripts/protocol_check_selftest.p
 # 5. 阶段名归一化自测（26 条）：--phase 阶段名 / 数字 / 大小写 / 非法值的归一化行为
 python3 scripts/test_phase_normalization.py
 
-# 5b. 编排层四项硬上限语义锁定（4 条）：turns/tokens 触顶=告警、max_time/failures=终态熔断
+# 6–7. Harness 设计检查 H1–H12 + 注入式负例自测（14 条）
+python3 scripts/harness_eval.py
+python3 scripts/harness_eval_selftest.py
+
+# 8–9. 路由结构一致性 R1–R6（39 项）+ 注入式负例自测（12 条）
+python3 scripts/routing_eval.py
+python3 scripts/routing_eval_selftest.py
+
+# 10. 联邦防漂移 V1–V6
+python3 tests/test_vendor_core.py
+
+# 11–12. State IO lifecycle smoke / 熔断路径：这两段是 workflow 内嵌脚本（heredoc），
+#        本地等价命令见 .github/workflows/validate.yml 同名 step，直接复制其命令块执行。
+
+# 13. 编排层四项硬上限语义锁定（4 条）：turns/tokens 触顶=告警、max_time/failures=终态熔断
 python3 tests/test_state_ceilings.py
 
-# 5c. state_io 输入护栏注入式验证（10 条）：checkpoint 归一化 / task_id 消毒 / 回归护栏
+# 14. state_io 输入护栏注入式验证（10 条）：checkpoint 归一化 / task_id 消毒 / 回归护栏
 python3 tests/test_state_io_guards.py
 
-# 6. 选题评分脚本边界测试
+# 15. 主理人双重事实源一致性（6 条，R5）：C12 的 agentName 必须跟随 C13 声明位
+python3 tests/test_lead_source_of_truth.py
+
+# 16. 运行时序 / 终态污染 / 观测数据一致性（8 条，R6）
+python3 tests/test_state_runtime_sequencing.py
+
+# 17. 状态文件健壮性 / cp 编号 / 孤儿 tmp（12 条，R7）
+python3 tests/test_state_file_robustness.py
+
+# 18. 选题评分脚本边界测试
 python3 skills/research-orchestration-workflow/scripts/topic_scoring.py \
   --topic test --originality 11 --feasibility 7 --value-density 9 \
   --data-availability 7 --competition 6 --cognition 8 --resource-fit 7 --sustainability 7
