@@ -286,6 +286,32 @@
 
 **CI 口径（§10.3.3）**：workflow 定义 **15 门禁 step**（+State IO input guards）；`yaml.safe_load` 本地验证通过，17 总 step（+6 平台 step）。
 
+### 5.4 R5 验收证据（2026-11-10，断言组合态审计）
+
+**Phase A：11 组组合态实验**（两条各自成立的断言，组合是否仍成立）：
+
+| 实验 | 组合 | 结果 |
+|---|---|---|
+| E1 | 熔断终态 × force 越级特许 | ✅ 终态压过特许（rc=1，拒绝推进） |
+| E2 | 熔断 × fail 再登记 | ✅ 拒绝（rc=1） |
+| E3 | 熔断 × init 幂等重入 | ✅ 幂等返回且**保留 aborted**（不被抹除） |
+| E4 | C2 对等 × C13 声明位 × C12 agentName | ⚠️ **P1 实锤：主理人三处同步漂移 74 项全绿**（双重事实源） |
+| E5 | done 终态 × resume | ✅ 正确提示「无需续跑」 |
+| E6 | turns 触顶告警 × finish | ✅ done 正常（告警不截断） |
+| E7 | C2 × agents 数组顺序 | ✅ 顺序敏感对等（双侧一致即绿，设计如此） |
+| E8 | C13 × memberAgents 倒序 | ✅ 集合语义顺序无关 |
+| E9 | requires 幽灵成员 | ✅ 依赖断言红（首跑 SyntaxError 无效，重做有效——FM-R1-05 同族） |
+| E10 | requires 真实成员未上游参与 | ✅ 依赖断言红（「所需角色 X 未在上游阶段参与」） |
+| E11 | 重复回引探针 | ✅ 8 条含 1 重复 → 缺失正确检出 |
+
+**E4 修复**：C12 以 C13 声明位（`members[].role == "lead"`）为唯一事实源；
+`agentName` 降级为兼容字段（存在但 ≠ 声明位即红）；无声明位旧版回退旧口径。
+锁定：`tests/test_lead_source_of_truth.py` M1–M6（6/6）——合法换主理人（全
+同步）放行，三种单字段漂移精确红且失败文案归属被测门禁。
+
+**R5 全量回归（15 套门禁逐条独立 rc=0）**：同 v2.5.3 CHANGELOG Regression
+evidence 表。CI 门禁 step 15→16（+Lead source-of-truth consistency）。
+
 ## 7. 已修复问题黑名单（禁止当作新发现重复上报）
 
 > **引用式登记（R1 修订）**：本表**不转录历史缺陷的原始措辞**。`scripts/manifest_check.py` 的 C8 对仓库全文做废弃表述正则扫描，其豁免名单 `SCAN_EXEMPT`（:108）是硬编码文件名白名单，本文件不在其中——R1 首次落盘时因抄录历史术语名触发 3 项假红（见 §8 `FM-R1-01`）。逐条原文以下列审计文档为准：
@@ -440,6 +466,7 @@
 | R2 | 2026-11-09 | **Phase D 收口（本次续跑）**：§1 元信息更新至 R2 + §1.1 R1 历史快照 + §3.1 R2 漂移复检（0%）+ §4.2 R2 四阶段台账 + §4.3 R2 修复批次明细（9 批次）+ §5.2 R2 GATE3 验收证据（13/13 全绿 + 6 组独立负向实锤）+ §8 补 FM-R2-01~06 + §10 改 R3 入口 + §10.2 遗留项更新至 18 条 + §10.3.2 负例验收纪律补录 + §10.5 R3 建议审计方向 + §10.4 判据更新 | agent-harness-architect |
 | R2 | 2026-11-10 | **Phase D 收口残留校正**：§1 移除自指 HEAD（改以 tag 基线 + `git rev-parse` 真值源）、§5.2 去固化 HEAD、§10.6 第三条「FM-R2-06 待回流」改已闭环、新增 §10.3.3 CI step 计数口径（实测 12/18 → 14/20）；README / CHANGELOG / LEARNING 的旧 step 数字全仓统一 | team-lead（续跑） |
 | R3 | 2026-11-10 | **Phase A 再诊断（断言交互 + 运行时序）**：6 组实验实锤 E5 路径注入（P1）与 E6 checkpoint 形态断裂（P0）；排除 E1/E2/E3/E4 四个假候选（并发锁/门禁语义/损坏检测/叠加态均验证为设计正确）。修复与护栏收口见 LEARNING.md「R3 输入护栏收口」条目；§5.3 落盘验收证据（14 套全绿 + 独立负向实锤） | agent-harness-architect + team-lead（两工作线汇合） |
+| R5 | 2026-11-10 | **组合态审计 + v2.5.3 发布**：11 组实验实锤 E4 主理人双重事实源（C12 读 agentName、C13 读 leadAgent×role，三处同步漂移 74 项全绿）；C12 统一到声明位事实源 + `test_lead_source_of_truth.py` 6 条锁定 + CI 15→16 step；其余 10 组验证为设计正确 | agent-harness-architect |
 | R4 | 2026-11-10 | **遗留双闭环**：#4 cp 清单动态化（从 PHASES 生成 + 双向破坏实锤 + fail-closed）+ #5 selftest 提速（APFS clonefile 0.39s/次；manifest 330s→48s、routing 64s→10s；开发期实锤并修复硬链接 pristine 污染：mutate write_text 回流共享 inode，防线 = detach + CoW 快路径）→ v2.5.2 发布 | agent-harness-architect |
 | R3 | 2026-11-10 | **v2.5.1 发布**：checkpoint 形态归一化（协议标准形态 `state://cp-NNN` 与裸名等价）+ task_id 统一消毒（main 入口，非法 rc=2）+ `tests/test_state_io_guards.py` 10 条注入式护栏 + CI 门禁 step 14→15 | team-lead |
 | R3 | 2026-11-10 | **输入护栏收口（续跑）**：实锤并修复半成品引入的回归（可选 checkpoint 未传被误拒）；新增 `tests/test_state_io_guards.py` 10 条 + 3 组注入破坏验证；CI 新增 input guards step（门禁 14→15）；CHANGELOG `[Unreleased]` 段 + README/CONTRIBUTING/agent-registry/状态文件口径同步 | team-lead（续跑） |

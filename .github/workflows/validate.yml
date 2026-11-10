@@ -184,6 +184,12 @@ jobs:
       - name: State IO input guards (R3 P0-1/P1-2)
         run: python3 tests/test_state_io_guards.py
 
+      # R5-E4：主理人事实源一致性（C12 × C13 组合态盲区修复）。
+      # M1-M6 六条用例锁定「声明位 = 唯一事实源」语义：合法换主理人（全同步）
+      # 放行，任何单字段漂移红且失败文案归属被测门禁。
+      - name: Lead source-of-truth consistency (R5 E4)
+        run: python3 tests/test_lead_source_of_truth.py
+
 
       - name: Topic scoring edge cases
         run: |

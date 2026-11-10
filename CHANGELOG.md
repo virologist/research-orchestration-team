@@ -2,6 +2,56 @@
 
 所有重要变更按版本倒序记录。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [2.5.3] - 2026-11-10
+
+> R5 组合态盲区修复版。主题：**两条各自成立的断言，组合起来是否仍成立？**
+> 11 组组合态实验，实锤 1 个 P1（C12×C13 主理人双重事实源——「主理人换人」
+> 可静默通过全部 74 项门禁），其余 10 组验证为设计正确。
+
+### Fixed
+
+- **主理人双重事实源（R5-E4，P1）**：manifest 内 `agentName`（C12 读取）与
+  `teamInfo.leadAgent` + `members[].role == "lead"` 声明位（C13 读取）此前是
+  两个独立事实源。三处同步漂移到同一普通成员时：C2 对等绿（双侧同步）、
+  C13 内部自洽绿（leadAgent == 声明位）、C12 绿（读 agentName，若 settings
+  也同步即绿）——「主理人换人」静默通过，合法换主理人与劫持无从区分。
+  修复：**C12 以 C13 的声明位为唯一事实源**（`members[].role == "lead"` →
+  谁，settings 与校验就以谁为准）；`agentName` 降级为兼容字段——存在但
+  ≠ 声明位即红（不再允许第二个事实源）。无声明位的旧版 manifest 回退旧
+  口径（leadAgent/agentName）保持兼容。
+
+### Added
+
+- `tests/test_lead_source_of_truth.py`（**6** 条）：M1 基线 rc=0 / M2 事实源
+  整体迁移（agentName+leadAgent+role+settings 全同步）= 合法换主理人放行 /
+  M3 agentName 单独漂移红（归属 C12 新断言）/ M4 leadAgent 漂移红（归属
+  C13 声明位断言）/ M5 role 声明位漂移红 / M6 settings 跟随声明位放行。
+  每条独立整包副本注入，判定同时断言 rc 与失败文案归属（FM-R2-06 纪律）。
+- CI 新增 `Lead source-of-truth consistency (R5 E4)` step；门禁 step **15 → 16**。
+
+### Regression evidence（v2.5.3 部署前实测，15 套门禁逐条独立取 rc）
+
+| 套件 | 结果 |
+|------|------|
+| `manifest_check.py` / `_selftest.py` | 74/74 ✅ / 30/30 ✅ |
+| `harness_eval.py` / `_selftest.py` | 12/12 ✅ / 14/14 ✅ |
+| `routing_eval.py` / `_selftest.py` | 39/39 ✅ / 12/12 ✅ |
+| `tests/test_vendor_core.py` | V1–V6 6/6 ✅ |
+| `test_phase_normalization.py` | 26/26 ✅ |
+| `tests/test_state_ceilings.py` | 4/4 ✅ |
+| `tests/test_state_io_guards.py` | 10/10 ✅ |
+| `tests/test_lead_source_of_truth.py`（新增） | **6/6** ✅ |
+| `protocol_check.py` envelope / conflict / integration | 37/37(v2.4)+12/12(legacy) ✅ / 5/5 ✅ / 10/10+8/8 ✅ |
+| `protocol_check_selftest.py` | 14/14 ✅ |
+
+组合态实验台账（11 组，其余 10 组为设计正确性验证）：熔断×force（终态压过
+特许）✅ / 熔断×fail 再登记（拒绝）✅ / 熔断×init 幂等重入（保留 aborted）✅ /
+done×resume（正确提示无需续跑）✅ / turns 告警×finish（done 正常）✅ /
+C2×agents 顺序（顺序敏感对等，双侧一致即绿）✅ / C13×memberAgents 倒序
+（集合语义顺序无关）✅ / requires 幽灵成员（依赖断言红）✅ / requires 真实
+成员未上游参与（依赖断言红）✅ / 重复回引探针（缺失正确检出）✅ / **E4 双重
+事实源（实锤并修复）**。台账详情见 `docs/harness-iteration-loop.md` §5.4。
+
 ## [2.5.2] - 2026-11-10
 
 > R4 遗留双闭环版：cp 检查点清单动态化（遗留 #4）+ selftest IO 提速（遗留 #5）。

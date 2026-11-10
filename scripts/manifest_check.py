@@ -1082,7 +1082,29 @@ def check_c12_settings(chk: Checker, manifests: dict) -> None:
     agent = data.get("agent")
     lead = None
     if codebuddy:
-        lead = codebuddy.get("agentName") or codebuddy.get("teamInfo", {}).get("leadAgent")
+        # R5（v2.5.3）：主理人事实源与 C13 对齐——C13 以 members[].role == "lead"
+        # 为声明位、要求 leadAgent 与之一致；C12 此前读 agentName（或 leadAgent），
+        # 与 C13 构成双重事实源：manifest 内 agentName + leadAgent + role 三处
+        # 同步漂移到同一普通成员时，C13 全绿、C12 也全绿（组合态盲区，R5 E4 实锤
+        # ——仅 settings.json 忘了同步才被 C12 顺带拦住）。现取 C13 口径的
+        # 声明位 lead；agentName 仍校验：存在时必须等于声明位 lead（兼容字段
+        # 不再是独立事实源，漂移即红）。
+        declared_leads = {
+            m.get("id") for m in (codebuddy.get("members") or [])
+            if isinstance(m, dict) and m.get("role") == "lead"
+        }
+        if declared_leads:
+            lead = sorted(declared_leads)[0]
+            agent_name = codebuddy.get("agentName")
+            if agent_name and agent_name != lead:
+                chk.fail(
+                    f"manifest agentName={agent_name} 与主理人声明位"
+                    f"（members[].role=lead → {lead}）不一致"
+                )
+                return
+        elif not declared_leads:
+            # 无声明位 → 回退旧口径（leadAgent/agentName），保持对旧版 manifest 的兼容
+            lead = codebuddy.get("agentName") or codebuddy.get("teamInfo", {}).get("leadAgent")
     if not agent or not isinstance(agent, str):
         chk.fail("settings.json 缺非空字符串字段 agent")
         return
