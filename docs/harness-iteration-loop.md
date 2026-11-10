@@ -349,6 +349,51 @@ N2（恢复 fail 抬高阈值）→ T4 精确红；N3（恢复 advance 覆盖）
 **R6 全量回归（16 套门禁逐条独立 rc=0）**：同 v2.5.4 CHANGELOG Regression
 evidence 表。CI 门禁 step 16→17（+State IO runtime sequencing + terminal state）。
 
+### 5.6 R7 验收证据（2026-11-10，状态文件健壮性 / 跨层一致性 / 崩溃恢复）
+
+**Phase A：11 组状态文件实验**（状态文件半损坏时会怎样？检查点编号与阶段序号绑不绑得住？崩溃后会不会留垃圾？）：
+
+| 实验 | 组合 | 结果 |
+|---|---|---|
+| E1 | 孤儿 tmp 注入 × 正常写盘 | ⚠️ **P1 实锤：孤儿 tmp 永不被清理**（空间泄漏，无下游影响） |
+| E2 | 落盘 checkpoints × 协议层 HANDOFF 覆盖校验 | ✅ 指针形态与覆盖校验兼容（跨层基线成立） |
+| E3 | cp 编号乱写 / 复用 / marker 重写 | ⚠️ **P1 实锤：编号与阶段序号解耦 + 复用无告警 + marker 不重写** |
+| E4 | 信封 phase/task_id 与落盘状态不符 | ⚠️ **P2 实锤：协议层不感知落盘状态，校验返回空失败列表** |
+| E5 | SIGKILL 打断写盘 × resume | ⚠️ **P1 实锤：崩溃后状态丢失 + 孤儿 tmp 残留** |
+| E6 | 合法 JSON 但缺字段 × init | ⚠️ **P0 实锤：裸 KeyError Traceback** |
+| E7 | 缺字段矩阵（6 子命令 × 5 损坏形态） | ⚠️ **P0 实锤：13 组裸 Traceback** |
+| E8 | 缺 status × budget | ⚠️ **P0 实锤：rc=0 假绿，静默按 running 处理** |
+| E9 | budget turns/tokens 触顶 | ✅ **设计语义**（registry 既定告警层，FM-R2-03 已登记）；仅文案失真 → P1 |
+| E10 | vendor `except Exception: pass` × 联邦真源比对 | ✅ **假阳性**：sha256 与联邦真源字节级一致（`3c3648f1…`），JSON 三形态解析的有意回退 |
+| E11 | `protocol_check.py` 硬编码 `state://cp-008` | ✅ **脆性非缺陷**：PHASES 恰为 8 个时断言成立，PHASES 变化时 fail-closed 判红 |
+
+**修复落点**：
+- P0-1 / P0-2：`state_io.py` 新增 `_validate_state_shape(state, path)`，在
+  `load_state` 内做**结构层校验**——必需字段缺失 / 类型非法（`bool` 不算 `int`）/
+  `status` ∉ {running, done, aborted} / `phase` ∉ PHASES，一律 rc=3 fail fast，
+  失败信息**逐条指名字段**；**不静默重建**（重建等于凭空替主理人编造任务状态）。
+- P1-1：`budget` 触顶文案改为「⚠️ 预算触顶（告警层，不自动熔断）」，
+  与 registry 的语义分层一致（FM-R2-03 同族复发：分层在压缩成一句话时丢失限定）。
+- P1-2：`advance` 强制 cp 编号 = `cp-{turn:03d}`，不符 rc=1；同编号复用 rc=1；
+  marker 改为每次推进都重写。
+- P1-3：新增 `_cleanup_stale_tmp(path)`，写盘前清理**已确认孤儿**的 tmp
+  （`os.kill(pid, 0)` 探测持有进程已死才删）；写盘异常时主动回收自己的 tmp。
+
+**锁定**：`tests/test_state_file_robustness.py` R1–R12（12/12）——含 R9
+（被拒后状态文件逐字节未变）与 R8（bool 不算 int）两条护栏性用例。
+**4 组注入破坏实锤**：N1（短路 `_validate_state_shape` 调用）→ R1–R9 精确红
+（9 条，R10–R12 不受影响，维度隔离正确）；N2（短路 cp 编号一致性校验）→ 仅 R11 红；
+N3（短路孤儿 tmp 清理）→ 仅 R12 红；N4（触顶文案改回「熔断」）→ 仅 R10 红。
+每组注入后还原校验 rc=0。
+
+**R7 全量回归（16 套门禁逐条独立 rc=0）**：同 v2.5.5 CHANGELOG Regression
+evidence 表。CI 门禁 step 17→18（+State IO file robustness + checkpoint consistency）。
+
+**遗留未闭环（不在 R7 范围）**：E4 的**跨层一致性缺口**——协议层与落盘状态之间
+没有绑定契约（哪个信封该匹配哪个 `task_id`、`phase` 如何对齐），补这道断言属设计裁决，
+留待 R8；台账 §10.2 #22（`init` / `budget` 主动放宽熔断阈值）同属 registry 语义变更，
+本轮不裁决。
+
 ## 7. 已修复问题黑名单（禁止当作新发现重复上报）
 
 > **引用式登记（R1 修订）**：本表**不转录历史缺陷的原始措辞**。`scripts/manifest_check.py` 的 C8 对仓库全文做废弃表述正则扫描，其豁免名单 `SCAN_EXEMPT`（:108）是硬编码文件名白名单，本文件不在其中——R1 首次落盘时因抄录历史术语名触发 3 项假红（见 §8 `FM-R1-01`）。逐条原文以下列审计文档为准：
@@ -403,7 +448,7 @@ evidence 表。CI 门禁 step 16→17（+State IO runtime sequencing + terminal 
 - R7 的**失败模式前置比对**：先与 §8 失败模式库（FM-R1-01 ~ FM-R1-08 + FM-R2-01 ~ FM-R2-06）比对，匹配度 >70% 先输出历史摘要与预防建议，再动手。
 - **R7 的建议主题**：R5 把「断言组合态」查完，R6 把「运行时序 / 终态污染 / 观测数据一致性」查完。剩余未覆盖方向见 §10.5（已按 R6 实测更新）：**上限覆写入口的语义边界**（`budget` 仍可主动放宽 `max_failures`，R6 只封了 `fail` 的逐次抬高路径）、**协议 §2 信封与落盘状态的跨层一致性**、以及 `protocol_check.py` 侧的运行时序（此前 R2–R5 的实验全部集中在 `state_io.py` 与 manifest 层）。
 
-### 10.2 R1 未闭环问题（截至 R6 收口的状态）
+### 10.2 R1 未闭环问题（截至 R7 收口的状态）
 
 | # | 问题 | 状态 | 后续动作 |
 |---|---|---|---|
@@ -429,17 +474,25 @@ evidence 表。CI 门禁 step 16→17（+State IO runtime sequencing + terminal 
 | 20 | 熔断可被绕过：`fail --max-failures` 能抬高阈值（8 次失败后仍 `running`） | **已闭环**（v2.5.4 R6 P0-2） | registry 只授权 `init` / `budget` 覆写上限，`fail` 的逐次抬高等于给熔断开后门。修复：改为**只允许收紧**（放宽忽略并告警）。锁定 T4/T5 + N2 注入破坏实锤 |
 | 21 | 观测数据静默丢失：`advance` 用 `turn` 覆盖 `turns_used`，冲掉上报值 | **已闭环**（v2.5.4 R6 P1-1） | 改为 `max(已落盘值, turn)`——`turn` 是结构化事实，主理人上报值可能更大（编排轮次 ≠ 阶段数），两者不冲突。锁定 T6/T7 + N3 注入破坏实锤 |
 | 22 | 熔断阈值仍可由 `init` / `budget` **主动放宽** | **未闭环 · 设计语义 · 登记备查** | R6 只封堵了 `fail` 的逐次抬高绕过路径；`budget --max-failures 99` 仍是 registry 明确授权的上限写入口。要杜绝「主动放宽」属 registry 语义变更，需另开轮次裁决，不在 R6 范围内 |
+| 23 | 半损坏状态文件 → 裸 Traceback（合法 JSON 但缺关键字段，13 组组合命中） | **已闭环**（v2.5.5 R7 P0-1） | `load_state` 原先只做 JSON 解析层校验；缺字段时下游直接 `state["phase"]` → 裸 KeyError。修复：新增 `_validate_state_shape` 结构层校验（缺字段 / 类型非法 / status·phase 取值非法 → rc=3，逐条指名字段，不静默重建） |
+| 24 | 缺 `status` 时 `budget` / `fail` rc=0 假绿（静默按 running 处理） | **已闭环**（v2.5.5 R7 P0-2） | 随 P0-1 的结构校验一并拦截（rc=3）——「未知状态」不得被静默当成 running |
+| 25 | `budget` 触顶文案宣称「熔断」实为告警 | **已闭环**（v2.5.5 R7 P1-1） | registry 明确 turns/tokens 是告警层、max_time/failures 才是终态熔断层；文案改为「⚠️ 预算触顶（告警层，不自动熔断）」（FM-R2-03 同族复发） |
+| 26 | 检查点编号与阶段序号解耦 + 编号可复用 + marker 不重写 | **已闭环**（v2.5.5 R7 P1-2） | 协议 §3 约定 cp 编号 = 阶段序号，protocol_check 的 HANDOFF 覆盖校验按此生成清单；`advance` 强制编号 = `cp-{turn:03d}`（不符 rc=1）、同编号复用 rc=1、marker 每次重写 |
+| 27 | SIGKILL 崩溃留下孤儿 tmp，无清理机制 | **已闭环**（v2.5.5 R7 P1-3） | 写盘前清理**已确认孤儿**的 tmp（`os.kill(pid,0)` 探测持有进程已死才删）；已确认无下游代码 glob 该目录，属空间泄漏而非正确性缺陷 |
+| 28 | 协议层与落盘状态无跨层校验入口 | **未闭环 · 设计缺口 · 登记备查** | R7 Phase A 实锤：信封 `phase` / `task_id` 与落盘状态完全不符时，协议校验返回**空失败列表**（rc=0）。补这道断言需先定义「信封与状态的绑定契约」，属设计裁决，不在 R7 范围内，留待 R8 |
 
-### 10.5 R7 建议审计方向（供下轮参考，非承诺）
+### 10.5 R8 建议审计方向（供下轮参考，非承诺）
 
-> R5 已把「断言交互 / 组合态」查完，R6 已把「运行时序 / 终态污染 / 观测数据一致性」查完。下表按 R6 实测结果更新。
+> R5 查完「断言交互 / 组合态」，R6 查完「运行时序 / 终态污染 / 观测数据一致性」，
+> R7 查完「状态文件健壮性 / 跨层一致性 / 崩溃恢复」。下表按 R7 实测结果更新。
 
 | 方向 | 依据 | 备注 |
 |---|---|---|
-| **上限覆写入口的语义边界** | R6 封了 `fail` 的逐次抬高路径，但 `init` / `budget` 仍可主动放宽阈值（§10.2 #22） | 是否需要「熔断一旦接近阈值即锁定」类保护？属 registry 语义变更，需裁决 |
-| `protocol_check.py` 侧的运行时序 | R2–R6 的破坏实验**全部集中在 `state_io.py` 与 manifest 层**；`protocol_check.py` 的 37 项主套件与 14 条 selftest 未做过任何运行时序 / 终态组合实验 | 检查器本身多为纯函数，但「同一信封先过 envelope 再过 conflict 再过 integration」的跨段状态传递未审 |
-| 协议 §2 信封与落盘状态的**跨层一致性** | `state_io.py` 管落盘、协议 §2 管信封，二者由主理人手工同步 | `turn` / `phase` / `status` 三者在两层各自表述，漂移无门禁（可从 `result_envelope` 与 `_state.json` 的交叉断言切入） |
-| 崩溃中断 → resume 的恢复正确性 | R6 验证了并发（8 路无丢更新）与损坏检测（fail-fast），但**未模拟进程在写盘中途被杀** | `_atomic_write` 的 tmp + `os.replace` 在 SIGKILL 下是否留下孤儿 tmp、能否被下次运行清理，尚无负例 |
+| **上限覆写入口的语义边界** | R6 封了 `fail` 的逐次抬高路径，但 `init` / `budget` 仍可主动放宽阈值（§10.2 #22） | 是否需要「熔断一旦接近阈值即锁定」类保护？属 registry 语义变更，需裁决。**R7 未动此项** |
+| **协议层与落盘状态的跨层一致性** | R7 实锤：信封 `phase=EXECUTE` / `task_id` 与落盘状态完全不符时，协议校验返回**空失败列表**（rc=0）（§10.2 #28） | 补这道断言需先定义「信封与状态的绑定契约」（哪个信封匹配哪个 `task_id`、`phase` 如何对齐、`turn` 是否必报）——**属设计裁决**，R7 只登记未动手 |
+| `protocol_check.py` 侧的运行时序 | R2–R7 的破坏实验**全部集中在 `state_io.py` 与 manifest 层**；`protocol_check.py` 的 37 项主套件与 14 条 selftest 未做过任何运行时序 / 终态组合实验 | 检查器本身多为纯函数，但「同一信封先过 envelope 再过 conflict 再过 integration」的跨段状态传递未审 |
+| 崩溃恢复的**语义**正确性 | R7 已闭环**空间**层面（孤儿 tmp 清理），但崩溃后**状态本身**的恢复语义未审 | 实测：SIGKILL 打在 `os.replace` 前 → 主文件不存在 → `resume` 报「未初始化」rc=2，旧进度**不可恢复**（tmp 里其实有完整内容）。是否需要「从孤儿 tmp 恢复」？属语义设计 |
+| 旧版本状态文件的**迁移** | R7 的结构校验对**缺字段**一律 rc=3；但 v2.3.0 之前的状态文件本来就没有 `budget` 里的部分键 | `_budget()` 的向后兼容补齐只覆盖 `budget` 子结构，**顶层**必需字段是否也需要类似补齐？需先确认是否存在真实旧版文件 |
 | 遗留 #4 cp 清单动态化 | 硬编码 `cp-001~cp-008` 与阶段序列交叉比对已在，但清单本身未动态化 | **已于 v2.5.2 R4 闭环**（本表历史条目，保留备查） |
 
 ### 10.6 R2 验收遗留（已全部闭环）
@@ -481,6 +534,7 @@ evidence 表。CI 门禁 step 16→17（+State IO runtime sequencing + terminal 
 | v2.5.2 已发布（run `42731422178`） | **15** | 21 | 6 |
 | v2.5.3 已发布（run `42757648000`） | **16**（+Lead source-of-truth consistency） | 22 | 6 |
 | v2.5.4 已发布（本次） | **17**（+State IO runtime sequencing + terminal state） | 23 | 6 |
+| v2.5.5 已发布（本次） | **18**（+State IO file robustness + checkpoint consistency） | 24 | 6 |
 
 平台 step 恒为 6 个：`Set up job` / `Checkout` / `Setup Python` / `Post Setup Python` / `Post Checkout` / `Complete job`，**不计入门禁 step**。
 
@@ -490,9 +544,9 @@ evidence 表。CI 门禁 step 16→17（+State IO runtime sequencing + terminal 
 
 | 判据（§3「收敛终止」） | 状态 |
 |---|---|
-| 连续 2 轮再诊断无 P0/P1 新问题 | **0/2**（R2 再诊断**实锤 2 个 P0 + 4 个 P1 + 1 个 P2**，全部已修复并闭环；R4 遗留双闭环（#4/#5）无新 P0/P1；R5 组合态审计**实锤 1 个 P1**（E4 双重事实源）并已修复闭环；R6 运行时序审计**实锤 2 个 P0 + 2 个 P1** 并已修复闭环。判据仍未达成——R2/R5/R6 均属「发现问题并修复」的轮次，不是「无新问题」的轮次） |
-| §8 全量回归全绿 | **R2 达成**（GATE3 实测 **13/13** 全部 rc=0，见 §5.2；R1 为 12/12）。R3/R4/R5/R6 各自回归均全绿（R5 = 15 套门禁逐条独立 rc=0，见 §5.4；R6 = 16 套，见 §5.5） |
-| 输出收口建议等管家节点裁决 | ✅ **R6 已闭环**：v2.5.4 已发布（commit `7eb9794` 之后的 v2.5.4 commit + tag `v2.5.4` + release 资产 `rot-v2.5.4.tar.gz` + 五方一致 + CI 17 门禁 step 全绿）。**R7 的起步方向见 §10.1 与 §10.5** |
+| 连续 2 轮再诊断无 P0/P1 新问题 | **0/2**（R2 再诊断**实锤 2 个 P0 + 4 个 P1 + 1 个 P2**，全部已修复并闭环；R4 遗留双闭环（#4/#5）无新 P0/P1；R5 组合态审计**实锤 1 个 P1**（E4 双重事实源）并已修复闭环；R6 运行时序审计**实锤 2 个 P0 + 2 个 P1** 并已修复闭环；R7 状态文件健壮性审计**实锤 2 个 P0 + 3 个 P1** 并已修复闭环。判据仍未达成——R2/R5/R6/R7 均属「发现问题并修复」的轮次，不是「无新问题」的轮次） |
+| §8 全量回归全绿 | **R2 达成**（GATE3 实测 **13/13** 全部 rc=0，见 §5.2；R1 为 12/12）。R3/R4/R5/R6/R7 各自回归均全绿（R5 = 15 套门禁逐条独立 rc=0，见 §5.4；R6 = 16 套，见 §5.5；R7 = 16 套，见 §5.6） |
+| 输出收口建议等管家节点裁决 | ✅ **R7 已闭环**：v2.5.5 已发布（commit + tag `v2.5.5` + release 资产 `rot-v2.5.5.tar.gz` + 八方一致 + CI 18 门禁 step 全绿）。**R8 的起步方向见 §10.5** |
 
 ---
 
@@ -518,6 +572,7 @@ evidence 表。CI 门禁 step 16→17（+State IO runtime sequencing + terminal 
 | R5 | 2026-11-10 | **v2.5.3 发布链收口（本次续跑）**：核验 CI run `42757648000` = success（16 门禁 step 全绿，headSha `7eb9794`）→ 打 tag `v2.5.3` → `git archive` 打包 `rot-v2.5.3.tar.gz`（14718511 B，sha256 `ead27613…1d56`）→ 解包核对（78 条目 / 双 manifest 2.5.3 / 含两个新增测试文件）→ 创建 release → OneDrive 镜像 fast-forward → **五方一致核验通过**（canonical HEAD = canonical tag = mirror HEAD = mirror tag = origin master = origin tag = GitHub API tag = CI headSha = `7eb9794a294bd85c25639b4af07a5185c49b6b80`；两端工作树各 0 项改动） | team-lead（续跑） |
 | R6 | 2026-11-10 | **运行时序审计 + v2.5.4 修复落盘**：13 组运行时序实验实锤 2 个 P0（① 终态污染：`resume`/`budget` 的 max_time 守卫只排除 aborted 漏了 done，且 `budget` 无任何终态守卫 → 已完成任务被事后翻案；② 熔断可绕过：`fail --max-failures` 能抬高阈值，8 次失败后仍 running）+ 2 个 P1（③ `advance` 覆盖 `turns_used` 致观测值静默丢失）；排除 7 组假阳性（含 E12 的检查命令引号误判）。修复：`_is_terminal()` 统一终态判定 + `budget` 补守卫 + 熔断阈值只收紧不放宽 + `turns_used` 取 max；新增 `tests/test_state_runtime_sequencing.py` 8 条锁定 + 3 组注入破坏实锤；CI 门禁 step 16→17 | agent-harness-architect + team-lead |
 | R6 | 2026-11-10 | **v2.5.4 发布链收口**：核验 CI run `42764691906` = success（17 门禁 step 全绿，headSha `006ff35`）→ 打 tag `v2.5.4` → `git archive` 打包 `rot-v2.5.4.tar.gz`（14729123 B，79 条目，sha256 `5cddc69b…cff`）→ 解包核对（双 manifest 2.5.4 / 含 `test_state_runtime_sequencing.py`）→ 创建 release → OneDrive 镜像 fast-forward → **八处一致核验通过**（canonical HEAD = canonical tag = mirror HEAD = mirror tag = origin master = origin tag = GitHub API tag = CI headSha = `006ff355edbb8a7b2486b2e8251e578c1d3b06ce`；双 manifest 四处版本号 2.5.4；两端工作树各 0 项改动）；资产下载实测 HTTP 200 / size 与 sha256 双向一致 | team-lead |
+| R7 | 2026-11-10 | **状态文件健壮性审计 + v2.5.5 修复落盘**：11 组状态文件实验实锤 2 个 P0（① 半损坏状态文件 → 裸 Traceback：合法 JSON 但缺关键字段时下游直接 `state["phase"]`，13 组子命令 × 损坏形态组合全部命中；② 缺 status 时 budget/fail rc=0 假绿：静默按 running 处理并继续写盘）+ 3 个 P1（③ budget 触顶文案宣称「熔断」实为告警——FM-R2-03 同族复发；④ 检查点编号与阶段序号解耦 + 可复用 + marker 不重写；⑤ SIGKILL 崩溃留下孤儿 tmp 永久残留）。排除 3 组假阳性（vendor `except` 与联邦真源 sha256 字节级一致属有意回退 / `cp-008` 硬编码为脆性非缺陷 / turns·tokens 不熔断为 registry 既定告警层）。修复：新增 `_validate_state_shape` 结构层校验（rc=3 + 逐条指名字段 + 不静默重建）、触顶文案改「告警层」、`advance` 强制 cp 编号 = `cp-{turn:03d}`（乱写与复用均 rc=1）+ marker 每次重写、新增 `_cleanup_stale_tmp` 清理已确认孤儿 tmp。锁定 `tests/test_state_file_robustness.py` 12 条（4 组注入破坏实锤证明会红）；CI 门禁 step 17→18 | agent-harness-architect |
 | R4 | 2026-11-10 | **遗留双闭环**：#4 cp 清单动态化（从 PHASES 生成 + 双向破坏实锤 + fail-closed）+ #5 selftest 提速（APFS clonefile 0.39s/次；manifest 330s→48s、routing 64s→10s；开发期实锤并修复硬链接 pristine 污染：mutate write_text 回流共享 inode，防线 = detach + CoW 快路径）→ v2.5.2 发布 | agent-harness-architect |
 | R3 | 2026-11-10 | **v2.5.1 发布**：checkpoint 形态归一化（协议标准形态 `state://cp-NNN` 与裸名等价）+ task_id 统一消毒（main 入口，非法 rc=2）+ `tests/test_state_io_guards.py` 10 条注入式护栏 + CI 门禁 step 14→15 | team-lead |
 | R3 | 2026-11-10 | **输入护栏收口（续跑）**：实锤并修复半成品引入的回归（可选 checkpoint 未传被误拒）；新增 `tests/test_state_io_guards.py` 10 条 + 3 组注入破坏验证；CI 新增 input guards step（门禁 14→15）；CHANGELOG `[Unreleased]` 段 + README/CONTRIBUTING/agent-registry/状态文件口径同步 | team-lead（续跑） |

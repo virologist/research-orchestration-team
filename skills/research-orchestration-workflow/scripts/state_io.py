@@ -159,13 +159,50 @@ max_time 与 circuit_breaker 是纯纸面。本版本把四项**全部**代码�
 主理人用 `budget` 上报的观测值（如 turns=25 / tokens=42000）不会被下一次 advance
 静默冲回 `turn` 的小数值；未上报时 `turns_used` 仍随 `turn` 递增。
 
+## 状态文件结构校验（R7 P0-1 / P0-2）
+
+状态文件**是合法 JSON 但缺关键字段**时（被外部改写 / 旧版本 / 部分写盘后编辑），
+下游子命令直接 `state["phase"]` / `state["status"]` 会抛**裸 KeyError Traceback**
+（R7 Phase A 实测 13 组组合命中），且 `budget` / `fail` 在缺 `status` 时
+**rc=0 假绿**——把「未知状态」静默当成 running 继续写盘。
+
+`load_state` 现在做两层校验：
+
+1. **JSON 解析层**：解析失败 → 退出码 3（既有行为）。
+2. **结构层**（`_validate_state_shape`）：必需字段缺失 / 类型不对 / 取值非法
+   （`status` ∉ {running, done, aborted}、`phase` ∉ PHASES）→ 退出码 3，
+   失败信息**指名具体字段**。
+
+处置口径与 JSON 损坏同级：fail fast，**不静默重建**——静默重建等于凭空替主理人
+编造一个任务状态，比报错更危险。
+
+## 检查点编号必须等于阶段序号（R7 P1-2）
+
+协议 §3 约定「检查点编号 = 阶段序号」（cp-001 = FREEZE、cp-002 = IDENTIFY…）。
+原实现只校验**形态**（`cp-[0-9]{3,}`），不校验编号一致性，于是编号可以乱写、
+同一编号可被复用、marker 文件因 `if not marker.exists()` 永不重写而与状态脱节。
+
+现在 `advance` 强制：传入的 `--checkpoint` 必须等于本次推进后的 `turn` 对应编号
+（`cp-{turn:03d}`），不符 → 退出码 1；同编号复用 → 退出码 1；marker 每次推进
+都重写，保证指针元信息与状态文件同步。
+
+## 孤儿 tmp 清理（R7 P1-3）
+
+`_atomic_write` 的 tmp 名带 PID 以隔离并发写者；进程在 `write_text` 与
+`os.replace` 之间被 SIGKILL 会留下孤儿 tmp（实测崩溃后 `_state.json.tmp.<pid>`
+永久残留，反复崩溃即无界堆积）。
+
+写盘前先清理**已确认孤儿**的 tmp（`os.kill(pid, 0)` 探测持有进程已死才删），
+当前进程自己的 tmp 与存活进程持有的 tmp 一律跳过。
+
 ## 退出码
 
   0 = 成功
   1 = 用法/参数错误（含 --task-id 缺失、跳级未 force、熔断后拒绝推进、
       **终态任务的操作被拒**）
   2 = 状态文件不存在（resume/advance/finish/budget/fail 遇到未 init 的任务）
-  3 = JSON 解析失败（状态文件被外部破坏，fail fast 不静默重建）
+  3 = 状态文件损坏（JSON 解析失败，或**结构校验不通过**：必需字段缺失 /
+      类型非法 / status·phase 取值非法）——fail fast 不静默重建
 
 ## 依赖
 
@@ -270,16 +307,79 @@ def _validate_task_id(task_id: str) -> str | None:
     return None
 
 
+def _cleanup_stale_tmp(path: Path) -> int:
+    """清理同目录下**不属于当前进程**的残留 tmp 文件，返回清理条数。
+
+    背景（R7 P1-3）：`_atomic_write` 的 tmp 名带 PID，用于隔离并发写者。
+    进程若在 `write_text` 与 `os.replace` 之间被 SIGKILL，tmp 就成了孤儿
+    （实测崩溃后目录里留下 `_state.json.tmp.<pid>`，此后**永远不会被清理**）。
+    虽然孤儿 tmp 不影响状态正确性（主文件始终是完整的），但会随崩溃次数
+    无界堆积——真实工作区反复崩溃即形成磁盘泄漏。
+
+    清理口径：
+      - 只删同目录、同名前缀（`<name>.tmp.`）的 tmp；
+      - **跳过当前进程自己的 tmp**（正在写，不能删）；
+      - 跳过**仍被其他进程持有**的 tmp（并发写者可能正在写）——
+        用 `os.kill(pid, 0)` 探测存活，不存活才认定为孤儿。
+    """
+    prefix = path.name + ".tmp."
+    removed = 0
+    try:
+        entries = list(path.parent.iterdir())
+    except OSError:
+        return 0
+    mine = f".tmp.{os.getpid()}"
+    for entry in entries:
+        if not entry.name.startswith(prefix):
+            continue
+        if entry.name.endswith(mine):
+            continue  # 当前进程自己的 tmp，不能删
+        suffix = entry.name[len(prefix):]
+        if not suffix.isdigit():
+            continue  # 非 PID 形态的 tmp，不动（可能是用户自己的文件）
+        pid = int(suffix)
+        if pid == os.getpid():
+            continue
+        # 探测持有者是否仍存活；存活则不是孤儿（并发写者）
+        try:
+            os.kill(pid, 0)
+            continue  # 进程仍存活 → 跳过
+        except ProcessLookupError:
+            pass  # 进程已死 → 孤儿，可清
+        except PermissionError:
+            continue  # 存在但无权限探测 → 保守跳过
+        except OSError:
+            continue
+        try:
+            entry.unlink()
+            removed += 1
+        except OSError:
+            pass
+    return removed
+
+
 def _atomic_write(path: Path, text: str) -> None:
     """原子写：先写 .tmp 再 os.replace，中断不会留下半截 JSON。
 
     tmp 文件名按 PID 隔离：即使无锁环境（非 POSIX 退化路径）下多进程
     并发，也不会出现「A 的 os.replace 把 B 正在写的 tmp 搬走」互踩崩溃。
+
+    R7 P1-3：写前先清理**孤儿 tmp**（上一进程崩溃留下的残留），避免
+    崩溃反复发生时 tmp 无界堆积。详见 `_cleanup_stale_tmp`。
     """
     path.parent.mkdir(parents=True, exist_ok=True)
+    _cleanup_stale_tmp(path)
     tmp = path.with_suffix(path.suffix + f".tmp.{os.getpid()}")
-    tmp.write_text(text, encoding="utf-8")
-    os.replace(tmp, path)  # POSIX 上原子
+    try:
+        tmp.write_text(text, encoding="utf-8")
+        os.replace(tmp, path)  # POSIX 上原子
+    except BaseException:
+        # 写盘失败/被中断时，尽量不让自己的 tmp 变成孤儿
+        try:
+            tmp.unlink()
+        except OSError:
+            pass
+        raise
 
 
 @contextlib.contextmanager
@@ -304,15 +404,77 @@ def _state_lock(workspace: Path, task_id: str):
             fcntl.flock(fh, fcntl.LOCK_UN)
 
 
+# ── 状态文件结构校验（R7 P0-1 / P0-2）────────────────────────────────────
+# 必需字段：键存在 + 类型正确 + 取值在合法枚举内。
+#
+# 为什么需要这一层（R7 Phase A 实锤）：
+#   `load_state` 原先只做 JSON 解析层面的校验——文件是合法 JSON 但**缺关键
+#   字段**时（字段被外部改写、旧版本状态文件、或部分写盘后被人为编辑），
+#   下游子命令直接 `state["phase"]` / `state["status"]` → **裸 KeyError
+#   Traceback**（实测 13 组组合命中），且 `budget` / `fail` 在缺 `status`
+#   时**rc=0 假绿**：把「未知状态」静默当成 running 处理并继续写盘。
+#
+#   处置口径与 JSON 损坏同级：fail fast，退出码 3，**不静默重建**——
+#   静默重建等于凭空替主理人编造一个任务状态（比报错更危险）。
+REQUIRED_STATE_FIELDS = {
+    "task_id": str,
+    "status": str,
+    "phase": str,
+    "turn": int,
+    "checkpoints": list,
+}
+VALID_STATUSES = (STATUS_RUNNING, STATUS_DONE, STATUS_ABORTED)
+
+
+def _validate_state_shape(state: dict, path: Path) -> None:
+    """校验状态文件的必需字段；不合法则 fail fast（退出码 3）。
+
+    失败信息必须**指名具体字段**（缺哪个 / 类型不对 / 取值非法），
+    否则调用方无法判断是状态文件坏了还是自己的参数错了。
+    """
+    if not isinstance(state, dict):
+        print(f"❌ 状态文件结构损坏（fail fast，不静默重建）: {path}\n"
+              f"   顶层不是对象，而是 {type(state).__name__}", file=sys.stderr)
+        sys.exit(3)
+    problems = []
+    for key, typ in REQUIRED_STATE_FIELDS.items():
+        if key not in state:
+            problems.append(f"缺字段 {key}")
+            continue
+        val = state[key]
+        # bool 是 int 的子类，必须排除（True 会被 isinstance 判成 int）
+        if typ is int and isinstance(val, bool):
+            problems.append(f"字段 {key} 类型非法: 期望 int，实际 bool")
+        elif not isinstance(val, typ):
+            problems.append(f"字段 {key} 类型非法: 期望 {typ.__name__}，"
+                            f"实际 {type(val).__name__}")
+    status = state.get("status")
+    if "status" in state and isinstance(status, str) and status not in VALID_STATUSES:
+        problems.append(f"字段 status 取值非法: {status!r}"
+                        f"（合法值: {'/'.join(VALID_STATUSES)}）")
+    phase = state.get("phase")
+    if "phase" in state and isinstance(phase, str) and phase not in PHASES:
+        problems.append(f"字段 phase 取值非法: {phase!r}"
+                        f"（合法值: {'/'.join(PHASES)}）")
+    if problems:
+        print(f"❌ 状态文件结构损坏（fail fast，不静默重建）: {path}",
+              file=sys.stderr)
+        for p in problems:
+            print(f"   - {p}", file=sys.stderr)
+        sys.exit(3)
+
+
 def load_state(workspace: Path, task_id: str) -> dict:
     p = state_path(workspace, task_id)
     if not p.exists():
         return None
     try:
-        return json.loads(p.read_text(encoding="utf-8"))
+        state = json.loads(p.read_text(encoding="utf-8"))
     except (ValueError, OSError) as exc:
         print(f"❌ 状态文件损坏（fail fast，不静默重建）: {p}\n   {exc}", file=sys.stderr)
         sys.exit(3)
+    _validate_state_shape(state, p)
+    return state
 
 
 def save_state(workspace: Path, task_id: str, state: dict) -> None:
@@ -571,6 +733,36 @@ def cmd_advance(args) -> int:
         # 父目录不存在 → 裸 Traceback（rc=1 但输出是堆栈，无业务报错）。
         # 本块把两种形态归一到裸 cp-NNN，并拒绝任何路径元字符（防穿越）。
         cp_name = _normalize_checkpoint_name(args.checkpoint)
+        if cp_name is not None and cp_name:
+            # R7 P1-2：协议 §3 规定「检查点编号 = 阶段序号」（cp-001 = FREEZE，
+            # cp-002 = IDENTIFY…）。原实现只校验**形态**（cp-[0-9]{3,}），
+            # 不校验编号与 `turn` 的一致性，于是：
+            #   - 编号可以乱写（第 1 个阶段记成 cp-007）；
+            #   - 同一编号可以复用多次（checkpoints 里出现两条 state://cp-007）；
+            #   - marker 文件因 `if not marker.exists()` 不重写，第 2 次推进的
+            #     phase/ts 永不落盘，指针内容与状态文件脱节。
+            # 三者都会破坏 protocol_check 的 HANDOFF 覆盖校验（它假定 cp 编号
+            # ≡ 阶段序号动态生成清单），属跨层一致性缺陷。
+            # 处置：编号必须等于本次推进后的 turn；不符即 rc=1 拒绝。
+            # （不用 --force 豁免——逃生阀是给「越级推进」用的，不是给
+            #   「检查点编号写错」用的；写错了应当改对，而不是绕过去。）
+            expected_cp = f"cp-{int(state['turn']) + 1:03d}"
+            if cp_name != expected_cp:
+                print(f"❌ 检查点编号与阶段序号不一致：本次推进为第 "
+                      f"{int(state['turn']) + 1} 个检查点，应为 {expected_cp}，"
+                      f"实得 {cp_name}",
+                      file=sys.stderr)
+                print("   协议 §3 约定「检查点编号 = 阶段序号」"
+                      "（cp-001=FREEZE、cp-002=IDENTIFY…）",
+                      file=sys.stderr)
+                return 1
+            # 编号复用防线（纵深防御：上面的编号一致性已排除绝大多数情况，
+            # 这里再挡一次「历史状态文件里已有同编号」的边角）
+            used = {c.get("snapshot_ref") for c in state.get("checkpoints", [])}
+            if f"state://{cp_name}" in used:
+                print(f"❌ 检查点编号 {cp_name} 已被占用（状态文件中已存在该指针）",
+                      file=sys.stderr)
+                return 1
         if cp_name is None:
             print(f"❌ 非法 checkpoint 名 {args.checkpoint!r}（归一化后须匹配 "
                   f"cp-\\d{{3,}}；接受 `state://cp-NNN` 或裸 `cp-NNN`；"
@@ -602,12 +794,17 @@ def cmd_advance(args) -> int:
             cp_dir = runs_dir(ws) / args.task_id / "checkpoints"
             cp_dir.mkdir(parents=True, exist_ok=True)
             marker = cp_dir / f"{cp_name}.md"
-            if not marker.exists():
-                marker.write_text(
-                    f"# {cp_name}\n\n- phase: {args.phase}\n- ts: {cp['ts']}\n"
-                    f"- note: {args.note or ''}\n\n"
-                    f"（本文件为检查点指针：阶段产物应落盘于此目录，指针可被 resume 解析）\n",
-                    encoding="utf-8")
+            # R7 P1-2：marker **可重写**（原先 `if not marker.exists()` 跳过
+            # 已存在的文件）——同编号复用被拒后，正常路径不再出现重写，
+            # 但「主理人事后手工修正 marker 内容」或「状态文件被外部回滚」
+            # 等场景下，旧 marker 会与状态文件脱节。改为每次推进都重写，
+            # 保证指针内容与状态文件同步；阶段产物由主理人写入同目录的其他
+            # 文件，本 marker 只承担「指针元信息」职责。
+            marker.write_text(
+                f"# {cp_name}\n\n- phase: {args.phase}\n- ts: {cp['ts']}\n"
+                f"- note: {args.note or ''}\n\n"
+                f"（本文件为检查点指针：阶段产物应落盘于此目录，指针可被 resume 解析）\n",
+                encoding="utf-8")
         state["checkpoints"].append(cp)
         if args.note:
             _note(state, args.phase, args.note)
@@ -770,7 +967,13 @@ def cmd_budget(args) -> int:
         b = state["budget"]
     warn = ""
     if b["turns_used"] >= b["turns_max"] or b["tokens_used"] >= b["tokens_max"]:
-        warn = "  ⚠️ 预算触顶 → 按协议熔断：升级用户，不空转"
+        # R7 P1-1：原文案写「按协议熔断」是**误导**——registry §Loop 终止硬上限
+        # 明确把 turns/tokens 定为**告警层**（主理人语义裁量），只有
+        # max_time / failures 是**终态熔断层**（FM-R2-03 已登记该分层）。
+        # 文案说「熔断」会让调用方以为 status 已变 aborted、后续推进会被拒，
+        # 实际 status 仍是 running、advance 照常放行——文案与行为脱节
+        # （FM-R2-03 同族复发：语义分层在压缩成一句话时丢失关键限定）。
+        warn = "  ⚠️ 预算触顶（告警层，不自动熔断）→ 请主理人裁量是否收尾或调预算"
     print(f"✅ 预算已更新: turns {b['turns_used']}/{b['turns_max']} · "
           f"tokens {b['tokens_used']}/{b['tokens_max']} · "
           f"已用时长 {_format_elapsed(state)}/{b['max_time_sec']}s{warn}")

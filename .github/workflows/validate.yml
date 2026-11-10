@@ -197,6 +197,15 @@ jobs:
       - name: State IO runtime sequencing + terminal state (R6)
         run: python3 tests/test_state_runtime_sequencing.py
 
+      # R7 P0-1 / P0-2 / P1-1 / P1-2 / P1-3：状态文件健壮性 + 检查点一致性
+      # + 孤儿 tmp 清理。12 条用例锁定五处修复：半损坏状态文件（合法 JSON
+      # 但缺字段/取值非法）必须 fail fast rc=3 且无裸 Traceback（不再静默
+      # 当成 running 假绿）、budget 触顶文案须表达「告警层」、检查点编号
+      # 必须等于阶段序号（乱写/复用均拒）、写盘时清理已确认孤儿 tmp。
+      # 负例同时断言失败原因归属被测分支。
+      - name: State IO file robustness + checkpoint consistency (R7)
+        run: python3 tests/test_state_file_robustness.py
+
 
       - name: Topic scoring edge cases
         run: |

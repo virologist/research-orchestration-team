@@ -2,6 +2,96 @@
 
 所有重要变更按版本倒序记录。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [2.5.5] - 2026-11-10
+
+> R7 状态文件健壮性审计版。主题：**状态文件半损坏时会怎样？检查点编号与阶段序号绑不绑得住？崩溃后会不会留垃圾？**
+> 11 组状态文件实验，实锤 2 个 P0（半损坏状态文件 → 裸 Traceback / 缺 status 时假绿）
+> + 3 个 P1（触顶文案宣称「熔断」实为告警 / 检查点编号与阶段序号解耦 / SIGKILL 孤儿 tmp），
+> 排除 3 组假阳性（vendor `except` 为联邦真源有意回退、`cp-008` 硬编码为脆性非缺陷、
+> turns/tokens 不熔断为 registry 既定告警层）。R6 已把「运行时序」查完，R7 转向
+> **状态文件本身的健壮性**与**跨层一致性**。
+
+### Fixed
+
+- **半损坏状态文件 → 裸 Traceback（R7 P0-1，E7）**：`load_state` 原先只做 JSON 解析层
+  校验。文件是**合法 JSON 但缺关键字段**时（被外部改写 / 旧版本状态文件 / 部分写盘后
+  编辑），下游子命令直接 `state["phase"]` / `state["status"]` → 裸 `KeyError` Traceback，
+  实测 **13 组子命令 × 损坏形态组合**全部命中，违反「业务报错必须有可读文案、无裸
+  Traceback」的既有契约。修复：`load_state` 增加**结构层校验**（`_validate_state_shape`）——
+  必需字段缺失 / 类型不对 / 取值非法（`status` ∉ {running, done, aborted}、
+  `phase` ∉ PHASES）一律 fail fast 退出码 **3**，且失败信息**逐条指名具体字段**。
+  处置口径与 JSON 损坏同级：**不静默重建**（重建等于凭空替主理人编造任务状态）。
+- **缺 status 时 budget / fail 假绿（R7 P0-2，E8）**：状态文件缺 `status` 时，
+  `budget` / `fail` **rc=0 放行**，把「未知状态」静默当成 `running` 处理并继续写盘——
+  等于凭空替主理人断言了任务状态。修复：随 P0-1 的结构校验一并拦截（rc=3）。
+- **budget 触顶文案宣称「熔断」实为告警（R7 P1-1，E9）**：registry §Loop 终止硬上限
+  明确把 `turns` / `tokens` 定为**告警层**（主理人语义裁量），只有 `max_time` /
+  `failures` 才是**终态熔断层**。原文案写「按协议熔断」会让调用方误以为 `status` 已变
+  `aborted`、后续推进会被拒，实际 `status` 仍是 `running`、`advance` 照常放行——文案与
+  行为脱节（FM-R2-03 同族复发：语义分层在压缩成一句话时丢失关键限定）。修复：文案改为
+  「⚠️ 预算触顶（告警层，不自动熔断）→ 请主理人裁量是否收尾或调预算」。
+- **检查点编号与阶段序号解耦（R7 P1-2，E3，三处）**：协议 §3 约定「检查点编号 =
+  阶段序号」（cp-001=FREEZE、cp-002=IDENTIFY…），而 `protocol_check` 的 HANDOFF 覆盖
+  校验正按该约定动态生成 cp 清单。原实现只校验**形态**（`cp-[0-9]{3,}`），不校验编号
+  一致性，于是：① 编号可乱写（第 1 个阶段记成 cp-007）；② 同一编号可被复用
+  （`checkpoints` 里出现两条 `state://cp-007`）；③ marker 文件因 `if not marker.exists()`
+  永不重写，第 2 次推进的 phase/ts 永不落盘，指针内容与状态文件脱节。三者都会破坏跨层
+  校验。修复：`advance` 强制编号 = 本次推进后的 `turn` 对应编号，不符 rc=1 拒绝；同编号
+  复用 rc=1 拒绝；marker 改为每次推进都重写，保证指针元信息与状态文件同步。
+- **SIGKILL 崩溃留下孤儿 tmp（R7 P1-3，E1 / E5）**：`_atomic_write` 的 tmp 名带 PID 以
+  隔离并发写者；进程在 `write_text` 与 `os.replace` 之间被杀，就留下
+  `_state.json.tmp.<pid>`——实测崩溃后**永远不会被清理**，反复崩溃即无界堆积的磁盘泄漏
+  （已确认无下游代码 glob 该目录，属空间泄漏而非正确性缺陷）。修复：写盘前清理**已确认
+  孤儿**的 tmp（`os.kill(pid, 0)` 探测持有进程已死才删），当前进程自己的 tmp 与存活进程
+  持有的 tmp 一律跳过；写盘异常时主动回收自己的 tmp。
+
+### Added
+
+- `tests/test_state_file_robustness.py`（**12** 条）：R1 缺 status → budget 拒绝 rc=3 /
+  R2 缺 phase → resume 拒绝 / R3 缺 task_id → finish 拒绝 / R4 缺 turn → advance 拒绝 /
+  R5 空对象 → init 拒绝 / R6 status 取值非法 / R7 phase 取值非法 / R8 turn 为 bool
+  （bool 不算 int）/ R9 结构损坏被拒后状态文件逐字节未变（不静默重建）/ R10 budget 触顶
+  文案表达「告警层」/ R11 检查点编号必须等于阶段序号（乱写与复用均拒 + marker 与状态
+  一致）/ R12 孤儿 tmp 被清理。每条独立临时目录，判定同时断言 rc、失败文案归属与
+  无裸 Traceback（FM-R2-06 纪律）。
+- CI 新增 `State IO file robustness + checkpoint consistency (R7)` step；门禁 step
+  **17 → 18**。
+
+### Regression evidence（v2.5.5 部署前实测，16 套门禁逐条独立取 rc）
+
+| 套件 | 结果 |
+|------|------|
+| `manifest_check.py` / `_selftest.py` | 74/74 ✅ / 30/30 ✅ |
+| `harness_eval.py` / `_selftest.py` | 12/12 ✅ / 14/14 ✅ |
+| `routing_eval.py` / `_selftest.py` | 39/39 ✅ / 12/12 ✅ |
+| `tests/test_vendor_core.py` | V1–V6 6/6 ✅ |
+| `test_phase_normalization.py` | 26/26 ✅ |
+| `tests/test_state_ceilings.py` | 4/4 ✅ |
+| `tests/test_state_io_guards.py` | 10/10 ✅ |
+| `tests/test_lead_source_of_truth.py` | 6/6 ✅ |
+| `tests/test_state_runtime_sequencing.py` | 8/8 ✅ |
+| `tests/test_state_file_robustness.py`（新增） | **12/12** ✅ |
+| `protocol_check.py` envelope / conflict / integration | 37/37(v2.4)+12/12(legacy) ✅ / 5/5 ✅ / 10/10+8/8 ✅ |
+| `protocol_check_selftest.py` | 14/14 ✅ |
+
+注入破坏实锤（4 组，证明锁定真的会红）：N1 短路 `_validate_state_shape` 调用 → R1–R9
+精确变红（9 条，R10–R12 不受影响，维度隔离正确）；N2 短路 cp 编号一致性校验 → 仅 R11
+变红；N3 短路孤儿 tmp 清理 → 仅 R12 变红；N4 把触顶文案改回「熔断」→ 仅 R10 变红。
+每组注入后还原校验 rc=0。
+
+### Known limitations（设计语义 · 登记备查，非缺陷）
+
+- **`init` / `budget` 仍可主动放宽熔断阈值**（台账 §10.2 #22）：registry 明确授权这两个
+  子命令覆写上限，`budget --max-failures 99` 是合法路径。R6 已封堵 `fail` 的逐次抬高
+  绕过路径，但要杜绝「主动放宽」属 registry 语义变更，需另开轮次裁决，**不在 R7 范围内**。
+- **协议层与落盘状态无跨层校验入口**（台账 §10.5 第 3 项）：`state_io.py` 管落盘、
+  协议 §2 管信封，`turn` / `phase` / `status` 三者在两层各自表述，漂移无门禁。R7 Phase A
+  实测确认：信封 `phase=EXECUTE` / `task_id` 与落盘状态完全不符时，协议校验返回**空失败
+  列表**（rc=0）。补这道跨层断言需要定义「信封与状态的绑定契约」（哪个信封应匹配哪个
+  task_id、phase 如何对齐），属设计裁决，**不在 R7 范围内**，留待 R8。
+- **`turns` / `tokens` 触顶不熔断**：registry 既定告警层语义（FM-R2-03 / §10.2 #3 /
+  #10 已登记），非缺陷。本轮只修正文案表述使其与语义一致。
+
 ## [2.5.4] - 2026-11-10
 
 > R6 运行时序审计版。主题：**终态之后写操作还会发生什么？观测数据会不会被静默冲掉？**

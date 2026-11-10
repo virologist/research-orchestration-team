@@ -143,9 +143,12 @@
 - **检查点指针**：`state://cp-NNN` ≡ `.harness-runs/<task_id>/checkpoints/cp-NNN.md`
 - **六命令**：`init`（开工，幂等）/ `advance`（阶段收尾）/ `resume`（中断恢复，打印续跑点）/ `finish`（收尾）/ `budget`（轮次与 token 计数）/ `fail`（登记一次失败，累计达 `budget.max_failures` 即熔断置 `status = aborted`）
 - **写入者**：仅主理人（与同步规则 2 一致）；成员只读
-- **退出码**：0 成功 / 1 参数错（**含跳级未 force**、熔断后拒绝推进、**终态任务的操作被拒**）/ 2 无状态文件 / 3 JSON 损坏（fail fast，禁静默重建）
+- **退出码**：0 成功 / 1 参数错（**含跳级未 force**、熔断后拒绝推进、**终态任务的操作被拒**、**检查点编号与阶段序号不符**）/ 2 无状态文件 / 3 状态文件损坏（JSON 解析失败，**或结构校验不通过**：必需字段缺失 / 类型非法 / status·phase 取值非法——fail fast，禁静默重建）
 - **终态不可回退（R6 P0-1）**：`done` 与 `aborted` 都是终态，任何子命令都不得把终态改写成另一种状态——已完成的任务不会因事后超时被翻成失败（`resume` / `budget` 的 `max_time` 改写一律要求「非终态」）；`budget` 对终态任务 rc=1 拒绝并保持状态文件完全不变。详见同目录 `agent-registry.md` §终态不可回退（R6 P0-1）
 - **熔断阈值只收紧不放宽（R6 P0-2）**：`fail --max-failures` 仅允许把阈值**调低**（让熔断更早触发），放宽一律忽略并告警——每次 fail 自带更大阈值会让熔断彻底失效
+- **状态文件结构校验（R7 P0-1 / P0-2）**：状态文件**是合法 JSON 但缺关键字段**时（被外部改写 / 旧版本状态文件 / 部分写盘后编辑），子命令一律 **rc=3** fail fast，**不静默重建**——重建等于凭空替主理人编造任务状态。校验范围：必需字段（`task_id` / `status` / `phase` / `turn` / `checkpoints`）缺失或类型不对、`status` ∉ {running, done, aborted}、`phase` ∉ 八阶段序列。失败信息逐条指名具体字段
+- **检查点编号 = 阶段序号（R7 P1-2）**：协议 §3 约定「检查点编号 = 阶段序号」（cp-001=FREEZE、cp-002=IDENTIFY…），`protocol_check` 的 HANDOFF 覆盖校验按该约定动态生成 cp 清单。`advance` 强制校验传入的 `--checkpoint` 等于本次推进后的 `turn` 对应编号（`cp-{turn:03d}`），不符 → rc=1；同编号复用 → rc=1；marker 文件每次推进都重写，保证指针元信息与状态文件同步
+- **孤儿 tmp 清理（R7 P1-3）**：原子写的 tmp 名带 PID 以隔离并发写者；进程在写盘中途被 SIGKILL 会留下孤儿 `_state.json.tmp.<pid>`。写盘前清理**已确认孤儿**的 tmp（持有进程已死才删），当前进程自己的 tmp 与存活进程持有的 tmp 一律跳过
 - **按序推进门禁（sequential advance gate）**：`advance` 只允许推进到**期望的下一个阶段**；越级即拒绝并返回退出码 1。边界约定：`init` 之后第一次推进的目标就是 `FREEZE` 本身（记为第 1 个检查点），此后严格取当前阶段的后继阶段。逃生阀：给非空 `--force-reason` 即生效（`--force` 与 `--force-reason` 同时给亦可；**只给 `--force` 而不给理由会被拒**，返回退出码 1）。越级放行时会打印 ⚠️ 提示实际跳过的阶段与理由。越级属**例外路径**，须在交付报告中标明，不得作为常规推进方式
 
 主理人断点续跑流程与命令示例见 `../../../agents/research-orchestration-team-team-lead.md`「标准工作流程（SOP）前的强制动作：状态初始化与断点续跑」节（本节与该处互为引用，行为以 `../scripts/state_io.py` 实现为准）。

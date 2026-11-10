@@ -222,6 +222,35 @@
 
 实现口径：`state_io.py` 的 `_is_terminal(state)` 统一判定 `status ∈ {done, aborted}`；`resume` / `budget` 的 `max_time` 改写守卫一律要求「非终态」；`budget` 入口补齐终态守卫（此前只有 `advance` / `fail` 有）。
 
+### 状态文件结构校验（R7 P0-1 / P0-2）
+
+状态文件**是合法 JSON 但缺关键字段**时（被外部改写 / 旧版本状态文件 / 部分写盘后编辑），子命令一律 **rc=3** fail fast，**不静默重建**——重建等于凭空替主理人编造任务状态。
+
+| 校验项 | 判定 |
+|---|---|
+| 必需字段缺失 | `task_id` / `status` / `phase` / `turn` / `checkpoints` 任一缺失 → rc=3 |
+| 必需字段类型不对 | 非预期类型 → rc=3（`bool` 不算 `int`） |
+| `status` 取值非法 | ∉ {running, done, aborted} → rc=3（**不得**静默当成 running） |
+| `phase` 取值非法 | ∉ 八阶段序列 → rc=3 |
+
+修复前实测：`budget` / `fail` 在缺 `status` 时 **rc=0 假绿**——把「未知状态」静默当成 `running` 处理并继续写盘，等于凭空替主理人断言了任务状态。
+
+### 检查点编号 = 阶段序号（R7 P1-2）
+
+协议 §3 约定「检查点编号 = 阶段序号」（cp-001=FREEZE、cp-002=IDENTIFY…），`protocol_check` 的 HANDOFF 覆盖校验按该约定动态生成 cp 清单——编号一旦与阶段序号脱节，跨层校验即失效。
+
+| 场景 | 修复前 | 修复后 |
+|---|---|---|
+| 编号与阶段序号不符（第 1 个阶段传 cp-007） | rc=0 放行，落盘 `state://cp-007` | **rc=1 拒绝**（提示应为 cp-001） |
+| 同编号复用（第 2 个阶段传 cp-001） | rc=0 放行，`checkpoints` 出现两条同指针 | **rc=1 拒绝** |
+| marker 文件内容 | `if not marker.exists()` → 永不重写，与状态脱节 | 每次推进都重写，与状态同步 |
+
+### 孤儿 tmp 清理（R7 P1-3）
+
+原子写的 tmp 名带 PID 以隔离并发写者；进程在写盘中途被 SIGKILL 会留下孤儿 `_state.json.tmp.<pid>`——反复崩溃即无界堆积的磁盘泄漏（已确认无下游代码 glob 该目录，属空间泄漏而非正确性缺陷）。
+
+清理口径：写盘前删除同目录同名前缀的 tmp，且**持有进程已死**（`os.kill(pid, 0)` 探测）才删；当前进程自己的 tmp 与存活进程持有的 tmp 一律跳过。
+
 锁定：`tests/test_state_runtime_sequencing.py` T1/T2/T3/T8（8 条用例），3 组注入破坏证明守卫被改回去时立即红。
 
 ### 观测数据不得被静默冲掉（R6 P1-1）
