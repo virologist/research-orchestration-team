@@ -140,10 +140,30 @@ max_time 与 circuit_breaker 是纯纸面。本版本把四项**全部**代码�
   python3 state_io.py fail --task-id trace-h9n2-001 --workspace /path/to/project \
     --reason "检索源三源全败，无可用证据"
 
+## 终态不可回退（R6 P0-1 / P0-2）
+
+`done`（已完成）与 `aborted`（已熔断）都是**终态**，任何子命令都不得把终态改写成
+另一种状态：
+
+- `resume` / `budget` 的 `max_time` 改写一律要求「**非终态**」——修复前守卫只排除
+  `aborted`、漏了 `done`，导致已完成的任务在事后超时时被翻成失败（metrics 里
+  `success_rate=1` 与 `status=aborted` 自相矛盾）。
+- `budget` 入口补齐终态守卫（此前只有 `advance` / `fail` 有）：对终态任务 rc=1
+  拒绝并保持状态文件完全不变。
+- `fail --max-failures` 仅允许**收紧**阈值（调低让熔断更早触发），放宽一律忽略
+  并告警——否则「每次 fail 自带更大阈值」能让熔断彻底失效。
+
+## 观测数据不得被静默冲掉（R6 P1-1）
+
+`advance` 把 `budget.turns_used` 更新为 `max(已落盘值, turn)` 而非直接覆盖：
+主理人用 `budget` 上报的观测值（如 turns=25 / tokens=42000）不会被下一次 advance
+静默冲回 `turn` 的小数值；未上报时 `turns_used` 仍随 `turn` 递增。
+
 ## 退出码
 
   0 = 成功
-  1 = 用法/参数错误（含 --task-id 缺失、跳级未 force、熔断后拒绝推进）
+  1 = 用法/参数错误（含 --task-id 缺失、跳级未 force、熔断后拒绝推进、
+      **终态任务的操作被拒**）
   2 = 状态文件不存在（resume/advance/finish/budget/fail 遇到未 init 的任务）
   3 = JSON 解析失败（状态文件被外部破坏，fail fast 不静默重建）
 
@@ -357,6 +377,21 @@ def _time_exceeded(state: dict) -> tuple[bool, int | None]:
     return elapsed >= limit, elapsed
 
 
+def _is_terminal(state: dict) -> bool:
+    """任务是否已处于终态（done / aborted）。
+
+    终态是**不可回退**的：已完成的（done）不能被事后超时翻成失败（aborted），
+    已熔断的（aborted）不能被任何写操作复活为 running。
+
+    R6 实锤（P0-1）：`resume` / `budget` 的 max_time 检查原先只排除 aborted，
+    **漏了 done**——任务 finish 后再调 resume，等过了 max_time 就会被改写为
+    aborted，metrics 里的 success_rate=1 与 status=aborted 自相矛盾
+    （「已完成的任务在事后被翻成失败」）。`cmd_budget` 更严重：它**没有任何
+    终态守卫**，对 done 任务调 budget --max-time 0 直接改写终态。
+    """
+    return state.get("status") in (STATUS_DONE, STATUS_ABORTED)
+
+
 def _note(state: dict, phase: str, note: str) -> None:
     """往 notes 里追加一条带时间戳的备注。"""
     state.setdefault("notes", []).append(
@@ -552,7 +587,13 @@ def cmd_advance(args) -> int:
         state["phase"] = args.phase
         state["turn"] += 1
         state["updated_at"] = now_iso()
-        state["budget"]["turns_used"] = state["turn"]
+        # R6 P1-1：原实现是 `state["budget"]["turns_used"] = state["turn"]`（覆盖）。
+        # 主理人用 budget 上报的观测值（如 turns=25 / tokens=42000）会被下一次
+        # advance 静默冲回 turn 的小数值——观测数据丢失且无任何提示。
+        # 改为**取较大值**：turn 是结构化事实（已推进阶段数），主理人上报值
+        # 可能更大（编排轮次 ≠ 阶段数），两者不冲突，取 max 保住观测值。
+        b = _budget(state)
+        b["turns_used"] = max(int(b.get("turns_used", 0)), int(state["turn"]))
         cp = {"turn": state["turn"], "phase": args.phase,
               "ts": now_iso(), "snapshot_ref": None}
         if cp_name:
@@ -599,8 +640,10 @@ def cmd_resume(args) -> int:
                   file=sys.stderr)
             return 2
         # max_time 触顶 → 置熔断终态（写操作，必须走锁 + save_state）
+        # R6 P0-1：守卫必须是「非终态」，不能只排除 aborted——done 同样不可回退。
+        # 任务完成后过了 max_time 再来 resume，不得把成功翻成失败。
         exceeded, elapsed = _time_exceeded(state)
-        if exceeded and state.get("status") != STATUS_ABORTED:
+        if exceeded and not _is_terminal(state):
             limit = _budget(state)["max_time_sec"]
             msg = (f"⚠️ 时长触顶（max_time）: 已用 {elapsed}s ≥ 上限 {limit}s "
                    f"→ 按协议熔断：升级用户，不空转")
@@ -701,6 +744,15 @@ def cmd_budget(args) -> int:
         if state is None:
             print(f"❌ 任务未初始化: {args.task_id}", file=sys.stderr)
             return 2
+        # R6 P0-1：budget 此前**没有任何终态守卫**（advance/fail 都有），
+        # 对已 done 的任务调 budget --max-time 0 会直接把它改写成 aborted——
+        # 事后翻案，且 budget 本是「上限写入口」，用它翻终态等于让成功任务
+        # 被追认失败。终态任务一律拒绝改写。
+        if _is_terminal(state):
+            print(f"❌ 拒绝更新预算：任务已处于终态（status={state.get('status')}）"
+                  f"→ 终态不可回退，不改写；如需继续请新建 task_id",
+                  file=sys.stderr)
+            return 1
         _apply_ceiling_overrides(state, args)
         if args.turns is not None:
             state["budget"]["turns_used"] = args.turns
@@ -708,7 +760,7 @@ def cmd_budget(args) -> int:
             state["budget"]["tokens_used"] = args.tokens
         # max_time 触顶 → 置熔断终态
         exceeded, elapsed = _time_exceeded(state)
-        if exceeded and state.get("status") != STATUS_ABORTED:
+        if exceeded and not _is_terminal(state):
             limit = state["budget"]["max_time_sec"]
             msg = (f"⚠️ 时长触顶（max_time）: 已用 {elapsed}s ≥ 上限 {limit}s "
                    f"→ 按协议熔断：升级用户，不空转")
@@ -761,8 +813,20 @@ def cmd_fail(args) -> int:
             print("❌ 拒绝登记失败：任务已因超时熔断（status=aborted）", file=sys.stderr)
             return 1
         b = _budget(state)
+        # R6 P0-2：`fail` 的 `--max-failures` 原先能**抬高**已落盘阈值，
+        # 于是「每次 fail 都自带一个更大的 --max-failures」可以让熔断彻底失效
+        # （实测 8 次失败后 status 仍 running）——registry 只授权 init/budget
+        # 覆写上限，fail 的逐次抬高等于给熔断开了后门。
+        # 修正为**只允许收紧**（把阈值调低让熔断更早触发），放宽一律忽略并告警。
         if getattr(args, "max_failures", None) is not None:
-            b["max_failures"] = int(args.max_failures)
+            want = int(args.max_failures)
+            have = int(b.get("max_failures", DEFAULT_MAX_FAILURES))
+            if want < have:
+                b["max_failures"] = want
+            elif want > have:
+                print(f"⚠️ 已忽略 --max-failures {want}（当前阈值 {have}）: "
+                      f"熔断阈值只允许收紧不允许放宽——放宽等于绕过熔断",
+                      file=sys.stderr)
         b["failures"] = int(b.get("failures", 0)) + 1
         failures = b["failures"]
         limit = int(b.get("max_failures", DEFAULT_MAX_FAILURES))

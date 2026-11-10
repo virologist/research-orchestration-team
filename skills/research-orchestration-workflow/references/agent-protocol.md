@@ -143,7 +143,9 @@
 - **检查点指针**：`state://cp-NNN` ≡ `.harness-runs/<task_id>/checkpoints/cp-NNN.md`
 - **六命令**：`init`（开工，幂等）/ `advance`（阶段收尾）/ `resume`（中断恢复，打印续跑点）/ `finish`（收尾）/ `budget`（轮次与 token 计数）/ `fail`（登记一次失败，累计达 `budget.max_failures` 即熔断置 `status = aborted`）
 - **写入者**：仅主理人（与同步规则 2 一致）；成员只读
-- **退出码**：0 成功 / 1 参数错（**含跳级未 force**、熔断后拒绝推进）/ 2 无状态文件 / 3 JSON 损坏（fail fast，禁静默重建）
+- **退出码**：0 成功 / 1 参数错（**含跳级未 force**、熔断后拒绝推进、**终态任务的操作被拒**）/ 2 无状态文件 / 3 JSON 损坏（fail fast，禁静默重建）
+- **终态不可回退（R6 P0-1）**：`done` 与 `aborted` 都是终态，任何子命令都不得把终态改写成另一种状态——已完成的任务不会因事后超时被翻成失败（`resume` / `budget` 的 `max_time` 改写一律要求「非终态」）；`budget` 对终态任务 rc=1 拒绝并保持状态文件完全不变。详见同目录 `agent-registry.md` §终态不可回退（R6 P0-1）
+- **熔断阈值只收紧不放宽（R6 P0-2）**：`fail --max-failures` 仅允许把阈值**调低**（让熔断更早触发），放宽一律忽略并告警——每次 fail 自带更大阈值会让熔断彻底失效
 - **按序推进门禁（sequential advance gate）**：`advance` 只允许推进到**期望的下一个阶段**；越级即拒绝并返回退出码 1。边界约定：`init` 之后第一次推进的目标就是 `FREEZE` 本身（记为第 1 个检查点），此后严格取当前阶段的后继阶段。逃生阀：给非空 `--force-reason` 即生效（`--force` 与 `--force-reason` 同时给亦可；**只给 `--force` 而不给理由会被拒**，返回退出码 1）。越级放行时会打印 ⚠️ 提示实际跳过的阶段与理由。越级属**例外路径**，须在交付报告中标明，不得作为常规推进方式
 
 主理人断点续跑流程与命令示例见 `../../../agents/research-orchestration-team-team-lead.md`「标准工作流程（SOP）前的强制动作：状态初始化与断点续跑」节（本节与该处互为引用，行为以 `../scripts/state_io.py` 实现为准）。

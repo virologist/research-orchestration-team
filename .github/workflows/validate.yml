@@ -190,6 +190,13 @@ jobs:
       - name: Lead source-of-truth consistency (R5 E4)
         run: python3 tests/test_lead_source_of_truth.py
 
+      # R6 P0-1 / P0-2 / P1-1：运行时序 / 终态污染 / 观测数据一致性。
+      # 8 条用例锁定三处修复：done 终态不得被事后超时翻案（resume/budget
+      # 改写终态）、fail 不得抬高熔断阈值（绕过熔断）、advance 不得冲掉
+      # 主理人上报的观测值。负例同时断言失败原因归属被测分支。
+      - name: State IO runtime sequencing + terminal state (R6)
+        run: python3 tests/test_state_runtime_sequencing.py
+
 
       - name: Topic scoring edge cases
         run: |

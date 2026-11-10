@@ -2,6 +2,74 @@
 
 所有重要变更按版本倒序记录。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [2.5.4] - 2026-11-10
+
+> R6 运行时序审计版。主题：**终态之后写操作还会发生什么？观测数据会不会被静默冲掉？**
+> 13 组运行时序实验，实锤 2 个 P0（终态污染 / 熔断可绕过）+ 2 个 P1（观测数据静默丢失），
+> 其余 7 组验证为设计正确。R5 已把「断言组合态」查完，R6 转向 §10.5 里 R5 未覆盖的
+> **运行时序**（终态后的写操作、并发、重入、中断恢复）与**观测数据一致性**。
+
+### Fixed
+
+- **终态污染（R6 P0-1，E1 + E2）**：`resume` / `budget` 的 `max_time` 改写守卫原先是
+  `status != aborted`，**漏了 `done`**；`cmd_budget` 更严重——它**没有任何终态守卫**
+  （`advance` / `fail` 都有）。后果：任务 `finish` 成功后，只要事后超过 `max_time`，
+  调一次 `resume` 或 `budget` 就会把 `status` 从 `done` 改写成 `aborted`——**已完成的
+  任务被翻成失败**，且 `metrics.success_rate=1` 与 `status=aborted` 自相矛盾。
+  修复：新增 `_is_terminal(state)` 统一判定 `status ∈ {done, aborted}`；`resume` /
+  `budget` 的超时改写一律要求「非终态」；`budget` 入口补齐终态守卫（对终态任务
+  rc=1 拒绝，状态文件完全不变）。
+- **熔断可被绕过（R6 P0-2，E8）**：`fail` 子命令的 `--max-failures` 原先能**抬高**
+  已落盘阈值，于是「每次 fail 都自带一个更大的阈值」能让熔断彻底失效——实测 8 次
+  失败后 `status` 仍是 `running`。registry 只授权 `init` / `budget` 覆写上限，`fail`
+  的逐次抬高等于给熔断开了后门。修复：改为**只允许收紧**（阈值调低让熔断更早触发），
+  放宽一律忽略并告警。
+- **观测数据静默丢失（R6 P1-1，E9）**：`advance` 里 `budget.turns_used = state["turn"]`
+  是**覆盖**而非累加——主理人用 `budget` 上报的观测值（如 `turns=25` / `tokens=42000`）
+  会被下一次 `advance` 静默冲回 `turn` 的小数值。修复：改为 `max(已落盘值, turn)`——
+  `turn` 是结构化事实（已推进阶段数），主理人上报值可能更大（编排轮次 ≠ 阶段数），
+  两者不冲突，取 max 既保住观测值又不破坏未上报时的递增语义。
+
+### Added
+
+- `tests/test_state_runtime_sequencing.py`（**8** 条）：T1 done 终态经超时 resume 不被
+  翻案 / T2 done 终态调 budget 被拒且不改写 / T3 budget 被拒后状态文件完全未变 /
+  T4 fail 抬高阈值被忽略且熔断照常触发 / T5 fail 收紧阈值被接受（防止修复做成「一律
+  忽略」）/ T6 advance 不冲掉上报的观测值 / T7 未上报时 turns_used 随 turn 递增
+  （对照组）/ T8 aborted 终态调 budget 被拒。每条独立临时目录，判定同时断言 rc 与
+  失败文案归属（FM-R2-06 纪律）。
+- CI 新增 `State IO runtime sequencing + terminal state (R6)` step；门禁 step **16 → 17**。
+
+### Regression evidence（v2.5.4 部署前实测，16 套门禁逐条独立取 rc）
+
+| 套件 | 结果 |
+|------|------|
+| `manifest_check.py` / `_selftest.py` | 74/74 ✅ / 30/30 ✅ |
+| `harness_eval.py` / `_selftest.py` | 12/12 ✅ / 14/14 ✅ |
+| `routing_eval.py` / `_selftest.py` | 39/39 ✅ / 12/12 ✅ |
+| `tests/test_vendor_core.py` | V1–V6 6/6 ✅ |
+| `test_phase_normalization.py` | 26/26 ✅ |
+| `tests/test_state_ceilings.py` | 4/4 ✅ |
+| `tests/test_state_io_guards.py` | 10/10 ✅ |
+| `tests/test_lead_source_of_truth.py` | 6/6 ✅ |
+| `tests/test_state_runtime_sequencing.py`（新增） | **8/8** ✅ |
+| `protocol_check.py` envelope / conflict / integration | 37/37(v2.4)+12/12(legacy) ✅ / 5/5 ✅ / 10/10+8/8 ✅ |
+| `protocol_check_selftest.py` | 14/14 ✅ |
+
+运行时序实验台账（13 组，其余 7 组为设计正确性验证）：done×超时resume（**实锤并
+修复**）/ done×budget（**实锤并修复**）/ fail×抬高阈值（**实锤并修复**）/
+advance×budget上报（**实锤并修复**）/ 8 路并发 advance 无丢更新 ✅ /
+checkpoint turn 序列无重复 ✅ / resume 续跑点正确 ✅ / init 幂等不覆盖已有状态 ✅ /
+JSON 损坏五子命令全 fail-fast ✅ / 旧版本状态文件 budget 键补齐 ✅ /
+fail 不带覆写的熔断对照组正常触发 ✅ / 熔断后 budget 拒绝（T8）✅。
+台账详情见 `docs/harness-iteration-loop.md` §5.5。
+
+### Known limitations
+
+- 熔断阈值仍可由 `init` / `budget` **显式放宽**（如 `budget --max-failures 99`）——
+  这是 registry 明确授权的上限写入口，R6 只封堵了 `fail` 的逐次抬高绕过路径。
+  若需杜绝「主动放宽」，属 registry 语义变更，需另开轮次裁决。
+
 ## [2.5.3] - 2026-11-10
 
 > R5 组合态盲区修复版。主题：**两条各自成立的断言，组合起来是否仍成立？**

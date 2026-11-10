@@ -185,7 +185,7 @@
 | max_token | 200,000 | 单任务总 token 消耗 | 常量 `DEFAULT_MAX_TOKENS` → 落盘 `budget.tokens_max`；`budget` 子命令触顶告警；覆写 `--max-tokens` |
 | circuit_breaker | 失败 5 次 | 同一 task 失败 5 次 → 熔断 + 升级用户 | 常量 `DEFAULT_MAX_FAILURES` → 落盘 `budget.max_failures`；`fail` 子命令累计 `budget.failures`，达上限即熔断；覆写 `--max-failures` |
 
-> **`--max-*` 的生效范围**：仅 `init` 与 `budget` 子命令接受覆写；`advance` / `resume` / `finish` 传入会被忽略并告警（避免中途改预算导致前后不可比）。
+> **`--max-*` 的生效范围**：仅 `init` 与 `budget` 子命令接受覆写；`advance` / `resume` / `finish` 传入会被忽略并告警（避免中途改预算导致前后不可比）。`fail` 是**受限例外**（R6 P0-2）：仅接受 `--max-failures`，且**只允许收紧不允许放宽**——每次 fail 自带更大的阈值会让熔断彻底失效（实测 8 次失败后 `status` 仍 `running`），放宽一律忽略并告警。
 
 ### 按序推进门禁
 
@@ -210,6 +210,23 @@
 熔断后的行为约定：
 - `advance` / `fail` 一律 rc=1（不再接受任何推进与失败计数）。
 - `finish` **仍可执行**（用于归档 metrics 与写收尾备注），但**不得改写** `status=aborted`——收尾不等于翻案。
+
+### 终态不可回退（R6 P0-1）
+
+`done` 与 `aborted` 都是**终态**，任何子命令都不得把终态改写成另一种状态：
+
+| 情形 | 修复前 | 修复后 |
+|------|--------|--------|
+| 任务已完成（`done`）→ 事后超过 `max_time` → 调 `resume` | 被改写为 `aborted`（**已成功的任务被翻成失败**，且 `metrics.success_rate=1` 与 `status=aborted` 自相矛盾） | 保持 `done`，`resume` 正常打印「任务已完成，无需续跑」 |
+| 任务已完成（`done`）→ 调 `budget` | `budget` **没有任何终态守卫**，`budget --max-time 0` 直接把 `done` 改写为 `aborted` | rc=1 拒绝并告警，状态文件完全不变 |
+
+实现口径：`state_io.py` 的 `_is_terminal(state)` 统一判定 `status ∈ {done, aborted}`；`resume` / `budget` 的 `max_time` 改写守卫一律要求「非终态」；`budget` 入口补齐终态守卫（此前只有 `advance` / `fail` 有）。
+
+锁定：`tests/test_state_runtime_sequencing.py` T1/T2/T3/T8（8 条用例），3 组注入破坏证明守卫被改回去时立即红。
+
+### 观测数据不得被静默冲掉（R6 P1-1）
+
+`advance` 原实现是 `budget.turns_used = state["turn"]`（**覆盖**），主理人用 `budget` 上报的观测值（如 `turns=25` / `tokens=42000`）会被下一次 `advance` 静默冲回 `turn` 的小数值。修正为**取较大值**：`turns_used = max(已落盘值, turn)`——`turn` 是结构化事实（已推进阶段数），主理人上报值可能更大（编排轮次 ≠ 阶段数），两者不冲突。锁定：同文件 T6/T7。
 
 
 

@@ -312,6 +312,43 @@
 **R5 全量回归（15 套门禁逐条独立 rc=0）**：同 v2.5.3 CHANGELOG Regression
 evidence 表。CI 门禁 step 15→16（+Lead source-of-truth consistency）。
 
+### 5.5 R6 验收证据（2026-11-10，运行时序 / 终态污染 / 观测数据一致性）
+
+**Phase A：13 组运行时序实验**（终态之后写操作还会发生什么？观测数据会不会被静默冲掉？）：
+
+| 实验 | 组合 | 结果 |
+|---|---|---|
+| E1 | done 终态 × 事后超时 × resume | ⚠️ **P0 实锤：done 被改写为 aborted**（终态污染） |
+| E2 | done 终态 × budget `--max-time 0` | ⚠️ **P0 实锤：budget 无终态守卫，直接改写终态** |
+| E3 | advance × budget 上报 | ⚠️ **P1 实锤：turns_used 被覆盖，观测值静默丢失** |
+| E4 | fail 每次抬高 `--max-failures` | ⚠️ **P0 实锤：8 次失败后仍 running，熔断彻底失效** |
+| E5 | fail × 不带覆写（对照组） | ✅ 正常熔断（证明 E4 绕过完全由覆写造成） |
+| E6 | 8 路并发 advance | ✅ 无丢更新（turn=8，flock 有效） |
+| E7 | checkpoint turn 序列 | ✅ 无重复（[1..8]） |
+| E8 | resume × running 态 | ✅ 续跑点正确（从 IDENTIFY 继续） |
+| E9 | init 幂等（重复 init） | ✅ 不覆盖已有状态（turn/perception/上限均保留） |
+| E10 | JSON 损坏 × 五子命令 | ✅ 全部 fail-fast rc=3，无静默重建 |
+| E11 | 旧版本状态文件（缺 budget 键） | ✅ 预算字段补齐后正常读 |
+| E12 | 缺失 budget 键 × advance | ✅ 无裸 Traceback（初判为损坏系检查命令自身的引号问题，**假阳性已排除**） |
+| E13 | aborted 终态 × budget | ✅ 拒绝改写（终态守卫覆盖两类终态） |
+
+**修复落点**：
+- P0-1：`state_io.py` 新增 `_is_terminal(state)`（`status ∈ {done, aborted}`）；
+  `resume` / `budget` 的 `max_time` 改写一律要求「非终态」；`budget` 入口补齐
+  终态守卫（此前只有 `advance` / `fail` 有）。
+- P0-2：`fail --max-failures` 改为**只允许收紧**，放宽忽略并告警。
+- P1-1：`advance` 的 `turns_used` 改为 `max(已落盘值, turn)`。
+
+**锁定**：`tests/test_state_runtime_sequencing.py` T1–T8（8/8）——含 T3
+（被拒后状态文件完全未变）与 T5（收紧仍被接受，防止修复做成「一律忽略」）两条
+护栏性用例。**3 组注入破坏实锤**：N1（守卫改回只排除 aborted）→ T1/T2/T3 精确红；
+N2（恢复 fail 抬高阈值）→ T4 精确红；N3（恢复 advance 覆盖）→ T6 精确红。
+（N2 首版因锚点先被替换导致第二段锚点失配而无效，按 FM-R1-05 重做为单次精确
+替换后有效。）
+
+**R6 全量回归（16 套门禁逐条独立 rc=0）**：同 v2.5.4 CHANGELOG Regression
+evidence 表。CI 门禁 step 16→17（+State IO runtime sequencing + terminal state）。
+
 ## 7. 已修复问题黑名单（禁止当作新发现重复上报）
 
 > **引用式登记（R1 修订）**：本表**不转录历史缺陷的原始措辞**。`scripts/manifest_check.py` 的 C8 对仓库全文做废弃表述正则扫描，其豁免名单 `SCAN_EXEMPT`（:108）是硬编码文件名白名单，本文件不在其中——R1 首次落盘时因抄录历史术语名触发 3 项假红（见 §8 `FM-R1-01`）。逐条原文以下列审计文档为准：
@@ -355,18 +392,18 @@ evidence 表。CI 门禁 step 15→16（+Lead source-of-truth consistency）。
 - `validate_expert.py` 仅安装态原位运行；tempfile 副本环境性误报不计失败。
 - 高危动作（`git push --force`、`rm -rf`、gh release、覆写共享资源）先警告并等管家节点确认。
 
-## 10. 下轮入口（R3 起始状态）
+## 10. 下轮入口（R7 起始状态）
 
 ### 10.1 下一轮起始阶段
 
-- **R3 续跑实况（2026-11-10）**：另一工作线已落盘两处输入护栏修复（checkpoint 形态归一化 / task_id 统一消毒）但未提交、无测试、无文档；本轮收口其**引入的回归**（不带检查点的推进被误拒）、补 10 条注入式护栏 + CI step + 全仓口径，并如实登记为「未升版、未发布」。**R3 全轮 Phase A 再诊断、GATE 裁决与完整台账仍待管家节点裁决**，本轮不擅自扩展诊断范围。
-- **R3 从 Phase A 开始**（只读诊断）。R1、R2 均已完成 Phase A→B→C→D 全程，R3 需先做**再诊断**，把 R2 的产出当作待验证对象而非既成事实。
-- R3 的**意图漂移基线** = 本文件 §3 六维表述（R1 基线）+ §3.1 的 R2 复检结论（0% 偏离）；若 R3 指令与该基线偏离 >30% 暂停等裁决。
-- R3 的**事实源** = 本文件 §6 资产清单 + §5 验收基线表（R1 实测列）+ §5.2（R2 实测列）。R1/R2 已修复的问题见 §7 黑名单与 §10.2 清单，**不得作为新发现重复上报**。
-- R3 的**失败模式前置比对**：先与 §8 失败模式库（FM-R1-01 ~ FM-R1-08 + FM-R2-01 ~ FM-R2-06）比对，匹配度 >70% 先输出历史摘要与预防建议，再动手。
-- **R3 的建议主题**：R2 已把「分支级负例覆盖」推到极致（14 条 protocol + 30 条 manifest + 4 条 ceiling + N27 批量覆盖）。下一轮的增量空间更可能在**断言之间的交互**（两条都通过的断言组合起来是否仍成立）与**运行时序**（并发/重入/中断恢复），而非单条分支。可优先审计的方向见 §10.5。
+- **R6 实况（2026-11-10）**：R6 完成 Phase A（13 组运行时序实验）→ Phase C（3 处修复 + 8 条锁定 + 3 组注入破坏实锤 + CI step）→ 升版 v2.5.4。**Phase D 台账已随本轮落盘**（§5.5 验收证据 + §4 变更记录 + 本节入口）。R7 从 Phase A 开始。
+- **R7 从 Phase A 开始**（只读诊断）。R1–R6 均已完成 Phase A→B→C→D 全程，R7 需先做**再诊断**，把 R6 的产出当作待验证对象而非既成事实。
+- R7 的**意图漂移基线** = 本文件 §3 六维表述（R1 基线）+ §3.1 的 R2 复检结论（0% 偏离）；若 R7 指令与该基线偏离 >30% 暂停等裁决。
+- R7 的**事实源** = 本文件 §6 资产清单 + §5 验收基线表（R1 实测列）+ §5.2（R2 实测列）。R1–R6 已修复的问题见 §7 黑名单与 §10.2 清单，**不得作为新发现重复上报**。
+- R7 的**失败模式前置比对**：先与 §8 失败模式库（FM-R1-01 ~ FM-R1-08 + FM-R2-01 ~ FM-R2-06）比对，匹配度 >70% 先输出历史摘要与预防建议，再动手。
+- **R7 的建议主题**：R5 把「断言组合态」查完，R6 把「运行时序 / 终态污染 / 观测数据一致性」查完。剩余未覆盖方向见 §10.5（已按 R6 实测更新）：**上限覆写入口的语义边界**（`budget` 仍可主动放宽 `max_failures`，R6 只封了 `fail` 的逐次抬高路径）、**协议 §2 信封与落盘状态的跨层一致性**、以及 `protocol_check.py` 侧的运行时序（此前 R2–R5 的实验全部集中在 `state_io.py` 与 manifest 层）。
 
-### 10.2 R1 未闭环问题（截至 R2 收口的状态）
+### 10.2 R1 未闭环问题（截至 R6 收口的状态）
 
 | # | 问题 | 状态 | 后续动作 |
 |---|---|---|---|
@@ -388,15 +425,22 @@ evidence 表。CI 门禁 step 15→16（+Lead source-of-truth consistency）。
 | 16 | 跨市场 description 漂移不可察觉（C2 只对等 7 字段） | **已闭环**（v2.5.0 P2-1） | 实锤两份 description 已漂移（ACP 措辞 vs Harness 措辞）→ 统一措辞 + SHARED_FIELDS 纳管 description（73→74 项）；keywords/author 有意不纳管（理由在校验器注释） |
 | 17 | v2.5.0 首推 CI run 失败（`load_agent_ids` 用 `parents[3]` 硬索引，Linux tempfile 布局越界） | **已闭环**（commit `dcd174e`） | 已改为按目录特征定位（找同时含 `agents/` 与 `.codebuddy-plugin/` 的祖先），修掉跨平台越界；后续 run 全绿 |
 | 18 | README「安装方式 3」写死版本锚点（每次发版都要改 README 的复发点） | **已闭环**（v2.5.0 发布侧） | 统一指向 `releases/latest` 页面并去掉版本锚点；README 发布契约补 4 条强制检查（CI 绿才打 tag / `git archive <tag>` / 打包前查版本字面量 / 解包核对版本行） |
+| 19 | 终态污染：已完成（`done`）的任务被事后超时翻案为 `aborted` | **已闭环**（v2.5.4 R6 P0-1） | `resume` / `budget` 的 `max_time` 改写守卫原先只排除 `aborted`、漏了 `done`；`budget` 更无任何终态守卫。修复：新增 `_is_terminal()`（`status ∈ {done, aborted}`）统一判定 + `budget` 补终态守卫（rc=1 拒绝、状态文件完全不变）。锁定 `tests/test_state_runtime_sequencing.py` T1/T2/T3/T8 + N1 注入破坏实锤 |
+| 20 | 熔断可被绕过：`fail --max-failures` 能抬高阈值（8 次失败后仍 `running`） | **已闭环**（v2.5.4 R6 P0-2） | registry 只授权 `init` / `budget` 覆写上限，`fail` 的逐次抬高等于给熔断开后门。修复：改为**只允许收紧**（放宽忽略并告警）。锁定 T4/T5 + N2 注入破坏实锤 |
+| 21 | 观测数据静默丢失：`advance` 用 `turn` 覆盖 `turns_used`，冲掉上报值 | **已闭环**（v2.5.4 R6 P1-1） | 改为 `max(已落盘值, turn)`——`turn` 是结构化事实，主理人上报值可能更大（编排轮次 ≠ 阶段数），两者不冲突。锁定 T6/T7 + N3 注入破坏实锤 |
+| 22 | 熔断阈值仍可由 `init` / `budget` **主动放宽** | **未闭环 · 设计语义 · 登记备查** | R6 只封堵了 `fail` 的逐次抬高绕过路径；`budget --max-failures 99` 仍是 registry 明确授权的上限写入口。要杜绝「主动放宽」属 registry 语义变更，需另开轮次裁决，不在 R6 范围内 |
 
-### 10.5 R3 建议审计方向（供下轮参考，非承诺）
+### 10.5 R7 建议审计方向（供下轮参考，非承诺）
+
+> R5 已把「断言交互 / 组合态」查完，R6 已把「运行时序 / 终态污染 / 观测数据一致性」查完。下表按 R6 实测结果更新。
 
 | 方向 | 依据 | 备注 |
 |---|---|---|
-| 断言**交互**覆盖 | R2 已把单条分支覆盖做满（§5.2 13 套 + 6 组实锤）；两条都单独通过的断言，其组合是否仍成立未被验证 | 例：C13 集合一致 + C2 字段对等同时成立时，是否存在两侧都「合法」但语义冲突的状态 |
-| 运行时序 / 并发 | R1 曾测 20 路并发写状态，但 R2 未复测；`state_io` 的断点续跑语义（resume）在异常中断后的恢复正确性未见负例 | v2.4.0 的 `state_io` 状态持久化特性至今没有「崩溃中断→resume」路径的负例 |
-| 熔断与预算的**交互** | R2 的 `test_state_ceilings.py` 4 条用例彼此独立；「超 turns + 熔断 + resume」叠加态未验证 | 语义分层锁定后，组合态是下一个盲区 |
-| 遗留 #4 cp 清单动态化 | 硬编码 `cp-001~cp-008` 与阶段序列交叉比对已在，但清单本身未动态化 | 低优先，成员增删时是同步风险点 |
+| **上限覆写入口的语义边界** | R6 封了 `fail` 的逐次抬高路径，但 `init` / `budget` 仍可主动放宽阈值（§10.2 #22） | 是否需要「熔断一旦接近阈值即锁定」类保护？属 registry 语义变更，需裁决 |
+| `protocol_check.py` 侧的运行时序 | R2–R6 的破坏实验**全部集中在 `state_io.py` 与 manifest 层**；`protocol_check.py` 的 37 项主套件与 14 条 selftest 未做过任何运行时序 / 终态组合实验 | 检查器本身多为纯函数，但「同一信封先过 envelope 再过 conflict 再过 integration」的跨段状态传递未审 |
+| 协议 §2 信封与落盘状态的**跨层一致性** | `state_io.py` 管落盘、协议 §2 管信封，二者由主理人手工同步 | `turn` / `phase` / `status` 三者在两层各自表述，漂移无门禁（可从 `result_envelope` 与 `_state.json` 的交叉断言切入） |
+| 崩溃中断 → resume 的恢复正确性 | R6 验证了并发（8 路无丢更新）与损坏检测（fail-fast），但**未模拟进程在写盘中途被杀** | `_atomic_write` 的 tmp + `os.replace` 在 SIGKILL 下是否留下孤儿 tmp、能否被下次运行清理，尚无负例 |
+| 遗留 #4 cp 清单动态化 | 硬编码 `cp-001~cp-008` 与阶段序列交叉比对已在，但清单本身未动态化 | **已于 v2.5.2 R4 闭环**（本表历史条目，保留备查） |
 
 ### 10.6 R2 验收遗留（已全部闭环）
 
@@ -436,6 +480,7 @@ evidence 表。CI 门禁 step 15→16（+Lead source-of-truth consistency）。
 | v2.5.1 已发布（run `42731422178` 区间） | **15**（+input guards） | 21 | 6 |
 | v2.5.2 已发布（run `42731422178`） | **15** | 21 | 6 |
 | v2.5.3 已发布（run `42757648000`） | **16**（+Lead source-of-truth consistency） | 22 | 6 |
+| v2.5.4 已发布（本次） | **17**（+State IO runtime sequencing + terminal state） | 23 | 6 |
 
 平台 step 恒为 6 个：`Set up job` / `Checkout` / `Setup Python` / `Post Setup Python` / `Post Checkout` / `Complete job`，**不计入门禁 step**。
 
@@ -445,9 +490,9 @@ evidence 表。CI 门禁 step 15→16（+Lead source-of-truth consistency）。
 
 | 判据（§3「收敛终止」） | 状态 |
 |---|---|
-| 连续 2 轮再诊断无 P0/P1 新问题 | **0/2**（R2 再诊断**实锤 2 个 P0 + 4 个 P1 + 1 个 P2**，全部已修复并闭环；R4 遗留双闭环（#4/#5）无新 P0/P1；R5 组合态审计**实锤 1 个 P1**（E4 双重事实源）并已修复闭环。判据仍未达成——R2/R5 均属「发现问题并修复」的轮次，不是「无新问题」的轮次） |
-| §8 全量回归全绿 | **R2 达成**（GATE3 实测 **13/13** 全部 rc=0，见 §5.2；R1 为 12/12）。R3/R4/R5 各自回归均全绿（R5 = 15 套门禁逐条独立 rc=0，见 §5.4） |
-| 输出收口建议等管家节点裁决 | ✅ **R5 已闭环**：v2.5.3 已发布（commit `7eb9794` + tag `v2.5.3` + release 资产 `rot-v2.5.3.tar.gz`（14718511 B）+ 五方一致 + CI 16 门禁 step 全绿，run `42757648000`） |
+| 连续 2 轮再诊断无 P0/P1 新问题 | **0/2**（R2 再诊断**实锤 2 个 P0 + 4 个 P1 + 1 个 P2**，全部已修复并闭环；R4 遗留双闭环（#4/#5）无新 P0/P1；R5 组合态审计**实锤 1 个 P1**（E4 双重事实源）并已修复闭环；R6 运行时序审计**实锤 2 个 P0 + 2 个 P1** 并已修复闭环。判据仍未达成——R2/R5/R6 均属「发现问题并修复」的轮次，不是「无新问题」的轮次） |
+| §8 全量回归全绿 | **R2 达成**（GATE3 实测 **13/13** 全部 rc=0，见 §5.2；R1 为 12/12）。R3/R4/R5/R6 各自回归均全绿（R5 = 15 套门禁逐条独立 rc=0，见 §5.4；R6 = 16 套，见 §5.5） |
+| 输出收口建议等管家节点裁决 | ✅ **R6 已闭环**：v2.5.4 已发布（commit `7eb9794` 之后的 v2.5.4 commit + tag `v2.5.4` + release 资产 `rot-v2.5.4.tar.gz` + 五方一致 + CI 17 门禁 step 全绿）。**R7 的起步方向见 §10.1 与 §10.5** |
 
 ---
 
@@ -471,6 +516,7 @@ evidence 表。CI 门禁 step 15→16（+Lead source-of-truth consistency）。
 | R3 | 2026-11-10 | **Phase A 再诊断（断言交互 + 运行时序）**：6 组实验实锤 E5 路径注入（P1）与 E6 checkpoint 形态断裂（P0）；排除 E1/E2/E3/E4 四个假候选（并发锁/门禁语义/损坏检测/叠加态均验证为设计正确）。修复与护栏收口见 LEARNING.md「R3 输入护栏收口」条目；§5.3 落盘验收证据（14 套全绿 + 独立负向实锤） | agent-harness-architect + team-lead（两工作线汇合） |
 | R5 | 2026-11-10 | **组合态审计 + v2.5.3 发布**：11 组实验实锤 E4 主理人双重事实源（C12 读 agentName、C13 读 leadAgent×role，三处同步漂移 74 项全绿）；C12 统一到声明位事实源 + `test_lead_source_of_truth.py` 6 条锁定 + CI 15→16 step；其余 10 组验证为设计正确 | agent-harness-architect |
 | R5 | 2026-11-10 | **v2.5.3 发布链收口（本次续跑）**：核验 CI run `42757648000` = success（16 门禁 step 全绿，headSha `7eb9794`）→ 打 tag `v2.5.3` → `git archive` 打包 `rot-v2.5.3.tar.gz`（14718511 B，sha256 `ead27613…1d56`）→ 解包核对（78 条目 / 双 manifest 2.5.3 / 含两个新增测试文件）→ 创建 release → OneDrive 镜像 fast-forward → **五方一致核验通过**（canonical HEAD = canonical tag = mirror HEAD = mirror tag = origin master = origin tag = GitHub API tag = CI headSha = `7eb9794a294bd85c25639b4af07a5185c49b6b80`；两端工作树各 0 项改动） | team-lead（续跑） |
+| R6 | 2026-11-10 | **运行时序审计 + v2.5.4 修复落盘**：13 组运行时序实验实锤 2 个 P0（① 终态污染：`resume`/`budget` 的 max_time 守卫只排除 aborted 漏了 done，且 `budget` 无任何终态守卫 → 已完成任务被事后翻案；② 熔断可绕过：`fail --max-failures` 能抬高阈值，8 次失败后仍 running）+ 2 个 P1（③ `advance` 覆盖 `turns_used` 致观测值静默丢失）；排除 7 组假阳性（含 E12 的检查命令引号误判）。修复：`_is_terminal()` 统一终态判定 + `budget` 补守卫 + 熔断阈值只收紧不放宽 + `turns_used` 取 max；新增 `tests/test_state_runtime_sequencing.py` 8 条锁定 + 3 组注入破坏实锤；CI 门禁 step 16→17 | agent-harness-architect + team-lead |
 | R4 | 2026-11-10 | **遗留双闭环**：#4 cp 清单动态化（从 PHASES 生成 + 双向破坏实锤 + fail-closed）+ #5 selftest 提速（APFS clonefile 0.39s/次；manifest 330s→48s、routing 64s→10s；开发期实锤并修复硬链接 pristine 污染：mutate write_text 回流共享 inode，防线 = detach + CoW 快路径）→ v2.5.2 发布 | agent-harness-architect |
 | R3 | 2026-11-10 | **v2.5.1 发布**：checkpoint 形态归一化（协议标准形态 `state://cp-NNN` 与裸名等价）+ task_id 统一消毒（main 入口，非法 rc=2）+ `tests/test_state_io_guards.py` 10 条注入式护栏 + CI 门禁 step 14→15 | team-lead |
 | R3 | 2026-11-10 | **输入护栏收口（续跑）**：实锤并修复半成品引入的回归（可选 checkpoint 未传被误拒）；新增 `tests/test_state_io_guards.py` 10 条 + 3 组注入破坏验证；CI 新增 input guards step（门禁 14→15）；CHANGELOG `[Unreleased]` 段 + README/CONTRIBUTING/agent-registry/状态文件口径同步 | team-lead（续跑） |
