@@ -2,6 +2,47 @@
 
 所有重要变更按版本倒序记录。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [2.5.2] - 2026-11-10
+
+> R4 遗留双闭环版：cp 检查点清单动态化（遗留 #4）+ selftest IO 提速（遗留 #5）。
+> 校验器与协议行为无变更——前者消除同步风险点，后者是纯测试基建优化。
+
+### Changed
+
+- **cp 检查点清单动态化（遗留 #4，v2.1.0 起存在）**：`protocol_check.py` 集成段的
+  `cp-001~cp-008` 逐条字面量清单，改为从 `state_io.PHASES` 长度生成（检查点编号
+  = 阶段序号，协议 §3「每阶段结束时主理人写一次检查点」）。成员增删阶段时两侧
+  自动同步，单侧漂移由「阶段序列与 state_io.PHASES 一致」断言先行拦截；
+  PHASES 加载失败按 fail-closed 判红，不静默回退到硬编码清单（那会让本处校验
+  在环境异常时假绿）。双向破坏实锤：PHASES 侧加第 9 阶段 → 序列断言红且 cp 清单
+  自动变 9/9；声明侧插 PHANTOM 阶段 → 序列断言红且失败原因精确归属。
+- **selftest IO 提速（遗留 #5）**：`manifest_check_selftest` 与
+  `routing_eval_selftest` 的 `make_copy` 首选 macOS APFS `cp -cR`
+  （clonefile 写时复制，0.39s/次 vs `shutil.copytree` 3.0s/次；全树 15.2MB
+  中 avatars/ 的 9 张 PNG 占 95%）。CoW 写时断链使 mutate 原地写天然不回流
+  pristine（实测：clone 后改 dst 的 manifest，src 不变）。跨平台回退链：
+  `cp -cR` → Python 硬链接树（`st_nlink>1` 判定 + `_detach_hardlinks` 防
+  mutate 回流）→ `copytree`（异卷 EXDEV）。
+  实测：**manifest selftest 330s → 48s（6.9×）、routing selftest 64s → 10s（6.4×）**。
+
+### Fixed
+
+- **硬链接路径的 pristine 污染风险（开发期实测抓出并修复）**：Python 硬链接
+  回退路径下，mutate 的 `write_text` 原地覆写会连带改写 pristine（共享 inode），
+  污染后续全部用例——开发期 N11 首跑即踩中（契约改名回流 pristine，
+  `agents/socratic-questioner.md` 被写脏，git checkout 还原）。防线两层：
+  ① `_detach_hardlinks` 在 mutate 前把共享 inode 文件替换为独立副本；
+  ② APFS CoW 路径下克隆文件 `st_nlink == 1`，该函数零操作（快路径）。
+
+### Regression evidence（v2.5.2 部署前实测，14 套门禁逐条独立取 rc）
+
+与 v2.5.1 同一套门禁、同一结果：manifest **74/74** ✅ / manifest_selftest **30/30** ✅
+（48s，原 330s）/ harness **12/12** ✅ / harness_selftest **14/14** ✅ / routing **39/39** ✅ /
+routing_selftest **12/12** ✅（10s，原 64s）/ phase_norm **26/26** ✅ / vendor V1–V6 **6/6** ✅ /
+state_ceilings **4/4** ✅ / state_io_guards **10/10** ✅ / protocol envelope **37/37**(v2.4) +
+**12/12**(legacy) ✅ / conflict **5/5** ✅ / integration 阶段流水线 **10/10** + HANDOFF **8/8** ✅ /
+protocol_selftest **14/14** ✅。cp 动态化双向破坏实锤 2 组（PHASES 侧 / 声明侧）。
+
 ## [2.5.1] - 2026-11-10
 
 > R3 输入护栏收口。Phase A 再诊断（断言交互 + 运行时序）实锤 1 个 P0

@@ -347,8 +347,8 @@
 | 1 | 官方 `validate_expert.py` 本机不存在 | **环境性已知限制**（非缺陷） | R3 若宿主更新该工具，补装后跑安装态原位校验，接管 §5-8 的替代口径 |
 | 2 | `assemble_spawn_prompt.py` shim 向上查找 `shared-core/` 的脆弱性 | **已闭环**（FM-R1-03 根治） | shim 已加「命中即校验 sha256 与 `VENDOR.json` 一致，不一致则拒绝加载」硬校验（`_expected_sha256()` + fail-closed 分支）；祖先目录存在旧版/被篡改同名文件不再会被静默加载 |
 | 3 | `token_budget` 无硬截断 | **已闭环（语义确认）** | R2 审计确认这是**设计语义**而非缺陷：turns/tokens 触顶 = 告警（主理人语义裁量），max_time/failures = 终态熔断。`tests/test_state_ceilings.py` 4 用例已把该分层锁定，误改即红。CHANGELOG/README 措辞已修正（「代码化」→「语义分层」） |
-| 4 | `protocol_check.py` 集成段的 `cp-001~cp-008` 检查点清单仍为硬编码 | **未闭环**（低优先，R2 复核仍在） | 当前与 `state_io.py` 的阶段序列已交叉比对（真断言），但 cp 清单本身未动态化；成员增删 cp 编号变动时需同步 |
-| 5 | selftest 约 350s IO 耗时 | **未闭环**（低优先，R2 复核仍在） | 可用硬链接替代复制提速；R2 实测：`manifest_check_selftest` ~90s、`routing_eval_selftest` ~64s、`protocol_check_selftest` ~8s |
+| 4 | `protocol_check.py` 集成段的 `cp-001~cp-008` 检查点清单仍为硬编码 | **已闭环**（v2.5.2 R4） | cp 清单从 `state_io.PHASES` 长度动态生成（检查点编号 = 阶段序号）；单侧漂移由「阶段序列一致」断言拦截；PHASES 加载失败 fail-closed 判红。双向破坏实锤（PHASES 侧加第 9 阶段 / 声明侧插 PHANTOM）均精确变红 |
+| 5 | selftest 约 350s IO 耗时 | **已闭环**（v2.5.2 R4） | `make_copy` 首选 APFS `cp -cR`（clonefile CoW，0.39s/次）；实测 manifest selftest 330s→48s（6.9×）、routing selftest 64s→10s（6.4×）。开发期实锤并修复硬链接回退路径的 pristine 污染风险（mutate write_text 回流共享 inode → detach 防线） |
 | 6 | `avatars/domain-expert.png` 不被任何 manifest 引用 | **已闭环 · 保留（既定决策）** | R2 复核发现：v2.1.0 CHANGELOG 已明确定策「保留（防历史引用）」，并非「待清理的孤儿文件」。R1 §10.2 曾误登记为待删除项，与既定决策冲突，R2 已改正。不再作为遗留项跟踪 |
 | 7 | GitHub Release tarball 资产名不统一 + v2.2.0/v2.3.0 无 tarball 资产 | **已闭环** | README 方式 3 原链 `v2.2.0/research-orchestration-team-2.2.0.tar.gz` 实测 HTTP 404；R1 改文档，v2.4.0 发布侧补齐 `rot-v2.4.0.tar.gz`（14685476 B），**v2.4.1 补齐 `rot-v2.4.1.tar.gz`（14673511 B）**。v2.2.0/v2.3.0 的资产缺口作为历史缺口如实登记，不追溯补发 |
 | 8 | README「安装方式」标题写「三套并存」但实际列 4 种方式 | **已闭环** | v2.0 时期引入就存在的表述错误（从引入 commit 起就错），R1 改为「四种并存」 |
@@ -440,5 +440,6 @@
 | R2 | 2026-11-09 | **Phase D 收口（本次续跑）**：§1 元信息更新至 R2 + §1.1 R1 历史快照 + §3.1 R2 漂移复检（0%）+ §4.2 R2 四阶段台账 + §4.3 R2 修复批次明细（9 批次）+ §5.2 R2 GATE3 验收证据（13/13 全绿 + 6 组独立负向实锤）+ §8 补 FM-R2-01~06 + §10 改 R3 入口 + §10.2 遗留项更新至 18 条 + §10.3.2 负例验收纪律补录 + §10.5 R3 建议审计方向 + §10.4 判据更新 | agent-harness-architect |
 | R2 | 2026-11-10 | **Phase D 收口残留校正**：§1 移除自指 HEAD（改以 tag 基线 + `git rev-parse` 真值源）、§5.2 去固化 HEAD、§10.6 第三条「FM-R2-06 待回流」改已闭环、新增 §10.3.3 CI step 计数口径（实测 12/18 → 14/20）；README / CHANGELOG / LEARNING 的旧 step 数字全仓统一 | team-lead（续跑） |
 | R3 | 2026-11-10 | **Phase A 再诊断（断言交互 + 运行时序）**：6 组实验实锤 E5 路径注入（P1）与 E6 checkpoint 形态断裂（P0）；排除 E1/E2/E3/E4 四个假候选（并发锁/门禁语义/损坏检测/叠加态均验证为设计正确）。修复与护栏收口见 LEARNING.md「R3 输入护栏收口」条目；§5.3 落盘验收证据（14 套全绿 + 独立负向实锤） | agent-harness-architect + team-lead（两工作线汇合） |
+| R4 | 2026-11-10 | **遗留双闭环**：#4 cp 清单动态化（从 PHASES 生成 + 双向破坏实锤 + fail-closed）+ #5 selftest 提速（APFS clonefile 0.39s/次；manifest 330s→48s、routing 64s→10s；开发期实锤并修复硬链接 pristine 污染：mutate write_text 回流共享 inode，防线 = detach + CoW 快路径）→ v2.5.2 发布 | agent-harness-architect |
 | R3 | 2026-11-10 | **v2.5.1 发布**：checkpoint 形态归一化（协议标准形态 `state://cp-NNN` 与裸名等价）+ task_id 统一消毒（main 入口，非法 rc=2）+ `tests/test_state_io_guards.py` 10 条注入式护栏 + CI 门禁 step 14→15 | team-lead |
 | R3 | 2026-11-10 | **输入护栏收口（续跑）**：实锤并修复半成品引入的回归（可选 checkpoint 未传被误拒）；新增 `tests/test_state_io_guards.py` 10 条 + 3 组注入破坏验证；CI 新增 input guards step（门禁 14→15）；CHANGELOG `[Unreleased]` 段 + README/CONTRIBUTING/agent-registry/状态文件口径同步 | team-lead（续跑） |

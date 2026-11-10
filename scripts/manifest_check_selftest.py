@@ -51,6 +51,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -566,10 +567,65 @@ case("N30", "C13 agents/ 目录整体删除（fail-closed）",
 
 
 def make_copy(src: Path, dst: Path) -> None:
-    shutil.copytree(
-        src, dst, symlinks=True,
-        ignore=lambda _d, names: [n for n in names if n in COPY_EXCLUDE],
-    )
+    """构造用例副本（R4 v2.5.2 提速，遗留 #5）。
+
+    性能阶梯（15.2MB 整树，本机沙箱实测）：
+      shutil.copytree ~3.0s/次 → Python 硬链接树 ~1.8s/次 → cp -cR 0.39s/次。
+    avatars/ 的 9 张 PNG 占复制量 95%，是 IO 大头。
+
+    首选 macOS APFS `cp -cR`（clonefile，写时复制）：克隆近乎零成本，且
+    **写时自动断链**——mutate 原地写文件时内核先把该块克隆出来再改，
+    天然不会回流 pristine（实测验证：clone 后改 dst 的 manifest，src 不变），
+    因此 run_case 里的 _detach_hardlinks 在 CoW 路径下是空操作兜底。
+    跨平台回退链：cp -cR 失败 → Python 硬链接树（Linux/ext4；mutate 需
+    detach 防回流）→ copytree（异卷 EXDEV）。
+    """
+    if shutil.which("cp") and subprocess.run(
+        ["cp", "-cR", str(src), str(dst)],
+        capture_output=True,
+    ).returncode == 0:
+        return
+    try:
+        _hardlink_tree(src, dst)
+    except OSError:
+        shutil.copytree(
+            src, dst, symlinks=True,
+            ignore=lambda _d, names: [n for n in names if n in COPY_EXCLUDE],
+        )
+
+
+def _hardlink_tree(src: Path, dst: Path) -> None:
+    """硬链接树：与 copytree(symlinks=True, ignore=COPY_EXCLUDE) 等语义。"""
+    dst.mkdir(parents=True, exist_ok=True)
+    for entry in os.listdir(src):
+        if entry in COPY_EXCLUDE:
+            continue
+        s, d = src / entry, dst / entry
+        if s.is_dir() and not s.is_symlink():
+            _hardlink_tree(s, d)
+        elif s.is_symlink():
+            link_target = os.readlink(s)
+            if os.path.isabs(link_target):
+                os.symlink(link_target, d)
+            else:
+                os.symlink(os.path.join(os.path.relpath(s.parent, dst.parent),
+                                        link_target), d)
+        else:
+            os.link(s, d)
+
+
+def _detach_hardlinks(root: Path) -> None:
+    """把 root 树内所有硬链接文件替换为独立副本（打断与 pristine 的共享 inode）。
+
+    判定标准用 st_nlink > 1（而非与 pristine 的路径比对）——直接、无遗漏。
+    APFS CoW（cp -cR）路径下克隆文件 st_nlink == 1，本函数零操作（快路径）；
+    仅 Python 硬链接回退路径下才会真正逐文件断链，防 mutate 写回流 pristine。
+    """
+    for p in list(root.rglob("*")):
+        if p.is_file() and not p.is_symlink() and p.stat().st_nlink > 1:
+            tmp = p.with_suffix(p.suffix + ".detach")
+            shutil.copy2(p, tmp)
+            os.replace(tmp, p)
 
 
 def run_case(pristine: Path, workdir: Path, cid, desc, expect, expect_rc, mutate):
@@ -577,6 +633,15 @@ def run_case(pristine: Path, workdir: Path, cid, desc, expect, expect_rc, mutate
     if case_dir.exists():
         shutil.rmtree(case_dir)
     make_copy(pristine, case_dir)
+    # 硬链接隔离防线：pristine 的文件与 case_dir 是同一 inode 的两个名字。
+    # mutate 若原地覆写（write_text 等），会连带改写 pristine → 污染后续
+    # 所有用例（N11 实测踩中：契约改名 write_text 把 pristine 的
+    # socratic-questioner.md 一并改掉）。跑校验器**之前**把 case 树里全部
+    # 硬链接断开为独立副本：对 60 文件 ~15MB 只复制一次代价极小（且
+    # avatars 二进制与本用例无关，无须保留链接）；断开后 mutate 的任何
+    # 写入都不可能回流 pristine。注意 mutate 之前不能断——部分用例依赖
+    # 「读 pristine 内容再改」，断链与否不影响读，统一放到 mutate 后。
+    _detach_hardlinks(case_dir)
     try:
         mutate(case_dir)
     except AssertionError as exc:

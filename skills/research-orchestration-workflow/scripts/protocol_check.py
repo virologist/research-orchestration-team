@@ -1258,18 +1258,30 @@ def main():
             print(f"  {mark} {name}  {detail}")
 
         # 真实回引链校验：HANDOFF 的 context_ref 必须覆盖所有检查点 cp-*
-        checkpoints = ["state://cp-001", "state://cp-002", "state://cp-003",
-                       "state://cp-004", "state://cp-005", "state://cp-006",
-                       "state://cp-007", "state://cp-008"]
+        # 检查点编号 = 阶段序号（协议 §3：每阶段结束时主理人写一次检查点），
+        # 故 cp 清单从 state_io.PHASES 长度动态生成，不再硬编码 8 条 ——
+        # 成员增删阶段时（PHASES 变化）两侧自动同步；单侧漂移由上方
+        # 「阶段序列一致」断言先行拦截，此处只剩覆盖逻辑本身。
+        # R4（v2.5.2）：消除遗留 #4 的硬编码清单（原 cp-001~cp-008 逐条字面量）。
+        # main 作用域重新加载 PHASES（run_pipeline_tests 内的 phases 不外泄）；
+        # 加载失败属环境异常，沿用「阶段序列一致」断言的 fail-closed 口径：
+        # 不静默回退到硬编码 8 条（那会让本处校验在环境异常时假绿）。
+        try:
+            _phases = load_state_phases()
+        except Exception as exc:
+            print(f"❌ 无法加载 state_io.PHASES（cp 清单动态化失败）: "
+                  f"{type(exc).__name__}: {exc}", file=sys.stderr)
+            failed += 1
+            print(f"  ❌ 合规回引：cp 清单动态化失败，未执行覆盖校验")
+            print()
+            print(f"[rc] failed={failed} → {'PASS' if failed == 0 else 'FAIL'}")
+            return 0 if failed == 0 else 1
+        checkpoints = [f"state://cp-{i:03d}" for i in range(1, len(_phases) + 1)]
         ok_refs = [
-            {"mode": "ref", "pointer": "state://cp-001"},
-            {"mode": "ref", "pointer": "state://cp-002"},
-            {"mode": "summary", "pointer": "state://cp-003"},
-            {"mode": "summary", "pointer": "state://cp-004"},
-            {"mode": "summary", "pointer": "state://cp-005"},
-            {"mode": "summary", "pointer": "state://cp-006"},
-            {"mode": "summary", "pointer": "state://cp-007"},
-            {"mode": "full", "pointer": "state://cp-008"},
+            {"mode": "ref",      "pointer": f"state://cp-{i:03d}"} if i <= 2
+            else {"mode": "full", "pointer": f"state://cp-{i:03d}"} if i == len(_phases)
+            else {"mode": "summary", "pointer": f"state://cp-{i:03d}"}
+            for i in range(1, len(_phases) + 1)
         ]
         missing = check_handoff_coverage(checkpoints, ok_refs)
         ok = not missing

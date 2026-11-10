@@ -410,10 +410,55 @@ case("N12", "registry 注入 mcp__GHOST_SERVER + 真实清单 fixture → R6 清
 
 # ── 复制与执行 ─────────────────────────────────────────────────────────────
 def make_copy(src: Path, dst: Path) -> None:
-    shutil.copytree(
-        src, dst, symlinks=True,
-        ignore=lambda _d, names: [n for n in names if n in COPY_EXCLUDE],
-    )
+    """首选 macOS APFS `cp -cR`（clonefile，0.39s/次 vs copytree 3.0s/次）。
+
+    CoW 写时断链：mutate 原地写不会回流 pristine，_detach_hardlinks 在
+    CoW 路径下零操作兜底。回退链：cp -cR → Python 硬链接（需 detach）→
+    copytree（异卷）。
+    """
+    if shutil.which("cp") and subprocess.run(
+        ["cp", "-cR", str(src), str(dst)],
+        capture_output=True,
+    ).returncode == 0:
+        return
+    try:
+        _hardlink_tree(src, dst)
+    except OSError:
+        shutil.copytree(
+            src, dst, symlinks=True,
+            ignore=lambda _d, names: [n for n in names if n in COPY_EXCLUDE],
+        )
+
+
+def _hardlink_tree(src: Path, dst: Path) -> None:
+    dst.mkdir(parents=True, exist_ok=True)
+    for entry in os.listdir(src):
+        if entry in COPY_EXCLUDE:
+            continue
+        s, d = src / entry, dst / entry
+        if s.is_dir() and not s.is_symlink():
+            _hardlink_tree(s, d)
+        elif s.is_symlink():
+            link_target = os.readlink(s)
+            if os.path.isabs(link_target):
+                os.symlink(link_target, d)
+            else:
+                os.symlink(os.path.join(os.path.relpath(s.parent, dst.parent),
+                                        link_target), d)
+        else:
+            os.link(s, d)
+
+
+def _detach_hardlinks(root: Path) -> None:
+    """硬链接 → 独立副本（st_nlink > 1 判定，防 mutate 回流 pristine）。
+
+    APFS CoW 路径下克隆文件 st_nlink == 1，本函数零操作（快路径）。
+    """
+    for p in list(root.rglob("*")):
+        if p.is_file() and not p.is_symlink() and p.stat().st_nlink > 1:
+            tmp = p.with_suffix(p.suffix + ".detach")
+            shutil.copy2(p, tmp)
+            os.replace(tmp, p)
 
 
 def run_checker(case_dir: Path) -> subprocess.CompletedProcess:
@@ -429,6 +474,7 @@ def run_case(pristine: Path, workdir: Path, cid, desc, expect, expect_rc, mutate
     if case_dir.exists():
         shutil.rmtree(case_dir)
     make_copy(pristine, case_dir)
+    _detach_hardlinks(case_dir)  # 防 mutate 原地写回流 pristine（硬链接共享 inode）
     saved_env = {k: os.environ.get(k) for k in ENV_CLEANUP}
     try:
         mutate(case_dir)

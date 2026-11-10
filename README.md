@@ -3,7 +3,7 @@
 > **团队名称**：科研价值驱动研究编排团 / Research Value-Driven Research Orchestration Team
 > **专家类型**：Team 型（8 人协作团 · v2.3.0 工具真实性门禁 R1-R6）
 > **行业分类**：12-IndustryConsultant（跨学科咨询）
-> **版本**：2.5.1
+> **版本**：2.5.2
 > **许可证**：MIT
 > **仓库**：[github.com/virologist/research-orchestration-team](https://github.com/virologist/research-orchestration-team)
 
@@ -189,6 +189,7 @@ research-orchestration-team/
 - **v2.4.0** (2026-11-09)：Harness 迭代进化 R1 首轮全闭环。四阶段硬门控走完一轮，门禁体系从一层升为**三层**（正向校验器 / 注入式负例自测 5 套 91 条 / 联邦防漂移）：manifest 升至 **C1–C13**（新增 C13 成员 ID 集合一致性，以 `agents/*.md` 文件名为机器真值源逐处比对 8 个目标）、protocol 主套件 16 → **37**、新增 `protocol_check_selftest.py`（13 条）与 `test_phase_normalization.py`（26 条）；`state_io.py` 状态机代码化（按序推进 / 熔断 / 预算 / metrics / `fail` 子命令）；C8 豁免机制声明化；shim 命中 core 加 sha256 硬校验。新建 `docs/harness-iteration-loop.md` 作为迭代断点续跑的单一事实源。回归 **12 套门禁全绿** + 4 组独立负向实锤。详见 [CHANGELOG.md](./CHANGELOG.md)。
 - **v2.4.1** (2026-11-09)：发布介质自洽性补丁。v2.4.0 的 release 资产 `rot-v2.4.0.tar.gz` 已补齐，但其 tag 指向 `90a1c36`——**早于**修正「安装方式 3」链接的 commit，导致 tarball 内的 README 仍写「方式 3 只能安装到 v2.1.2」，介质与自身文档矛盾。按发布纪律（tag 不重写、不重打已发布资产以免「资产内容 ≠ tag 内容」）不改 v2.4.0，改发本补丁版：方式 3 改指 v2.4.1 资产。协议、运行时、门禁**行为无变更**。
 - **v2.5.0** (2026-11-09)：R2 覆盖矩阵盲区修复。16 组真实破坏实验逐条验证「每条门禁分支都有会红的测试盯着」，修复：编排层上限语义失真（turns/tokens 触顶=告警，max_time/failures=终态熔断，新增 `tests/test_state_ceilings.py` 4 用例锁定）；流水线幽灵成员无门禁（集成段新增真值源断言 9→10 项）；protocol selftest N10 重构（消除与 N6 的重复）+ N11 新增（13→14 条）；manifest selftest 补 N27（C8 七条缺口规则批量回归）+ N28/N29/N30（C13 声明位互换/重复 ID/目录删除）（26→30 条）；CI 补熔断段 + 语义锁定 step（门禁 step 12→14）；跨市场 description 漂移实锤并统一，C2 对等校验纳管 description（73→74 项）。详见 [CHANGELOG.md](./CHANGELOG.md)。
+- **v2.5.2** (2026-11-10)：R4 遗留双闭环。① cp 检查点清单动态化——集成段的 `cp-001~cp-008` 硬编码改为从 `state_io.PHASES` 长度生成（检查点编号 = 阶段序号），成员增删阶段时两侧自动同步，单侧漂移由「阶段序列一致」断言拦截（双向破坏实锤）；PHASES 加载失败 fail-closed 判红不静默回退。② selftest IO 提速——`make_copy` 首选 APFS `cp -cR`（clonefile 写时复制，0.39s/次 vs copytree 3.0s/次），CoW 写时断链使 mutate 天然不回流 pristine；回退链 cp -cR → Python 硬链接（detach 防回流）→ copytree。实测 manifest selftest **330s → 48s**、routing selftest **64s → 10s**。行为无变更（测试基建优化）。
 - **v2.5.1** (2026-11-10)：R3 输入护栏收口。Phase A 再诊断（断言交互 + 运行时序）实锤：checkpoint 形态契约断裂——协议标准形态 `state://cp-NNN`（protocol_check 的 `CHECKPOINT_POINTER_PATTERN`）传给 `state_io.py` 旧实现会拼出 `checkpoints/state:/cp-NNN.md` → 裸 Traceback（P0）；task_id 含 `/` 或 `..` 可越界落盘（P1）。修复：`_normalize_checkpoint_name` 双形态归一（空值=不带、非法=拒绝三态语义）+ `main()` 统一入口 task_id 消毒（非法 rc=2）；同步修复修复过程引入的回归（不带检查点的推进被误拒）。新增 `tests/test_state_io_guards.py` 10 条注入式护栏（3 组破坏实验证明会红）；CI 门禁 step 14→15。详见 [CHANGELOG.md](./CHANGELOG.md)。
 
 ## 安装方式（四种并存）
@@ -225,7 +226,7 @@ cp -r research-orchestration-team ~/.claude/skills/research-orchestration-team
 
 ### 方式 3 · GitHub Release tarball
 
-下载 [最新 release](https://github.com/virologist/research-orchestration-team/releases/latest) 页面的 tarball（资产名约定 `rot-<版本>.tar.gz`，如本版 `rot-v2.5.1.tar.gz`）→ 解压 → 按方式 2 拷贝。
+下载 [最新 release](https://github.com/virologist/research-orchestration-team/releases/latest) 页面的 tarball（资产名约定 `rot-<版本>.tar.gz`，如本版 `rot-v2.5.2.tar.gz`）→ 解压 → 按方式 2 拷贝。
 
 > tarball 内容与 `git clone` 一致（含 `avatars/` 与包根 `settings.json`），已剔除编辑备份等本地产物。
 > **链接不写死版本（v2.5.0 起）**：统一指向 `releases/latest` 页面，避免每次发版都要改 README。此前方式 3 写死 `rot-v2.4.1.tar.gz`，v2.4.0 曾因同类滞后专门发过 v2.4.1 补丁版——这是该复发点的根治。下载前请在 release 页面确认实际资产名。
