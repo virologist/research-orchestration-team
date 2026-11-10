@@ -433,6 +433,9 @@ evidence 表。CI 门禁 step 15→16（+Lead source-of-truth consistency）。
 | v2.4.x（run `42561278912`） | **12** | 18 | 6 |
 | v2.5.0 已发布（run `42623476669` / `42637122693` / `42637447758`） | **14**（+熔断段 +语义锁定） | 20 | 6 |
 | R3 续跑（本次，未发布） | **15**（+input guards） | 21 | 6 |
+| v2.5.1 已发布（run `42731422178` 区间） | **15**（+input guards） | 21 | 6 |
+| v2.5.2 已发布（run `42731422178`） | **15** | 21 | 6 |
+| v2.5.3 已发布（run `42757648000`） | **16**（+Lead source-of-truth consistency） | 22 | 6 |
 
 平台 step 恒为 6 个：`Set up job` / `Checkout` / `Setup Python` / `Post Setup Python` / `Post Checkout` / `Complete job`，**不计入门禁 step**。
 
@@ -442,9 +445,9 @@ evidence 表。CI 门禁 step 15→16（+Lead source-of-truth consistency）。
 
 | 判据（§3「收敛终止」） | 状态 |
 |---|---|
-| 连续 2 轮再诊断无 P0/P1 新问题 | **0/2**（R2 再诊断**实锤 2 个 P0 + 4 个 P1 + 1 个 P2**，全部已修复并闭环；判据未达成——R2 是「发现问题并修复」的轮次，不是「无新问题」的轮次） |
-| §8 全量回归全绿 | **R2 达成**（GATE3 实测 **13/13** 全部 rc=0，见 §5.2；R1 为 12/12） |
-| 输出收口建议等管家节点裁决 | ✅ **R2 已闭环**：v2.5.0 已发布（tag `4d6e7e0` + release 资产 + 三源同步 + CI 14 门禁 step 全绿）；状态文件 Phase D 已落盘。**R3 的起步方向见 §10.1 与 §10.5** |
+| 连续 2 轮再诊断无 P0/P1 新问题 | **0/2**（R2 再诊断**实锤 2 个 P0 + 4 个 P1 + 1 个 P2**，全部已修复并闭环；R4 遗留双闭环（#4/#5）无新 P0/P1；R5 组合态审计**实锤 1 个 P1**（E4 双重事实源）并已修复闭环。判据仍未达成——R2/R5 均属「发现问题并修复」的轮次，不是「无新问题」的轮次） |
+| §8 全量回归全绿 | **R2 达成**（GATE3 实测 **13/13** 全部 rc=0，见 §5.2；R1 为 12/12）。R3/R4/R5 各自回归均全绿（R5 = 15 套门禁逐条独立 rc=0，见 §5.4） |
+| 输出收口建议等管家节点裁决 | ✅ **R5 已闭环**：v2.5.3 已发布（commit `7eb9794` + tag `v2.5.3` + release 资产 `rot-v2.5.3.tar.gz`（14718511 B）+ 五方一致 + CI 16 门禁 step 全绿，run `42757648000`） |
 
 ---
 
@@ -467,6 +470,7 @@ evidence 表。CI 门禁 step 15→16（+Lead source-of-truth consistency）。
 | R2 | 2026-11-10 | **Phase D 收口残留校正**：§1 移除自指 HEAD（改以 tag 基线 + `git rev-parse` 真值源）、§5.2 去固化 HEAD、§10.6 第三条「FM-R2-06 待回流」改已闭环、新增 §10.3.3 CI step 计数口径（实测 12/18 → 14/20）；README / CHANGELOG / LEARNING 的旧 step 数字全仓统一 | team-lead（续跑） |
 | R3 | 2026-11-10 | **Phase A 再诊断（断言交互 + 运行时序）**：6 组实验实锤 E5 路径注入（P1）与 E6 checkpoint 形态断裂（P0）；排除 E1/E2/E3/E4 四个假候选（并发锁/门禁语义/损坏检测/叠加态均验证为设计正确）。修复与护栏收口见 LEARNING.md「R3 输入护栏收口」条目；§5.3 落盘验收证据（14 套全绿 + 独立负向实锤） | agent-harness-architect + team-lead（两工作线汇合） |
 | R5 | 2026-11-10 | **组合态审计 + v2.5.3 发布**：11 组实验实锤 E4 主理人双重事实源（C12 读 agentName、C13 读 leadAgent×role，三处同步漂移 74 项全绿）；C12 统一到声明位事实源 + `test_lead_source_of_truth.py` 6 条锁定 + CI 15→16 step；其余 10 组验证为设计正确 | agent-harness-architect |
+| R5 | 2026-11-10 | **v2.5.3 发布链收口（本次续跑）**：核验 CI run `42757648000` = success（16 门禁 step 全绿，headSha `7eb9794`）→ 打 tag `v2.5.3` → `git archive` 打包 `rot-v2.5.3.tar.gz`（14718511 B，sha256 `ead27613…1d56`）→ 解包核对（78 条目 / 双 manifest 2.5.3 / 含两个新增测试文件）→ 创建 release → OneDrive 镜像 fast-forward → **五方一致核验通过**（canonical HEAD = canonical tag = mirror HEAD = mirror tag = origin master = origin tag = GitHub API tag = CI headSha = `7eb9794a294bd85c25639b4af07a5185c49b6b80`；两端工作树各 0 项改动） | team-lead（续跑） |
 | R4 | 2026-11-10 | **遗留双闭环**：#4 cp 清单动态化（从 PHASES 生成 + 双向破坏实锤 + fail-closed）+ #5 selftest 提速（APFS clonefile 0.39s/次；manifest 330s→48s、routing 64s→10s；开发期实锤并修复硬链接 pristine 污染：mutate write_text 回流共享 inode，防线 = detach + CoW 快路径）→ v2.5.2 发布 | agent-harness-architect |
 | R3 | 2026-11-10 | **v2.5.1 发布**：checkpoint 形态归一化（协议标准形态 `state://cp-NNN` 与裸名等价）+ task_id 统一消毒（main 入口，非法 rc=2）+ `tests/test_state_io_guards.py` 10 条注入式护栏 + CI 门禁 step 14→15 | team-lead |
 | R3 | 2026-11-10 | **输入护栏收口（续跑）**：实锤并修复半成品引入的回归（可选 checkpoint 未传被误拒）；新增 `tests/test_state_io_guards.py` 10 条 + 3 组注入破坏验证；CI 新增 input guards step（门禁 14→15）；CHANGELOG `[Unreleased]` 段 + README/CONTRIBUTING/agent-registry/状态文件口径同步 | team-lead（续跑） |
