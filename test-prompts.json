@@ -12,7 +12,16 @@
       "domain-expert-ai",
       "domain-expert-general",
       "methodological-reviewer"
-    ]
+    ],
+    "assertions": [
+      "A1",
+      "A2",
+      "A3",
+      "A4",
+      "A6"
+    ],
+    "output_file": "TP-1.md",
+    "human_review": "A10/A11 语义质量与价值取舍由用户确认，不纳入自动断言"
   },
   {
     "id": 2,
@@ -23,7 +32,14 @@
     "target_agents": [
       "team-lead",
       "socratic-questioner"
-    ]
+    ],
+    "assertions": [
+      "A1",
+      "A7",
+      "A8"
+    ],
+    "output_file": "TP-2.md",
+    "human_review": "A10/A11 语义质量与价值取舍由用户确认，不纳入自动断言"
   },
   {
     "id": 3,
@@ -35,6 +51,14 @@
       "team-lead",
       "socratic-questioner",
       "methodological-reviewer"
-    ]
+    ],
+    "assertions": [
+      "A1",
+      "A4",
+      "A5",
+      "A9"
+    ],
+    "output_file": "TP-3.md",
+    "human_review": "A10/A11 语义质量与价值取舍由用户确认，不纳入自动断言"
   }
 ]

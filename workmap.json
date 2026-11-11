@@ -1,0 +1,316 @@
+{
+  "schema": "rot-workmap/v1",
+  "version": "2.5.7",
+  "updated": "2026-11-10",
+  "purpose": "科研编排团的简洁工作地图：任务 → 阶段 → 依赖 → 工具 → 验收条件 → 证据。机器真值源；人读视图见 WORKMAP.md。",
+  "status_labels": [
+    "自动验证通过",
+    "AI 评估通过",
+    "人工确认通过",
+    "尚未验证"
+  ],
+  "status_rule": "只有脚本实跑 rc 可复现才标「自动验证通过」；AI 语义产出标「AI 评估通过」；价值取舍/语义审美必须标「人工确认通过」或「尚未验证」，禁止混标。",
+  "phases": [
+    {
+      "id": "P1",
+      "name": "FREEZE 冻结评估",
+      "depends_on": [],
+      "tool": "skills/research-orchestration-workflow/scripts/state_io.py",
+      "gate": null
+    },
+    {
+      "id": "P2",
+      "name": "IDENTIFY 识别内部分诊",
+      "depends_on": [
+        "P1"
+      ],
+      "tool": "skills/research-orchestration-workflow/scripts/state_io.py",
+      "gate": null
+    },
+    {
+      "id": "P3",
+      "name": "COLLAPSE 坍缩组合",
+      "depends_on": [
+        "P2"
+      ],
+      "tool": "scripts/assemble_spawn_prompt.py",
+      "gate": "ALIGN_ACK"
+    },
+    {
+      "id": "P4",
+      "name": "CLARIFY 澄清追问",
+      "depends_on": [
+        "P1"
+      ],
+      "tool": "scripts/assemble_spawn_prompt.py",
+      "gate": null
+    },
+    {
+      "id": "P5",
+      "name": "ALIGN 对齐确认",
+      "depends_on": [
+        "P3",
+        "P4"
+      ],
+      "tool": "manual",
+      "gate": "ALIGN_ACK"
+    },
+    {
+      "id": "P6",
+      "name": "EXECUTE 单步执行",
+      "depends_on": [
+        "P5"
+      ],
+      "tool": "skills/research-orchestration-workflow/scripts/topic_scoring.py",
+      "gate": "CK1"
+    },
+    {
+      "id": "P7",
+      "name": "REVIEW 复评闭环",
+      "depends_on": [
+        "P6"
+      ],
+      "tool": "skills/research-orchestration-workflow/scripts/topic_scoring.py",
+      "gate": "CK2"
+    },
+    {
+      "id": "P8",
+      "name": "NEXT 下阶段收敛",
+      "depends_on": [
+        "P7"
+      ],
+      "tool": "manual",
+      "gate": "CK3"
+    }
+  ],
+  "tasks": [
+    {
+      "id": "T1",
+      "name": "科研选题",
+      "workflow": "A",
+      "input": "用户研究方向描述 + 8 维评分参数（1-10 整数）",
+      "output": [
+        "选题评分卡",
+        "S/A/B/C 分档",
+        "3 条止损线"
+      ],
+      "phases": [
+        "P1",
+        "P2",
+        "P3",
+        "P5",
+        "P6",
+        "P7"
+      ],
+      "acceptance": [
+        "A1",
+        "A2",
+        "A3",
+        "A4",
+        "A6"
+      ],
+      "human_gates": [
+        "CK1",
+        "CK2",
+        "CK3"
+      ],
+      "sample": "test-prompts.json#1"
+    },
+    {
+      "id": "T2",
+      "name": "深度调研 / 澄清追问",
+      "workflow": "B",
+      "input": "信息不足的用户请求",
+      "output": [
+        "Round 1 五个宏观追问",
+        "信息完整度评估",
+        "关键假设清单"
+      ],
+      "phases": [
+        "P1",
+        "P2",
+        "P4",
+        "P8"
+      ],
+      "acceptance": [
+        "A1",
+        "A7",
+        "A8"
+      ],
+      "human_gates": [],
+      "sample": "test-prompts.json#2"
+    },
+    {
+      "id": "T3",
+      "name": "复评闭环决策",
+      "workflow": "C",
+      "input": "研究卡点 / 阶段性复盘 / 止损判断",
+      "output": [
+        "四项决策之一",
+        "GRADE 证据等级",
+        "推翻条件与下一步"
+      ],
+      "phases": [
+        "P1",
+        "P2",
+        "P6",
+        "P7",
+        "P8"
+      ],
+      "acceptance": [
+        "A1",
+        "A4",
+        "A5",
+        "A9",
+        "A10"
+      ],
+      "human_gates": [
+        "CK2"
+      ],
+      "sample": "test-prompts.json#3"
+    }
+  ],
+  "acceptance_rules": [
+    {
+      "id": "A1",
+      "text": "产出非空且使用与用户输入相同的语言",
+      "check": "sample_check:nonempty_language",
+      "human": false
+    },
+    {
+      "id": "A2",
+      "text": "必含 S/A/B/C 分档结论之一，禁「暂未定档」",
+      "check": "sample_check:grade_bucket",
+      "human": false
+    },
+    {
+      "id": "A3",
+      "text": "必含 3 条止损线且逐条可辨识",
+      "check": "sample_check:stop_loss",
+      "human": false
+    },
+    {
+      "id": "A4",
+      "text": "强结论必带 GRADE 证据等级",
+      "check": "sample_check:grade_label",
+      "human": false
+    },
+    {
+      "id": "A5",
+      "text": "复评必给维持/升档/降档/止损之一，禁「待定」「观察」结案",
+      "check": "sample_check:review_decision",
+      "human": false
+    },
+    {
+      "id": "A6",
+      "text": "评分参数越界必须被脚本拒绝（rc=1，不静默钳制）",
+      "check": "sample_check:scoring_edge",
+      "human": false
+    },
+    {
+      "id": "A7",
+      "text": "信息不足不得直接给方案：必含 Round 1 五个宏观追问",
+      "check": "sample_check:clarify_round",
+      "human": false
+    },
+    {
+      "id": "A8",
+      "text": "信息不足时不得输出选题评分卡 / 分档建议",
+      "check": "sample_check:no_premature_plan",
+      "human": false
+    },
+    {
+      "id": "A9",
+      "text": "复评结论必含推翻条件或下一步动作",
+      "check": "sample_check:next_action",
+      "human": false
+    },
+    {
+      "id": "A10",
+      "text": "价值取舍（是否换方向 / 是否止损结案）由用户裁决",
+      "check": null,
+      "human": true
+    },
+    {
+      "id": "A11",
+      "text": "语义质量、文献真实性、审美与表达",
+      "check": null,
+      "human": true
+    }
+  ],
+  "human_gates": {
+    "CK1": {
+      "when": "评分落分前",
+      "what": "展示 8 维初步判断依据，确认无重大误解",
+      "skippable": "用户已授权直接给结论时"
+    },
+    "CK2": {
+      "when": "判定 C 档或决策为止损时",
+      "what": "询问接受止损 / 转向相邻选题 / 补信息重评",
+      "skippable": "不可跳过"
+    },
+    "CK3": {
+      "when": "决策为升档追加资源时",
+      "what": "列增量资源清单与预期回报，获 ACK",
+      "skippable": "不可跳过"
+    },
+    "ALIGN_ACK": {
+      "when": "进入 EXECUTE 前",
+      "what": "Pre-flight Contract 获用户 ACK",
+      "skippable": "不可跳过"
+    },
+    "L5": {
+      "when": "五级仲裁的价值层",
+      "what": "上呈用户裁决，主理人不代做价值选择",
+      "skippable": "不可跳过"
+    }
+  },
+  "gates": {
+    "static": [
+      "manifest_check",
+      "manifest_check_selftest",
+      "protocol_envelope",
+      "protocol_conflict",
+      "protocol_integration",
+      "protocol_check_selftest",
+      "phase_normalization",
+      "harness_eval",
+      "harness_eval_selftest",
+      "routing_eval",
+      "routing_eval_selftest",
+      "vendor_core",
+      "state_ceilings",
+      "state_io_guards",
+      "lead_source_of_truth",
+      "state_runtime_sequencing",
+      "state_file_robustness",
+      "topic_scoring_edge"
+    ],
+    "structural": [
+      "workmap_check",
+      "workmap_check_selftest",
+      "sample_check_selftest",
+      "feedback_check"
+    ],
+    "documentation": [
+      "rot_verify"
+    ],
+    "task_samples": [
+      "T1",
+      "T2",
+      "T3"
+    ]
+  },
+  "feedback": {
+    "single_request": "只对本次任务生效，写入 task 记录，不进长期规则",
+    "long_term_rule": "需满足：同类错误真实复发 ≥ 2 次，且已由程序检查或工具修复承接；否则只能作为候选条款",
+    "conversion_order": [
+      "工具修复",
+      "程序检查",
+      "认可样例",
+      "文字规则"
+    ],
+    "rule_cap": "长期规则总数上限 24 条；达到上限时新规则必须先归档一条旧规则并给出证据",
+    "accepted_example_status": "候选认可样例默认「AI 评估通过 / 待人工确认」，经用户确认后才标「人工确认通过」"
+  }
+}

@@ -444,6 +444,8 @@ evidence 表。CI 门禁 step 17→18（+State IO file robustness + checkpoint c
 
 - **R7 实况（2026-11-10）**：R7 完成 Phase A（11 组状态文件实验）→ Phase C（2 个 P0 + 3 个 P1 修复 + 12 条锁定 + 4 组注入破坏实锤 + CI step）→ Phase D 台账与发布链落盘（v2.5.5，commit `7c070e0` / tag `v2.5.5` / 资产 `rot-v2.5.5.tar.gz` / 八方一致 / CI 18 门禁 step 全绿，收口 commit `260239a`）。**R7 已完整闭环**。
 - **v2.5.6 文档收口（2026-11-10，本次续跑）**：R3–R7 连续五轮快速迭代造成资产内文档口径累计滞后（README 结构树 / 门禁计数 / 命令清单 / 版本历史顺序，CONTRIBUTING 提交前清单，LEARNING.md 的 Task 记录停在 R3，本文件 §10 章节错乱且入口仍停在 R7）。按「已发布 tag 不重写、已发布资产不重打包」纪律不改 v2.5.5，改发**纯文档补丁版 v2.5.6**，把全部文档口径对齐到仓库实际并推进本入口到 R8。**运行时与门禁行为无变更**；该轮不计入「再诊断」轮次。
+- **v2.5.7 工作系统升级（2026-11-10，用户发起，不计入再诊断轮次）**：把「依赖 AI 理解执行的操作说明」升级为工作系统——新增 `WORKMAP.md`/`workmap.json` 工作地图、统一 CLI `scripts/rot.py`、`workmap_check.py` W1–W12、`sample_check.py` A1–A9、`feedback/` 反馈层，`rot.py verify` 闭环本文件 #29。三层门禁与运行时行为保留不变。
+
 - **R8 从 Phase A 开始**（只读诊断）。R1–R7 均已完成 Phase A→B→C→D 全程；R8 需先把 R7 与 v2.5.6 的产出当作**待验证对象**再诊断，不得当作既成事实。
 - R8 的**意图漂移基线** = 本文件 §3 六维表述（R1 基线）+ §3.1 的 R2 复检结论（0% 偏离）；若 R8 指令与该基线偏离 >30% 暂停等裁决。
 - R8 的**事实源** = 本文件 §6 资产清单 + §5 验收基线表（R1 实测列）+ §5.2（R2 实测列）+ §5.4 / §5.5 / §5.6（R5 / R6 / R7 实测列）。R1–R7 已修复的问题见 §7 黑名单与 §10.2 清单，**不得作为新发现重复上报**。
@@ -482,7 +484,7 @@ evidence 表。CI 门禁 step 17→18（+State IO file robustness + checkpoint c
 | 26 | 检查点编号与阶段序号解耦 + 编号可复用 + marker 不重写 | **已闭环**（v2.5.5 R7 P1-2） | 协议 §3 约定 cp 编号 = 阶段序号，protocol_check 的 HANDOFF 覆盖校验按此生成清单；`advance` 强制编号 = `cp-{turn:03d}`（不符 rc=1）、同编号复用 rc=1、marker 每次重写 |
 | 27 | SIGKILL 崩溃留下孤儿 tmp，无清理机制 | **已闭环**（v2.5.5 R7 P1-3） | 写盘前清理**已确认孤儿**的 tmp（`os.kill(pid,0)` 探测持有进程已死才删）；已确认无下游代码 glob 该目录，属空间泄漏而非正确性缺陷 |
 | 28 | 协议层与落盘状态无跨层校验入口 | **未闭环 · 设计缺口 · 登记备查** | R7 Phase A 实锤：信封 `phase` / `task_id` 与落盘状态完全不符时，协议校验返回**空失败列表**（rc=0）。补这道断言需先定义「信封与状态的绑定契约」，属设计裁决，不在 R7 范围内，留待 R8 |
-| 29 | 文档口径（结构树 / 用例计数 / 提交前清单 / SSOT 入口轮次）无自动化门禁 | **未闭环 · 设计缺口 · 登记备查** | v2.5.6 已用人工全量差集对齐并写入 README 发布契约第 5 条，但「文档 ↔ 仓库实际」仍靠人工核对，属 FM-R2-07 的根因残留。补自动化校验器需定义检查范围与豁免清单（历史段落的旧数字不改写），属设计裁决，留待 R8 |
+| 29 | 文档口径（结构树 / 用例计数 / 提交前清单 / SSOT 入口轮次）无自动化门禁 | **已闭环**（v2.5.7） | 用户发起的工作系统升级把 README 发布契约第 5 条脚本化为 `scripts/rot.py verify`（V1–V10）：逐项比对 `tests/`/`scripts/` 清单 ↔ README 结构树 ↔ CONTRIBUTING、CI 门禁 step 数 ↔ workmap 登记、四处版本、版本历史顺序、状态文件、LEARNING 回流、命令清单计数；并作为 CI 第 23 个门禁 step。FM-R2-07 由「部分闭环」升级为工具承接 |
 
 ### 10.3 R1 验收遗留
 
@@ -519,6 +521,7 @@ evidence 表。CI 门禁 step 17→18（+State IO file robustness + checkpoint c
 | v2.5.4 已发布（本次） | **17**（+State IO runtime sequencing + terminal state） | 23 | 6 |
 | v2.5.5 已发布（本次） | **18**（+State IO file robustness + checkpoint consistency） | 24 | 6 |
 | v2.5.6 已发布（本次） | **18**（纯文档补丁，无新增门禁 step） | 24 | 6 |
+| v2.5.7 已发布（本次） | **23**（+4 结构检查 +1 文档差集） | 29 | 6 |
 
 平台 step 恒为 6 个：`Set up job` / `Checkout` / `Setup Python` / `Post Setup Python` / `Post Checkout` / `Complete job`，**不计入门禁 step**。
 
@@ -583,3 +586,4 @@ evidence 表。CI 门禁 step 17→18（+State IO file robustness + checkpoint c
 | R7 | 2026-11-10 | **v2.5.5 发布链收口**：核验 CI run `42778746854` = success（18 门禁 step 全绿 + 6 平台 step = 24 总 step，headSha `7c070e0`）→ 打 annotated tag `v2.5.5`（tag 对象 `0723574`，解引用到 commit `7c070e0`）→ `git archive` 打包 `rot-v2.5.5.tar.gz`（14744005 B，80 条目，sha256 `55154f79…c9ea`）→ 解包核对（双 manifest 2.5.5 / README 2.5.5 / 新测试在资产内 / CI step 在资产内 / `_validate_state_shape` + `_cleanup_stale_tmp` 在资产内）→ 创建 release + 上传资产 → 资产下载实测与本地打包**字节级一致**（cmp 通过）→ my-experts 镜像 fast-forward 到 `7c070e0` → **八处一致核验通过**（canonical HEAD / canonical tag / origin·master / OneDrive 镜像 / my-experts HEAD / my-experts origin·master / GitHub API master / GitHub API tag→commit 全等 `7c070e0`） | agent-harness-architect |
 | R7 | 2026-11-10 | **v2.5.6 文档自洽补丁收口（本次续跑）**：R7 发布链收口后核实 R3–R7 连续迭代造成资产内文档口径累计滞后；修 README（结构树补 R5/R6/R7 三套测试、门禁段与命令清单对齐、`9/9`→`10/10`、`13`→`14` 条、版本历史段重排、示例资产名去版本字面量）、CONTRIBUTING（提交前必跑补齐 18 门禁 step 对应命令）、LEARNING.md（补 R4–R7 四轮 Task 回流 + FM-R2-07）、本文件（§10 章节编号重排、§10.1 推进到 R8 入口、§10.3.3 补 v2.5.6 行、§10.4 判据更新、变更记录表按轮次归位）；双 manifest + README 升版 2.5.6；16 套门禁逐条独立 rc=0；走完整发布链（CI 绿 → tag → `git archive` → 解包核对 → release → 镜像同步 → 八处一致） | agent-harness-architect |
 | R7 | 2026-11-10 | **v2.5.6 发布链收口（本次续跑）**：核验 CI run `42823445006` = success（18 门禁 step 全绿 + 6 平台 step = 24 总 step，headSha `fcdf14b`）→ 打 annotated tag `v2.5.6`（tag 对象 `061db48`，解引用到 `fcdf14b`）→ `git archive --prefix=research-orchestration-team/` 打包 `rot-v2.5.6.tar.gz`（14752316 B，80 条目，sha256 `c0257280…afaff`）→ 解包核对 **63 个 tracked 文件逐文件 git blob hash 与 tag 全等**（资产内容 == tag 内容硬证明）+ 16 项介质自洽断言全绿 → 创建 release（Latest，非 draft / 非 prerelease）+ 上传资产 → 回下载 `cmp` 字节级一致 → OneDrive 镜像 `pull --ff-only` + `fetch --tags --force` → **八处一致全等 `fcdf14b`**（canonical HEAD / canonical origin·master / 镜像 HEAD / GitHub API master / canonical tag deref / 镜像 tag deref / 远端 tag deref / GitHub API tag→commit），两处工作树 0 dirty；镜像侧独立复跑 6 套门禁 rc=0。**本行为 tag 之后的纯文档台账，不进任何已发布资产**（发布证据无法先于发布存在，与 R7 收口 commit 同例） | agent-harness-architect |
+| R8 | 2026-11-10 | **v2.5.7 工作系统升级收口（用户发起，不计入再诊断轮次）**：诊断实锤 4 类缺口（工作地图分散在 4 份文档约 90 处强制词、18 条门禁无统一入口且无证据记录、3 个真实任务样例无执行器、反馈只有失败回流无认可样例）；实跑 18 条门禁取基线（17 rc=0 + 1 期望 rc=1，5m05s）。新增 `WORKMAP.md`/`workmap.json`、`scripts/rot.py`（check/verify/sample/feedback/roadmap/report）、`workmap_check.py` W1–W12（含 7 组注入破坏）、`sample_check.py` A1–A9（含 9 条正/反例自测）、`feedback/`（RULES/RECORDS/3 个认可样例）；`test-prompts.json` 追加 assertions 且原字段逐值未改；CI 门禁 step 18→23；§10.2 #29 由未闭环改已闭环。原有三层门禁、state_io、topic_scoring、人设注入、失败回流判据全部保留。**真实 spawn 实跑与四种状态标注在交付报告中如实登记** | team-lead |

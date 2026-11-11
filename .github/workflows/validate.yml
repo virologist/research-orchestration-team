@@ -242,3 +242,21 @@ jobs:
             exit 1
           fi
           echo "✅ 正常输入被正确接受 (rc=0)"
+
+      # ── v2.5.7 工作系统结构检查（4 套）+ 文档差集（1 套）──────────────
+      # 防「操作说明与真实工具/文档/样例脱节」：地图、断言、反馈记录、
+      # 发布契约第 5 条全部从文字转为可复跑的程序检查。
+      - name: Workmap consistency (W1-W12)
+        run: python3 scripts/workmap_check.py -v
+
+      - name: Workmap checker mutation self-test
+        run: python3 scripts/workmap_check.py --self-test
+
+      - name: Sample assertion self-test (A1-A9)
+        run: python3 scripts/sample_check.py --self-test
+
+      - name: Feedback records and rule cap (F1-F8)
+        run: python3 scripts/rot.py feedback
+
+      - name: Documentation delta verification (V1-V10)
+        run: python3 scripts/rot.py verify

@@ -11,7 +11,13 @@
 ## 提交前必跑（强制 CI）
 
 ```bash
-# CI 共 18 个门禁 step（另有 6 个平台 step 不计入），以下按 workflow 顺序给出本地等价命令。
+# 推荐：一条命令跑完 22 条门禁并落盘「检查对象/结果/证据」，再单独做文档差集与反馈检查。
+python3 scripts/rot.py check
+python3 scripts/rot.py verify
+python3 scripts/rot.py feedback
+
+# CI 共 23 个门禁 step（18 静态 + 4 结构 + 1 文档差集；另有 6 个平台 step 不计入），
+# 以下按 workflow 顺序给出本地等价命令。
 # 逐条独立取 rc；rc=0 通过 / rc=1 校验失败 / rc=2 文件不存在 / rc=3 参数缺失。
 # rc≠0/1 一律先查命令、路径、参数，不直接归因为门禁失效（见 LEARNING.md 的 FM-R1-08）。
 
@@ -68,6 +74,21 @@ python3 skills/research-orchestration-workflow/scripts/topic_scoring.py \
   --topic test --originality 11 --feasibility 7 --value-density 9 \
   --data-availability 7 --competition 6 --cognition 8 --resource-fit 7 --sustainability 7
 # 期望：退出码 1 + "评分超出有效范围"
+
+# 19. 工作地图一致性 W1–W12（任务/阶段/依赖/工具/验收/地图与样例不漂移）
+python3 scripts/workmap_check.py -v
+
+# 20. 工作地图校验器注入式负例自测（7 组破坏，每组精确命中一个检查项）
+python3 scripts/workmap_check.py --self-test
+
+# 21. 真实任务样例断言有效性自测（A1–A9 正例 PASS / 反例 FAIL）
+python3 scripts/sample_check.py --self-test
+
+# 22. 反馈记录完整性 / 规则膨胀 / 认可样例状态（F1–F8）
+python3 scripts/rot.py feedback
+
+# 23. 文档 ↔ 仓库实际 全量差集（V1–V10，发布契约第 5 条的程序化实现）
+python3 scripts/rot.py verify
 ```
 
 > `scripts/manifest_check.py` 的校验项为 C1–C13，全部为**硬失败**（`rc=1`）。

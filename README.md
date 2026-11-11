@@ -3,7 +3,7 @@
 > **团队名称**：科研价值驱动研究编排团 / Research Value-Driven Research Orchestration Team
 > **专家类型**：Team 型（8 人协作团 · v2.3.0 工具真实性门禁 R1-R6）
 > **行业分类**：12-IndustryConsultant（跨学科咨询）
-> **版本**：2.5.6
+> **版本**：2.5.7
 > **许可证**：MIT
 > **仓库**：[github.com/virologist/research-orchestration-team](https://github.com/virologist/research-orchestration-team)
 
@@ -49,7 +49,7 @@ research-orchestration-team/
 │   └── marketplace.json     # WorkBuddy 市场清单（与上一份同步维护）
 ├── .github/
 │   └── workflows/
-│       └── validate.yml     # CI：双 manifest 校验 + 协议单测 + 一致性扫描
+│       └── validate.yml     # CI：23 门禁 step（18 静态 + 4 结构 + 1 文档差集）+ 6 平台 step
 ├── agents/                                          # 8 名成员（主理人 1 + 团员 7）
 │   ├── research-orchestration-team-team-lead.md   # 主理人：沈知枢
 │   ├── socratic-questioner.md                      # 问清源（分析者）
@@ -84,7 +84,10 @@ research-orchestration-team/
 │   ├── harness_eval_selftest.py                    # harness 注入式负例自测（14 条）
 │   ├── routing_eval.py                             # v2.2.0 路由结构一致性评估 R1–R6
 │   ├── routing_eval_selftest.py                    # v2.2.0 路由注入式负例自测（12 条 · 含 raw_probe 未归一化护栏）
-│   └── test_phase_normalization.py                 # 阶段名归一化自测 · 26 条
+│   ├── test_phase_normalization.py                 # 阶段名归一化自测 · 26 条
+│   ├── rot.py                                      # ★ 统一 CLI：check / verify / sample / feedback / roadmap / report
+│   ├── workmap_check.py                            # ★ 工作地图一致性校验 W1–W12（含注入式负例自测）
+│   └── sample_check.py                             # ★ 真实任务样例结构化断言 A1–A9（含正/反例自测）
 ├── vendor/shared-core/                              # 联邦共享件兜底副本 + VENDOR.json 清单
 ├── tests/
 │   ├── test_vendor_core.py                         # 防漂移门禁 V1–V6
@@ -99,12 +102,18 @@ research-orchestration-team/
 │   ├── arbitration-L4L5-live-test.md               # 冲突仲裁 L4/L5 真实团队实测记录
 │   ├── harness-eval-report-v2.0.2.md               # Harness 改造前基线（0/12）
 │   └── harness-iteration-loop.md                   # Harness 迭代闭环状态文件 · 断点续跑 SSOT
+├── feedback/                                        # ★ 反馈层（单次要求 / 长期规则 / 认可样例）
+│   ├── RULES.md                                    # 转化优先级 · 晋升条件 · 规则上限 24 条
+│   ├── RECORDS.jsonl                               # 结构化反馈记录（机器真值源）
+│   └── accepted/                                   # 认可样例 EX-01 / EX-02 / EX-03
 ├── .gitignore
 ├── README.md
+├── WORKMAP.md                                       # ★ 一页工作地图（任务/步骤/依赖/验收/人工确认点）
+├── workmap.json                                     # ★ 工作地图机器真值源
 ├── CHANGELOG.md                                     # 版本变更历史
 ├── CONTRIBUTING.md                                  # 贡献流程与协议变更政策
 ├── settings.json                                    # Team 型包根必需（agent 指向主理人）
-├── test-prompts.json
+├── test-prompts.json                                # 3 个真实任务样例 + assertions 断言清单
 └── LICENSE                                          # MIT
 ```
 
@@ -118,9 +127,11 @@ research-orchestration-team/
 4. 信息充分时按 SOP 进入 ALIGN → EXECUTE → REVIEW
 5. 严复回主导复评闭环，必给维持/升档/降档/止损四项决策之一
 
+**工作系统入口（v2.5.7 起）**：先读 [`WORKMAP.md`](./WORKMAP.md) 一页看懂任务/阶段/依赖/验收；用 `python3 scripts/rot.py check` 复跑全部门禁并取证据；反馈按 [`feedback/RULES.md`](./feedback/RULES.md) 转化为工具修复、程序检查或认可样例。四种结果状态（自动验证通过 / AI 评估通过 / 人工确认通过 / 尚未验证）禁止混标。
+
 ## 门禁体系现状
 
-本包的门禁分三层：**正向校验器**（干净仓库应全绿）、**注入式负例自测**（证明校验器不是永远返回 0）、**联邦防漂移门禁**（防 vendor 副本被静默改写）。
+本包的门禁分四层：**正向校验器**（干净仓库应全绿）、**注入式负例自测**（证明校验器不是永远返回 0）、**联邦防漂移门禁**（防 vendor 副本被静默改写）、**工作系统结构检查**（v2.5.7 新增，防「操作说明与真实工具/文档/样例脱节」）。CI 共 **23 个门禁 step**（18 静态 + 4 结构检查 + 1 文档差集）+ 6 个平台 step = 29 总 step。
 
 ### 第一层 · 正向校验器（4 套）
 
@@ -156,6 +167,19 @@ research-orchestration-team/
 | 门禁 | 检查项 | 防什么 |
 |------|--------|--------|
 | `tests/test_vendor_core.py` | **V1–V6** | 比对 `vendor/shared-core/` 与联邦真源的 sha256 清单，防 vendor 副本被静默漂移；联邦真源缺失时显式 SKIP 且不计 FAIL |
+
+### 第四层 · 工作系统结构检查（4 套，v2.5.7 新增）
+
+| 检查 | 内容 | 防什么 |
+|------|------|--------|
+| `scripts/workmap_check.py` | **W1–W12**：阶段依赖无环 / 工具路径存在 / 每条验收条件有程序检查或显式交人工 / 地图与人读视图、样例断言不漂移 | 工作地图退化为又一纸说明 |
+| `--self-test` | 7 组注入破坏，每组精确命中一个检查项 | 校验器永远返回 0 |
+| `scripts/sample_check.py --self-test` | 9 条断言正例 PASS / 反例 FAIL | 断言形同虚设 |
+| `scripts/rot.py feedback` | **F1–F8**：反馈记录字段 / 承接检查真实存在 / 长期规则上限 / 认可样例未冒充用户确认 | 规则无限膨胀、口头已修复 |
+
+另有 `scripts/rot.py verify`（**V1–V10**）：把 README 发布契约第 5 条「全量文档差集核对」变成程序检查，逐项比对 `tests/`、`scripts/`、CI step、四处版本、版本历史顺序、状态文件、LEARNING 回流、提交前清单——根治 FM-R2-07 的累计型文档滞后。
+
+> 统一入口：`python3 scripts/rot.py check` 一条命令跑完 22 条门禁（18 静态 + 4 结构），`rot.py verify` 单独跑文档差集（CI 第 23 个门禁 step）；逐条独立取 rc，把**检查对象 / 结果 / rc / 耗时 / 证据尾行**落盘到 `.harness-runs/verify/latest.json`。`--fast` 跳过的项标「尚未验证」，**不计入通过**。
 
 ### 为什么必须有注入式负例
 
@@ -204,6 +228,7 @@ research-orchestration-team/
 - **v2.5.4** (2026-11-10)：R6 运行时序审计。13 组运行时序实验实锤 **2 个 P0 + 2 个 P1**：① **终态污染**——`resume`/`budget` 的 `max_time` 守卫只排除 `aborted` 漏了 `done`，且 `budget` 完全没有终态守卫，导致已 finish 成功的任务事后超时会**被翻成 `aborted`**（`success_rate=1` 与 `status=aborted` 自相矛盾）；② **熔断可绕过**——`fail --max-failures` 能抬高阈值，「每次 fail 自带更大阈值」让熔断彻底失效（实测 8 次失败后仍 `running`）；③ **观测数据静默丢失**——`advance` 用 `turn` 覆盖 `turns_used`，把主理人上报的观测值冲回小值。修复：新增 `_is_terminal()` 统一终态判定 + `budget` 补守卫；熔断阈值改为**只收紧不放宽**；`turns_used` 改取 `max(已落盘值, turn)`。新增 `tests/test_state_runtime_sequencing.py` 8 条锁定（3 组注入破坏证明会红）；CI 门禁 step 16→17。其余 7 组运行时序实验验证为设计正确（8 路并发无丢更新、init 幂等、JSON 损坏全 fail-fast 等）。
 - **v2.5.5** (2026-11-10)：R7 状态文件健壮性审计。11 组状态文件实验实锤 **2 个 P0 + 3 个 P1**：① **半损坏状态文件 → 裸 Traceback**——`load_state` 原先只做 JSON 解析层校验，文件是合法 JSON 但缺关键字段时（被外部改写 / 旧版本状态文件 / 部分写盘后编辑），下游子命令直接 `state["phase"]` / `state["status"]` → 裸 `KeyError`，实测 **13 组子命令 × 损坏形态组合全部命中**；② **缺 status 时 budget/fail 假绿**——rc=0 放行，把「未知状态」静默当成 running 继续写盘，等于凭空替主理人断言状态；③ **budget 触顶文案宣称「熔断」实为告警**——registry 明确 turns/tokens 是告警层、只有 max_time/failures 才是终态熔断层，原文案会让调用方误以为 status 已变 aborted（FM-R2-03 同族复发）；④ **检查点编号与阶段序号解耦**——协议 §3 约定 cp 编号 = 阶段序号，原实现只校验形态，编号可乱写 / 可复用 / marker 因 `if not marker.exists()` 永不重写，三者都会破坏 protocol_check 的 HANDOFF 跨层校验；⑤ **SIGKILL 崩溃留下孤儿 tmp**——`_state.json.tmp.<pid>` 永久残留，反复崩溃即无界堆积的磁盘泄漏。修复：新增结构层校验 `_validate_state_shape`（缺字段 / 类型非法 / 取值非法一律 rc=3 且逐条指名字段，**不静默重建**）、触顶文案改为「告警层」、`advance` 强制 cp 编号 = turn 对应编号（乱写与复用均 rc=1 拒绝）+ marker 每次重写、写盘前清理**已确认孤儿**的 tmp（`os.kill(pid,0)` 探测持有进程已死才删）。新增 `tests/test_state_file_robustness.py` 12 条锁定（4 组注入破坏实锤证明会红）；CI 门禁 step 17→18。
 - **v2.5.6** (2026-11-10)：发布介质自洽性补丁（纯文档，运行时与门禁行为无变更）。R3–R7 连续五轮快速迭代后，已发布的 `rot-v2.5.5.tar.gz` 内 README / CONTRIBUTING 的门禁计数、结构树与提交前清单滞后于仓库实际（结构树缺 R5/R6/R7 三套测试、集成仿真 `9/9` 与协议负例 `13 条` 两处自相矛盾、版本历史段逆序）；`LEARNING.md` 的 Task 记录停在 R3；状态文件 §10.1 仍写「R7 起始状态」且 §10 章节编号错乱。按发布纪律「已发布 tag 不重写、已发布资产不重打包」，不改 v2.5.5，改发本补丁版：文档口径全量对齐、示例资产名去掉版本字面量（根治复发点）、提交前必跑清单补齐 18 个门禁 step 对应命令、状态文件推进到 R8 入口、LEARNING 补 R4–R7 四轮回流并新增 FM-R2-07。详见 [CHANGELOG.md](./CHANGELOG.md)。
+- **v2.5.7** (2026-11-10)：从「操作说明驱动」升级为**结构清晰、工具可靠、结果可验证、能持续自我改进**的工作系统。新增一页 [`WORKMAP.md`](./WORKMAP.md) + 机器真值源 `workmap.json`（任务/阶段/依赖/验收/人工确认点）；统一 CLI `scripts/rot.py`（check / verify / sample / feedback / roadmap / report），一条命令跑完 22 条门禁并落盘「检查对象·结果·证据」结构化报告；`workmap_check.py` W1–W12 与 `sample_check.py` A1–A9 把原先只有文字的验收条件转成会红的自动检查；3 个真实任务样例追加 `assertions` 字段并获得执行器；`feedback/` 层建立认可样例、单次要求 vs 长期规则区分、转化优先级与 24 条规则上限；`rot.py verify` 把发布契约第 5 条脚本化（V1–V10）。原有三层门禁、state_io、topic_scoring、人设注入与失败回流判据**全部保留**，运行时行为无变更。详见 [CHANGELOG.md](./CHANGELOG.md)。
 
 ## 安装方式（四种并存）
 
@@ -314,7 +339,12 @@ claude --plugin-dir ./research-orchestration-team
 5. **全量文档差集核对（v2.5.6 起，FM-R2-07 根治项）**：逐项比对 `tests/` 真实文件清单 ↔ README 结构树 ↔ 门禁体系现状 ↔ CONTRIBUTING 提交前必跑清单；CI workflow 的 `- name:` 清单 ↔ 本地命令清单；用例数 ↔ CHANGELOG 回归证据表；版本历史段顺序；状态文件 `docs/harness-iteration-loop.md` §10.1 的入口轮次与 §10 章节编号；`LEARNING.md` 的 Task 记录最新轮次。**若已发布 tag 的资产内文档滞后，不改该 tag / 不重打包，改发纯文档补丁版**。
 
 ```bash
-# 1. 在 canonical 仓库推送
+# 1. 统一入口（推荐）：一条命令跑完 22 条门禁并落盘结构化证据
+python3 scripts/rot.py check       # 22 条门禁 + 结构化证据
+python3 scripts/rot.py verify      # 文档差集 V1–V10
+python3 scripts/rot.py feedback    # 反馈记录 F1–F8
+
+# 2. 在 canonical 仓库推送
 cd ~/.workbuddy/plugins/marketplaces/my-experts/plugins/research-orchestration-team
 git push origin master
 # 打包：资产内容严格等于 tag 内容（prefix 与方式 2 的目录名一致）

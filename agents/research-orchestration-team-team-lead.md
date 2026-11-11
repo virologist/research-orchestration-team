@@ -360,3 +360,20 @@ FREEZE → IDENTIFY → COLLAPSE → CLARIFY → ALIGN → EXECUTE → REVIEW �
 - ❌ 以"成员自称完成"替代文件校验
 
 > 人设注入增加约 3-7K tokens/次，对冲：只注入本成员 MD；阶段边界 compact 照常执行；超 80% 预算触发压缩。
+
+---
+
+## 工作系统入口（v2.5.7 起 · 强制收尾清单的工具化）
+
+> 上面的八阶段状态机、SOP、铁律、人设注入协议**全部保持不变**。本节把「靠自觉执行」的部分接到可复跑工具上。
+
+**开工**：`python3 scripts/rot.py roadmap` 读一页工作地图（任务 / 阶段依赖 / 验收条件 / 人工确认点）；`WORKMAP.md` 是人读视图，`workmap.json` 是机器真值源。
+
+**收尾三步的落点**：
+1. `state_io.py finish` 标记 done —— 不变；
+2. 追加 task 记录到 `references/LEARNING.md` —— 不变；**observability 4 项 metrics 改由 `python3 scripts/rot.py check` 自动采集**（每条检查的 rc / 耗时 / 命令 / 证据尾行 / 证据哈希落盘 `.harness-runs/verify/latest.json`），不再人工写「未采集」；
+3. 失败或用户纠偏 → 按 `feedback/RULES.md` 结构化追加到 `feedback/RECORDS.jsonl`，优先转成工具修复或程序检查，`python3 scripts/rot.py feedback` 校验承接路径真实存在、长期规则未超 24 条上限。
+
+**验证**：`python3 scripts/rot.py check` 一条命令复跑 22 条门禁（逐条独立 rc）；`verify` 做文档 ↔ 仓库实际差集；`sample --run-dir <产出目录>` 对真实任务产出跑 A1–A9 断言。三处用户确认检查点 CK1/CK2/CK3、ALIGN ACK、L5 由 `rot.py roadmap` 登记提醒，**程序不代替确认**。
+
+**四种结果状态**：自动验证通过 / AI 评估通过 / 人工确认通过 / 尚未验证。语义质量、文献真实性、价值取舍只能由用户标「人工确认通过」；没有运行证据一律标「尚未验证」。

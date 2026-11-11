@@ -23,6 +23,27 @@
 
 > 说明：以下 v2.2.0 补记的 5 条为**工程内证**——证据来源为本仓库真实 commit（short hash）、`CHANGELOG.md`、`README.md 版本历史` 与脚本 / 文件路径，不引用外部 DOI / PMID / URL；`observability` 因历史未逐任务采集，统一如实标注「未采集」，不自造数值。
 
+### [2026-11-10] / team-lead / v2.5.7 工作系统升级（用户发起）
+
+- **决策**：
+  - 先诊断不动文件：实跑 18 条门禁取基线（17 rc=0 + 1 期望 rc=1，5m05s），确认三层门禁检查的全是「包自身静态一致性」，无一覆盖真实任务产出
+  - 诊断四缺口：工作地图散在 4 份文档（team-lead 362 / registry 361 / protocol 285 / SKILL 143，约 90 处强制词无检查）；18 条门禁散在 3 个目录、三种参数风格、无统一入口、证据只打 stdout；`test-prompts.json` 3 个样例 expected 全是字符串、全仓无执行器、包内无运行产物；LEARNING 只有 15 条失败模式、0 条认可样例、observability 5 条明确「未采集」
+  - 用户确认三条验收：允许一切操作 / 结构化断言与真实 spawn 实跑都要 / 走完整发布链
+  - 保留有效设计：三层门禁 + 注入式负例、state_io、topic_scoring、人设注入、失败回流判据一律不改；以**新增一层**为主，核心说明只做最小追加
+  - 反馈按「工具修复 > 程序检查 > 认可样例 > 文字规则」转化；长期规则上限 24 条，单次要求不晋升
+- **证据**：
+  - 新增 `workmap.json` + `WORKMAP.md`；`workmap_check.py` W1–W12 正向 18 项全绿 + `--self-test` 7 组破坏各自精确命中一个检查项
+  - `sample_check.py` 9 条断言正例 PASS / 反例 FAIL 全绿；`scoring_edge` 实跑 topic_scoring 越界 rc=1
+  - `rot.py verify` V1–V10 自动列出 5 项文档口径待补（V2/V3/V4/V5/V10），驱动本轮文档同步，首次实战即防住 FM-R2-07 复发
+  - `test-prompts.json` 追加 3 个键，原有 6 个字段逐值比对全等（未覆盖原文）
+  - `feedback/RECORDS.jsonl` 9 条反馈记录、3 个候选认可样例，状态如实标「AI 评估通过 / 待人工确认」
+  - 本条为工程内证：证据来源为仓库文件、实跑 rc 与 git diff，不引用外部 DOI/PMID/URL
+- **下一步**：
+  - 真实 spawn 实跑 3 个场景（用户要求「两者都要」），结构化断言 + 人工语义复核分别标注状态
+  - 四种状态（自动验证通过 / AI 评估通过 / 人工确认通过 / 尚未验证）在交付报告逐项标注，不混标
+  - §10.2 #29 已由 `rot.py verify` 闭环；剩余设计裁决项 #22 / #28 仍留待用户确认
+- **observability**：由 `python3 scripts/rot.py check` 自动采集（每条检查 rc / 耗时 / 命令 / 证据尾行 / evidence_sha256 落盘 `.harness-runs/verify/latest.json`），不再人工填写
+
 ### [2026-11-10] / team-lead / v2.5.6 文档自洽补丁收口（R7 发布链之后）
 
 - **决策**：
