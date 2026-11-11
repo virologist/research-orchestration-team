@@ -2,6 +2,38 @@
 
 所有重要变更按版本倒序记录。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [2.5.8] - 2026-11-12
+
+> **统一 CLI 可靠性补丁**（工具修复）。运行时、协议、评分、状态机行为**零变更**；CI 门禁 step **仍为 23**（平台 6，总 29），无新增 step。
+
+### Fixed
+
+- **慢门禁被统一超时阈值误伤**：`rot.py check` 把 22 条门禁串行执行，`run_cmd()` 对全部条目使用同一个 240s 超时。实测 `manifest_check_selftest` **单独执行 138s / rc=0 / 30 条全过**，但在全量上下文中因前后命令的 IO 竞争升至 240s+ → 被截为 `rc=137`，按既有语义标「尚未验证」→ 汇总 `21 通过 / 0 未通过 / 1 尚未验证`，`RESULT: NOT GREEN`。这是**阈值误伤，不是门禁失效**（FM-R1-08 退出码分层语义：rc≠0/1 先查命令、路径、参数，不直接归因于门禁失效）。
+- 修复：`SLOW_TIMEOUTS = {manifest_check_selftest: 900, harness_eval_selftest: 900}` + `DEFAULT_TIMEOUT = 240`，由 `cmd_check` 按门禁名选超时。**「超时不算通过」与「--fast 跳过不算通过」两条语义红线保持不变**。
+
+### Added
+
+- **`python3 scripts/rot.py selftest`**：4 组注入式负例（清空慢门禁超时表 / 把慢门禁超时降回默认值 / 把超时标成通过 / 把 `--fast` 跳过标成通过）+ 1 组未注入正例，逐条断言静态策略校验精确判红。注入前先切掉自检函数自身，避免锚点命中 cases 字面量造成静默 no-op（FM-R1-04 / 字面量断言三连误伤同族）。
+- **`rot.py verify` V0**：AST 静态读取 `SLOW_TIMEOUTS` / `DEFAULT_TIMEOUT`，校验慢门禁全覆盖且阈值大于默认；按**分支区块**取文校验两条语义红线。V0–V10 共 11 项。
+
+### Changed
+
+- `.github/workflows/validate.yml` 的 `Documentation delta verification` step 的 `run` 改为两行（`selftest` + `verify`），`- name:` 数量不变 → V4 的 23 == workmap 登记 23 不变；§10.3.3 计数口径不变。
+- README 版本行、结构树 CLI 子命令清单、健康检查命令块、版本历史；双 manifest + workmap.json + my-experts 市场清单升 **2.5.8**；WORKMAP.md 版本行；CONTRIBUTING 提交前清单；状态文件 §10.1 / §10.3.3 / 变更记录；LEARNING 回流；`feedback/RECORDS.jsonl` 追加一条 `tool_fix` 记录。
+
+### Regression evidence（改造前后对比）
+
+| 对象 | 改造前 | 改造后 |
+|------|--------|--------|
+| `rot.py check` 汇总 | 21 自动验证通过 / 0 未通过 / **1 尚未验证**（NOT GREEN） | **22 自动验证通过 / 0 未通过 / 0 尚未验证（ALL GREEN）** |
+| `manifest_check_selftest` | 批量 rc=137 TIMEOUT >240s | 最终全量 **89.8s / rc=0**（30 条全过）；另一次复跑 157.0s / rc=0 |
+| `harness_eval_selftest` | 98.7s / rc=0 | 最终全量 **74.7s / rc=0**（未退化）；另一次复跑 98.7s / rc=0 |
+| `rot.py verify` | V1–V10 全绿 | **V0–V10 全绿** |
+| `rot.py selftest` | 无 | **4 组负例精确命中 + 正例零错误** |
+| CI 门禁 step | 23（平台 6，总 29） | 23（平台 6，总 29） |
+
+> 最终证据：`/tmp/rot_check_v258.log` + `.harness-runs/verify/latest.json`（22/22 ALL GREEN，git_head 指向本次补丁）。慢门禁耗时随机器 IO 波动，两次实测均 `rc=0`、条目数不减。
+
 ## [2.5.7] - 2026-11-10
 
 > **工作系统升级**：从「依赖 AI 理解并自觉执行的操作说明」升级为**结构清晰、工具可靠、结果可验证、能持续自我改进**的工作系统。

@@ -445,6 +445,7 @@ evidence 表。CI 门禁 step 17→18（+State IO file robustness + checkpoint c
 - **R7 实况（2026-11-10）**：R7 完成 Phase A（11 组状态文件实验）→ Phase C（2 个 P0 + 3 个 P1 修复 + 12 条锁定 + 4 组注入破坏实锤 + CI step）→ Phase D 台账与发布链落盘（v2.5.5，commit `7c070e0` / tag `v2.5.5` / 资产 `rot-v2.5.5.tar.gz` / 八方一致 / CI 18 门禁 step 全绿，收口 commit `260239a`）。**R7 已完整闭环**。
 - **v2.5.6 文档收口（2026-11-10，本次续跑）**：R3–R7 连续五轮快速迭代造成资产内文档口径累计滞后（README 结构树 / 门禁计数 / 命令清单 / 版本历史顺序，CONTRIBUTING 提交前清单，LEARNING.md 的 Task 记录停在 R3，本文件 §10 章节错乱且入口仍停在 R7）。按「已发布 tag 不重写、已发布资产不重打包」纪律不改 v2.5.5，改发**纯文档补丁版 v2.5.6**，把全部文档口径对齐到仓库实际并推进本入口到 R8。**运行时与门禁行为无变更**；该轮不计入「再诊断」轮次。
 - **v2.5.7 工作系统升级（2026-11-10，用户发起，不计入再诊断轮次）**：把「依赖 AI 理解执行的操作说明」升级为工作系统——新增 `WORKMAP.md`/`workmap.json` 工作地图、统一 CLI `scripts/rot.py`、`workmap_check.py` W1–W12、`sample_check.py` A1–A9、`feedback/` 反馈层，`rot.py verify` 闭环本文件 #29。三层门禁与运行时行为保留不变。
+- **v2.5.8 统一 CLI 可靠性补丁（2026-11-12，工具修复，不计入再诊断轮次）**：真实全量实跑发现 `rot.py check` 用统一 240s 超时，批量 IO 竞争下 `manifest_check_selftest` 被误截 `rc=137` → 汇总 NOT GREEN；单独执行同一脚本 138s / rc=0 / 30 条全过，实证为阈值误伤而非门禁失效。修复为慢门禁独立 900s 超时（超时仍不算通过），补 `rot.py selftest` 4 组注入式负例与 `rot.py verify` V0 静态策略校验；CI `- name:` 计数保持 23。改造后 `rot.py check` **22/22 ALL GREEN**、verify V0–V10 全绿、selftest 4/4 精确命中。**运行时/协议/评分/状态机行为零变更**。
 
 - **R8 从 Phase A 开始**（只读诊断）。R1–R7 均已完成 Phase A→B→C→D 全程；R8 需先把 R7 与 v2.5.6 的产出当作**待验证对象**再诊断，不得当作既成事实。
 - R8 的**意图漂移基线** = 本文件 §3 六维表述（R1 基线）+ §3.1 的 R2 复检结论（0% 偏离）；若 R8 指令与该基线偏离 >30% 暂停等裁决。
@@ -522,6 +523,7 @@ evidence 表。CI 门禁 step 17→18（+State IO file robustness + checkpoint c
 | v2.5.5 已发布（本次） | **18**（+State IO file robustness + checkpoint consistency） | 24 | 6 |
 | v2.5.6 已发布（本次） | **18**（纯文档补丁，无新增门禁 step） | 24 | 6 |
 | v2.5.7 已发布（本次） | **23**（+4 结构检查 +1 文档差集） | 29 | 6 |
+| v2.5.8 已发布（本次） | **23**（selftest 挂在既有 verify step 内，`- name:` 数不变） | 29 | 6 |
 
 平台 step 恒为 6 个：`Set up job` / `Checkout` / `Setup Python` / `Post Setup Python` / `Post Checkout` / `Complete job`，**不计入门禁 step**。
 

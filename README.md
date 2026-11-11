@@ -3,7 +3,7 @@
 > **团队名称**：科研价值驱动研究编排团 / Research Value-Driven Research Orchestration Team
 > **专家类型**：Team 型（8 人协作团 · v2.3.0 工具真实性门禁 R1-R6）
 > **行业分类**：12-IndustryConsultant（跨学科咨询）
-> **版本**：2.5.7
+> **版本**：2.5.8
 > **许可证**：MIT
 > **仓库**：[github.com/virologist/research-orchestration-team](https://github.com/virologist/research-orchestration-team)
 
@@ -85,7 +85,7 @@ research-orchestration-team/
 │   ├── routing_eval.py                             # v2.2.0 路由结构一致性评估 R1–R6
 │   ├── routing_eval_selftest.py                    # v2.2.0 路由注入式负例自测（12 条 · 含 raw_probe 未归一化护栏）
 │   ├── test_phase_normalization.py                 # 阶段名归一化自测 · 26 条
-│   ├── rot.py                                      # ★ 统一 CLI：check / verify / sample / feedback / roadmap / report
+│   ├── rot.py                                      # ★ 统一 CLI：check / verify / selftest / sample / feedback / roadmap / report
 │   ├── workmap_check.py                            # ★ 工作地图一致性校验 W1–W12（含注入式负例自测）
 │   └── sample_check.py                             # ★ 真实任务样例结构化断言 A1–A9（含正/反例自测）
 ├── vendor/shared-core/                              # 联邦共享件兜底副本 + VENDOR.json 清单
@@ -177,7 +177,7 @@ research-orchestration-team/
 | `scripts/sample_check.py --self-test` | 9 条断言正例 PASS / 反例 FAIL | 断言形同虚设 |
 | `scripts/rot.py feedback` | **F1–F8**：反馈记录字段 / 承接检查真实存在 / 长期规则上限 / 认可样例未冒充用户确认 | 规则无限膨胀、口头已修复 |
 
-另有 `scripts/rot.py verify`（**V1–V10**）：把 README 发布契约第 5 条「全量文档差集核对」变成程序检查，逐项比对 `tests/`、`scripts/`、CI step、四处版本、版本历史顺序、状态文件、LEARNING 回流、提交前清单——根治 FM-R2-07 的累计型文档滞后。
+另有 `scripts/rot.py verify`（**V0–V10**）：把 README 发布契约第 5 条「全量文档差集核对」变成程序检查，逐项比对 `tests/`、`scripts/`、CI step、四处版本、版本历史顺序、状态文件、LEARNING 回流、提交前清单——根治 FM-R2-07 的累计型文档滞后；V0 额外校验统一 CLI 的慢门禁超时策略未被削弱。配 `scripts/rot.py selftest`（4 组注入式负例）证明 V0 会红。
 
 > 统一入口：`python3 scripts/rot.py check` 一条命令跑完 22 条门禁（18 静态 + 4 结构），`rot.py verify` 单独跑文档差集（CI 第 23 个门禁 step）；逐条独立取 rc，把**检查对象 / 结果 / rc / 耗时 / 证据尾行**落盘到 `.harness-runs/verify/latest.json`。`--fast` 跳过的项标「尚未验证」，**不计入通过**。
 
@@ -229,6 +229,7 @@ research-orchestration-team/
 - **v2.5.5** (2026-11-10)：R7 状态文件健壮性审计。11 组状态文件实验实锤 **2 个 P0 + 3 个 P1**：① **半损坏状态文件 → 裸 Traceback**——`load_state` 原先只做 JSON 解析层校验，文件是合法 JSON 但缺关键字段时（被外部改写 / 旧版本状态文件 / 部分写盘后编辑），下游子命令直接 `state["phase"]` / `state["status"]` → 裸 `KeyError`，实测 **13 组子命令 × 损坏形态组合全部命中**；② **缺 status 时 budget/fail 假绿**——rc=0 放行，把「未知状态」静默当成 running 继续写盘，等于凭空替主理人断言状态；③ **budget 触顶文案宣称「熔断」实为告警**——registry 明确 turns/tokens 是告警层、只有 max_time/failures 才是终态熔断层，原文案会让调用方误以为 status 已变 aborted（FM-R2-03 同族复发）；④ **检查点编号与阶段序号解耦**——协议 §3 约定 cp 编号 = 阶段序号，原实现只校验形态，编号可乱写 / 可复用 / marker 因 `if not marker.exists()` 永不重写，三者都会破坏 protocol_check 的 HANDOFF 跨层校验；⑤ **SIGKILL 崩溃留下孤儿 tmp**——`_state.json.tmp.<pid>` 永久残留，反复崩溃即无界堆积的磁盘泄漏。修复：新增结构层校验 `_validate_state_shape`（缺字段 / 类型非法 / 取值非法一律 rc=3 且逐条指名字段，**不静默重建**）、触顶文案改为「告警层」、`advance` 强制 cp 编号 = turn 对应编号（乱写与复用均 rc=1 拒绝）+ marker 每次重写、写盘前清理**已确认孤儿**的 tmp（`os.kill(pid,0)` 探测持有进程已死才删）。新增 `tests/test_state_file_robustness.py` 12 条锁定（4 组注入破坏实锤证明会红）；CI 门禁 step 17→18。
 - **v2.5.6** (2026-11-10)：发布介质自洽性补丁（纯文档，运行时与门禁行为无变更）。R3–R7 连续五轮快速迭代后，已发布的 `rot-v2.5.5.tar.gz` 内 README / CONTRIBUTING 的门禁计数、结构树与提交前清单滞后于仓库实际（结构树缺 R5/R6/R7 三套测试、集成仿真 `9/9` 与协议负例 `13 条` 两处自相矛盾、版本历史段逆序）；`LEARNING.md` 的 Task 记录停在 R3；状态文件 §10.1 仍写「R7 起始状态」且 §10 章节编号错乱。按发布纪律「已发布 tag 不重写、已发布资产不重打包」，不改 v2.5.5，改发本补丁版：文档口径全量对齐、示例资产名去掉版本字面量（根治复发点）、提交前必跑清单补齐 18 个门禁 step 对应命令、状态文件推进到 R8 入口、LEARNING 补 R4–R7 四轮回流并新增 FM-R2-07。详见 [CHANGELOG.md](./CHANGELOG.md)。
 - **v2.5.7** (2026-11-10)：从「操作说明驱动」升级为**结构清晰、工具可靠、结果可验证、能持续自我改进**的工作系统。新增一页 [`WORKMAP.md`](./WORKMAP.md) + 机器真值源 `workmap.json`（任务/阶段/依赖/验收/人工确认点）；统一 CLI `scripts/rot.py`（check / verify / sample / feedback / roadmap / report），一条命令跑完 22 条门禁并落盘「检查对象·结果·证据」结构化报告；`workmap_check.py` W1–W12 与 `sample_check.py` A1–A9 把原先只有文字的验收条件转成会红的自动检查；3 个真实任务样例追加 `assertions` 字段并获得执行器；`feedback/` 层建立认可样例、单次要求 vs 长期规则区分、转化优先级与 24 条规则上限；`rot.py verify` 把发布契约第 5 条脚本化（V1–V10）。原有三层门禁、state_io、topic_scoring、人设注入与失败回流判据**全部保留**，运行时行为无变更。详见 [CHANGELOG.md](./CHANGELOG.md)。
+- **v2.5.8** (2026-11-12)：统一 CLI 可靠性补丁（工具修复，运行时/协议/评分/状态机行为零变更）。实测 `rot.py check` 全量串行时 `manifest_check_selftest` 因 IO 竞争撞上统一 240s 超时 → 被判 `rc=137`「尚未验证」→ 汇总误报 NOT GREEN；单独执行同一脚本 rc=0 / 30 条全过（138s），证明是**阈值误伤而非门禁失效**。修复：慢门禁改用独立超时（`SLOW_TIMEOUTS` 900s / `DEFAULT_TIMEOUT` 240s），**超时依然不算通过**的语义不变。补 `rot.py selftest` 4 组注入式负例 + `rot.py verify` V0 静态策略校验，挂在既有 CI 文档差集 step 内（门禁 step 仍 23 / 总 29）。改造后 `rot.py check` **22/22 ALL GREEN**。详见 [CHANGELOG.md](./CHANGELOG.md)。
 
 ## 安装方式（四种并存）
 
@@ -341,7 +342,8 @@ claude --plugin-dir ./research-orchestration-team
 ```bash
 # 1. 统一入口（推荐）：一条命令跑完 22 条门禁并落盘结构化证据
 python3 scripts/rot.py check       # 22 条门禁 + 结构化证据
-python3 scripts/rot.py verify      # 文档差集 V1–V10
+python3 scripts/rot.py verify      # 文档差集 V0–V10
+python3 scripts/rot.py selftest    # 超时策略注入式负例
 python3 scripts/rot.py feedback    # 反馈记录 F1–F8
 
 # 2. 在 canonical 仓库推送

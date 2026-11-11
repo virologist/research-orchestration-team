@@ -87,7 +87,8 @@ python3 scripts/sample_check.py --self-test
 # 22. 反馈记录完整性 / 规则膨胀 / 认可样例状态（F1–F8）
 python3 scripts/rot.py feedback
 
-# 23. 文档 ↔ 仓库实际 全量差集（V1–V10，发布契约第 5 条的程序化实现）
+# 23. 文档 ↔ 仓库实际 全量差集（V0–V10，发布契约第 5 条的程序化实现）
+python3 scripts/rot.py selftest
 python3 scripts/rot.py verify
 ```
 

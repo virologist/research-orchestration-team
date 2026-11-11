@@ -1,6 +1,6 @@
 {
   "name": "research-orchestration-team",
-  "version": "2.5.7",
+  "version": "2.5.8",
   "description": "Eight-agent cross-disciplinary research orchestration team with ACP communication protocol, five-role matrix (orchestrator/analyzer/executor/reviewer/integrator), L1-L5 conflict arbitration, harness-compliant runtime, Orchestrator Pattern routing, Loop hard-stop (max_turns/time/token), per-step verification, atomic subagent split (biomed/ai/general), and Ralph Loop cross-session memory. For Claude Code / WorkBuddy / Claude Desktop.",
   "author": {
     "name": "TZUVet",

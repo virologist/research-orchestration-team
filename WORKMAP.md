@@ -2,7 +2,7 @@
 
 > 一页看懂「做什么 → 走哪几步 → 依赖什么 → 凭什么算做完」。
 > 机器真值源：[`workmap.json`](./workmap.json)；本文档是人读视图，两者由 `scripts/workmap_check.py` 双向校验。
-> 版本 `2.5.7` · 2026-11-10。本图只描述**任务如何被完成与验收**，不替代 `agents/` 的角色定义与 `references/agent-protocol.md` 的通信协议。
+> 版本 `2.5.8` · 2026-11-12。本图只描述**任务如何被完成与验收**，不替代 `agents/` 的角色定义与 `references/agent-protocol.md` 的通信协议。
 
 ## 一、四种结果状态（禁止混标）
 

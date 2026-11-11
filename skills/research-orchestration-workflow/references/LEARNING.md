@@ -23,6 +23,15 @@
 
 > 说明：以下 v2.2.0 补记的 5 条为**工程内证**——证据来源为本仓库真实 commit（short hash）、`CHANGELOG.md`、`README.md 版本历史` 与脚本 / 文件路径，不引用外部 DOI / PMID / URL；`observability` 因历史未逐任务采集，统一如实标注「未采集」，不自造数值。
 
+### [2026-11-12] / team-lead / v2.5.8 统一 CLI 超时假失败（工具修复，不计入再诊断轮次）
+
+- **实证**：全量 `rot.py check` 报 `21 通过 / 0 未通过 / 1 尚未验证` → NOT GREEN；`manifest_check_selftest` 在批量上下文 `rc=137 TIMEOUT >240s`。按 FM-R1-08（rc≠0/1 先查命令/路径/参数）不归因为门禁失效；用**正确脚本名**单独复跑 → `rc=0 / 30 条全过 / 138s`（先误跑 `manifest_check.py --self-test` 得 rc=2，属参数错）。结论：**统一 240s 阈值在串行 IO 竞争下误伤慢门禁**。
+- **转化（优先级 1 工具修复，零新增文字规则）**：`SLOW_TIMEOUTS` 给两条慢 selftest 各 900s，`DEFAULT_TIMEOUT` 保持 240s；`cmd_check` 按门禁名选超时。**「超时不算通过」「--fast 跳过不算通过」两条语义红线原样保留**。
+- **防复发**：`rot.py selftest` 4 组注入式负例（清空超时表 / 降回默认阈值 / 超时标成通过 / 跳过标成通过）+ 未注入正例；`rot.py verify` 新增 V0 AST 静态策略校验，挂在既有 CI `verify` step 内，`- name:` 数不变（23 门禁 / 29 总 step 口径不动）。
+- **踩坑回流**：① 断言全文扫被另一分支合法的「尚未验证」掩护 → 缩到分支区块取文（FM-R1-04 同族）；② 注入锚点命中自检 cases 自身字面量 → 切掉自检函数并用行级正则定位，杜绝静默 no-op 误报。两者都是本项目已登记的失败模式**再次复发**，说明登记文字不足以防复发，必须落成程序检查。
+- **回归对照**：改造前 NOT GREEN → 改造后 `22/22 ALL GREEN`（manifest selftest 157.0s / rc=0，harness selftest 98.7s / rc=0 未退化）；verify V0–V10 全绿；selftest 4/4 精确命中。运行时/协议/评分/状态机行为零变更。
+- **下一步**：R8 仍从 Phase A 再诊断起步；#22 / #28 属设计裁决须先确认。
+
 ### [2026-11-10] / team-lead / v2.5.7 工作系统升级（用户发起）
 
 - **决策**：

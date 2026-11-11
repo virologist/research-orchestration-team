@@ -7,6 +7,7 @@ rot.py — Research Orchestration Toolkit（科研编排团统一 CLI 入口）
 
     python3 scripts/rot.py check      全部门禁逐条独立 rc + 证据报告
     python3 scripts/rot.py verify     文档 ↔ 仓库实际 全量差集（发布契约第 5 条脚本化）
+    python3 scripts/rot.py selftest   超时策略注入式负例自测
     python3 scripts/rot.py sample     对真实任务产出跑 A1–A9 断言
     python3 scripts/rot.py feedback   反馈记录完整性 / 规则膨胀 / 认可样例状态
     python3 scripts/rot.py roadmap    打印工作地图摘要
@@ -23,6 +24,7 @@ rot.py — Research Orchestration Toolkit（科研编排团统一 CLI 入口）
 from __future__ import annotations
 
 import argparse
+import ast
 import hashlib
 import json
 import re
@@ -83,9 +85,66 @@ GATES: list[tuple[str, list[str], int]] = [
     ("feedback_check", ["scripts/rot.py", "feedback"], 0),
 ]
 
+# 慢门禁单独给更长超时：批量串行时 IO 竞争会让耗时长命令撞上默认阈值，
+# 产生「超时假失败」（实测 manifest_check_selftest 单独 138s / 批量 240s+ 被判 rc=137）。
+# 超时依然不算通过（rc=137 → 尚未验证），只是不再因阈值过紧误伤慢门禁。
+SLOW_TIMEOUTS = {"manifest_check_selftest": 900, "harness_eval_selftest": 900}
+DEFAULT_TIMEOUT = 240
+SLOW_GATES = {"manifest_check_selftest", "harness_eval_selftest"}
 
-def run_cmd(root: Path, args: list[str], timeout: int = 240) -> dict:
+
+def timeout_policy_errors(source: str | None = None) -> list[str]:
+    """静态校验「慢门禁超时策略」未被削弱。source 可注入，供 --self-test 用。
+
+    只做 AST 字面量读取与语义断言，零 IO、不执行被测代码；返回问题列表，空 = 合格。
+    """
+    src = source if source is not None else Path(__file__).read_text(encoding="utf-8")
+    try:
+        tree = ast.parse(src)
+    except SyntaxError as e:
+        return [f"源码无法解析: {e}"]
+    consts: dict = {}
+    for node in tree.body:
+        if isinstance(node, ast.Assign):
+            for t in node.targets:
+                if isinstance(t, ast.Name) and t.id in ("SLOW_TIMEOUTS", "DEFAULT_TIMEOUT"):
+                    try:
+                        consts[t.id] = ast.literal_eval(node.value)
+                    except ValueError:
+                        return [f"{t.id} 不是字面量常量，无法静态校验"]
+    errs: list[str] = []
+    default = consts.get("DEFAULT_TIMEOUT")
+    slow = consts.get("SLOW_TIMEOUTS")
+    if not isinstance(default, int) or default < 240:
+        errs.append("DEFAULT_TIMEOUT 缺失或低于 240s 基线")
+    if not isinstance(slow, dict) or not slow:
+        errs.append("SLOW_TIMEOUTS 缺失或为空（慢门禁会重新撞上统一阈值）")
+    elif SLOW_GATES - set(slow):
+        errs.append(f"慢门禁未被超时策略覆盖：{sorted(SLOW_GATES - set(slow))}")
+    elif isinstance(default, int) and any(v <= default for v in slow.values()):
+        errs.append("慢门禁超时未大于 DEFAULT_TIMEOUT（批量 IO 竞争下仍会假失败）")
+    # 语义红线：超时与 --fast 跳过都不得计为通过。
+    # 断言缩到目标分支区块取文（全文扫会被另一分支的合法「尚未验证」掩护，FM-R1-04 同族）；
+    # 用行级正则锚定，避免命中本函数/自检 cases 里的同名字符串字面量（锚点命中自身定义）。
+    def branch(start_pat: str, end_pat: str) -> str:
+        m = re.search(start_pat, src, re.M)
+        if not m:
+            return ""
+        e = re.search(end_pat, src[m.end():], re.M)
+        return src[m.start(): m.end() + (e.start() if e else 0)]
+
+    to_blk = branch(r"^[ \t]+except subprocess\.TimeoutExpired:[ \t]*$", r"^def ")
+    if '"status": "尚未验证"' not in to_blk:
+        errs.append("超时分支不再标「尚未验证」（可能把超时当成通过）")
+    fast_blk = branch(r"^[ \t]+if fast and name in slow:[ \t]*$", r"^[ \t]+continue[ \t]*$")
+    if '"status": "尚未验证"' not in fast_blk or "不计入通过" not in fast_blk:
+        errs.append("--fast 跳过项不再标「尚未验证」（可能把跳过当成通过）")
+    return errs
+
+
+def run_cmd(root: Path, args: list[str], timeout: int | None = None) -> dict:
     """执行一条命令，独立取 rc，返回结构化证据。"""
+    timeout = DEFAULT_TIMEOUT if timeout is None else timeout
     rel = args[0]
     f = root / rel
     if not f.is_file():
@@ -125,7 +184,7 @@ def cmd_check(root: Path, fast: bool = False, json_only: bool = False) -> int:
             if not json_only:
                 print(f"[SKIP] {name:<30} 尚未验证（--fast）")
             continue
-        r = run_cmd(root, args)
+        r = run_cmd(root, args, timeout=SLOW_TIMEOUTS.get(name, DEFAULT_TIMEOUT))
         r.update({"id": name, "expected_rc": expected})
         r["status"] = "自动验证通过" if r["rc"] == expected else "自动验证未通过"
         if r["rc"] not in (0, 1) and r["rc"] is not None:
@@ -158,11 +217,50 @@ def ck_line(lines: list[str], code: str, cond: bool, msg: str) -> bool:
     return cond
 
 
+def cmd_selftest(root: Path) -> int:
+    """注入式负例：破坏统一 CLI 的超时策略，断言静态校验逐条判红。"""
+    full = Path(__file__).read_text(encoding="utf-8")
+    # 切掉自检函数自身再注入，否则锚点可能命中 cases 里的字面量 → 静默 no-op 误报门禁失效。
+    # 用行级正则定位（字符串字面量中的同名片段不处于行首，不会被命中）。
+    m1 = re.search(r"^def cmd_selftest\(", full, re.M)
+    m2 = re.search(r"^def cmd_verify\(", full, re.M)
+    src = (full[:m1.start()] + full[m2.start():]) if m1 and m2 and m2.start() > m1.start() else full
+    cases = [
+        ("清空慢门禁超时表", 'SLOW_TIMEOUTS = {"manifest_check_selftest": 900, "harness_eval_selftest": 900}',
+         "SLOW_TIMEOUTS = {}", "SLOW_TIMEOUTS 缺失或为空"),
+        ("慢门禁超时降到默认阈值", '"manifest_check_selftest": 900',
+         '"manifest_check_selftest": 240', "未大于 DEFAULT_TIMEOUT"),
+        ("超时被当成通过", '"status": "尚未验证", "evidence": f"TIMEOUT',
+         '"status": "自动验证通过", "evidence": f"TIMEOUT', "超时分支不再标「尚未验证」"),
+        ("--fast 跳过被当成通过", '"evidence": "--fast 跳过（未执行，不计入通过）"',
+         '"evidence": "--fast 已通过"', "--fast 跳过项不再标「尚未验证」"),
+    ]
+    print("=== rot.py selftest · 超时策略注入式负例 ===")
+    ok = True
+    for label, anchor, mutated, expect in cases:
+        if anchor not in src:
+            print(f"[BAD] {label:<24} 锚点未命中（注入静默 no-op）")
+            ok = False
+            continue
+        errs = timeout_policy_errors(src.replace(anchor, mutated, 1))
+        hit = any(expect in e for e in errs)
+        print(f"[{'OK ' if hit else 'BAD'}] {label:<24} 期望命中「{expect}」；实际 {errs[:2]}")
+        ok &= hit
+    base = timeout_policy_errors(src)
+    ok &= not base
+    print(f"[{'OK ' if not base else 'BAD'}] 未注入的正例应零错误；实际 {base}")
+    print("SELFTEST: " + ("ALL GREEN" if ok else "FAILED"))
+    return 0 if ok else 1
+
+
 def cmd_verify(root: Path) -> int:
     """文档 ↔ 仓库实际 全量差集核对：把 README 发布契约第 5 条变成程序检查。"""
     print("=== rot.py verify · 全量文档差集核对（FM-R2-07 根治项）===")
     lines: list[str] = []
     ok = True
+    tp_errs = timeout_policy_errors()
+    ok &= ck_line(lines, "V0", not tp_errs,
+                  f"统一 CLI 慢门禁超时策略未被削弱 {tp_errs or 'OK'}")
     rd = (root / "README.md").read_text(encoding="utf-8")
     cb = (root / "CONTRIBUTING.md").read_text(encoding="utf-8")
     ch = (root / "CHANGELOG.md").read_text(encoding="utf-8")
@@ -333,6 +431,7 @@ def main() -> int:
     c.add_argument("--fast", action="store_true", help="跳过两条耗时 selftest（标尚未验证，不计通过）")
     c.add_argument("--json-only", action="store_true", help="只落盘，不打印明细")
     sub.add_parser("verify", help="文档 ↔ 仓库实际 全量差集核对")
+    sub.add_parser("selftest", help="统一 CLI 超时策略注入式负例自测")
     s = sub.add_parser("sample", help="对真实任务产出跑 A1–A9 断言")
     s.add_argument("--run-dir", required=True)
     s.add_argument("--json", dest="json_out")
@@ -348,6 +447,8 @@ def main() -> int:
         return cmd_check(root, fast=a.fast, json_only=a.json_only)
     if a.cmd == "verify":
         return cmd_verify(root)
+    if a.cmd == "selftest":
+        return cmd_selftest(root)
     if a.cmd == "feedback":
         return cmd_feedback(root)
     if a.cmd == "roadmap":

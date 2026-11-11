@@ -156,7 +156,7 @@ m.review_decision(old, new, risks=["中"])  # → (维持/升档/降档/止损, 
 | 三处用户确认检查点 CK1/CK2/CK3 | `workmap.json` 登记 `human_gates`，`rot.py roadmap` 列出；**程序不代替确认** |
 
 - **工作地图**：`WORKMAP.md`（人读，一页）+ `workmap.json`（机器真值源），由 `scripts/workmap_check.py` W1–W12 双向校验。
-- **统一 CLI**：`python3 scripts/rot.py check`（22 条门禁 + 结构化证据）、`verify`（文档差集 V1–V10）、`sample --run-dir <产出目录>`（对真实任务产出跑断言）、`feedback`（反馈 F1–F8）、`roadmap`、`report`。
+- **统一 CLI**：`python3 scripts/rot.py check`（22 条门禁 + 结构化证据）、`verify`（文档差集 V0–V10）、`selftest`（超时策略 4 组注入式负例）、`sample --run-dir <产出目录>`（对真实任务产出跑断言）、`feedback`（反馈 F1–F8）、`roadmap`、`report`。
 - **状态标注**：自动验证通过 / AI 评估通过 / 人工确认通过 / 尚未验证，**禁止混标**；没有证据不宣称验证通过。
 - **反馈**：按 `feedback/RULES.md` 的优先级（工具修复 > 程序检查 > 认可样例 > 文字规则）转化，长期规则上限 24 条。
 - 语义质量、文献真实性、价值取舍仍由人工复核；`sample_check.py` 只检查结构，不证明结论正确。

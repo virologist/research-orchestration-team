@@ -258,5 +258,7 @@ jobs:
       - name: Feedback records and rule cap (F1-F8)
         run: python3 scripts/rot.py feedback
 
-      - name: Documentation delta verification (V1-V10)
-        run: python3 scripts/rot.py verify
+      - name: Documentation delta verification (V0-V10)
+        run: |
+          python3 scripts/rot.py selftest
+          python3 scripts/rot.py verify
