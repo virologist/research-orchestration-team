@@ -65,10 +65,12 @@ P1 FREEZE ──┬──> P2 IDENTIFY ──> P3 COLLAPSE ──┐
 ## 五、一条命令跑完检查
 
 ```bash
-python3 scripts/rot.py check      # 18 条静态门禁 + 3 条结构检查，逐条独立 rc，证据落盘
-python3 scripts/rot.py verify     # 文档 ↔ 仓库实际 全量差集（把发布契约第 5 条脚本化）
+python3 scripts/rot.py check      # 18 条静态门禁 + 4 条结构检查，逐条独立 rc，证据落盘
+python3 scripts/rot.py verify     # 文档 ↔ 仓库实际 全量差集 V0–V10（发布契约第 5 条脚本化；V0 静态策略校验）
 python3 scripts/rot.py sample --run-dir <产出目录>   # 对真实任务产出跑 A1–A9 断言
 python3 scripts/rot.py feedback  # 反馈记录完整性 / 规则膨胀 / 认可样例状态
+python3 scripts/rot.py selftest  # 4 组注入负例（证明 V0 会红）
+python3 scripts/rot.py report    # 打印验证报告
 python3 scripts/rot.py roadmap   # 打印本图摘要
 ```
 

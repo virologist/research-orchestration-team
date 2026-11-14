@@ -24,6 +24,8 @@
 # 注意：此前仅靠用户全局 ~/.config/git/ignore 忽略，
 #       换机器 clone 后 *.pyc 会变成未跟踪文件，故在此显式声明。
 __pycache__/
+# .pytest_cache/ 显式声明：不依赖 pytest 自动生成的嵌套 .pytest_cache/.gitignore 自忽略
+.pytest_cache/
 *.py[cod]
 *.egg-info/
 .venv/

@@ -96,12 +96,13 @@ research-orchestration-team/
 │   ├── test_lead_source_of_truth.py                # 主理人双重事实源一致性 · 6 条
 │   ├── test_state_runtime_sequencing.py            # 运行时序 / 终态污染 / 观测一致性 · 8 条
 │   └── test_state_file_robustness.py               # 状态文件健壮性 / cp 编号 / 孤儿 tmp · 12 条
-├── avatars/                                         # 8 名成员头像 + 团队头像（随 git 分发）
+├── avatars/                                         # 10 张（8 成员 + 团队 + 保留的历史 domain-expert.png），随 git 分发
 ├── docs/
 │   ├── REDTEAM-REPORT.md                           # 红队审查报告（5 维度 · 缺陷 · 回归证据）
 │   ├── arbitration-L4L5-live-test.md               # 冲突仲裁 L4/L5 真实团队实测记录
 │   ├── harness-eval-report-v2.0.2.md               # Harness 改造前基线（0/12）
-│   └── harness-iteration-loop.md                   # Harness 迭代闭环状态文件 · 断点续跑 SSOT
+│   ├── harness-iteration-loop.md                   # Harness 迭代闭环状态文件 · 断点续跑 SSOT
+│   └── VERIFICATION-REPORT.md                  # v2.5.7 交付验证记录（四种状态标注）
 ├── feedback/                                        # ★ 反馈层（单次要求 / 长期规则 / 认可样例）
 │   ├── RULES.md                                    # 转化优先级 · 晋升条件 · 规则上限 24 条
 │   ├── RECORDS.jsonl                               # 结构化反馈记录（机器真值源）
@@ -318,6 +319,7 @@ claude --plugin-dir ./research-orchestration-team
 | [docs/arbitration-L4L5-live-test.md](./docs/arbitration-L4L5-live-test.md) | 冲突仲裁协议 §7 第 4/5 层（升级主理人 / 用户裁决）的真实团队实测记录 |
 | [docs/harness-eval-report-v2.0.2.md](./docs/harness-eval-report-v2.0.2.md) | Harness 改造前基线快照：v2.0.2 在 12 项设计模式上 0/12 符合 |
 | [docs/harness-iteration-loop.md](./docs/harness-iteration-loop.md) | Harness 迭代进化状态文件：每轮「诊断 → 构建 → 测试&debug → 再诊断」闭环的断点续跑单一事实源 |
+| [docs/VERIFICATION-REPORT.md](./docs/VERIFICATION-REPORT.md) | v2.5.7 交付验证记录：自动验证 / AI 评估 / 人工确认 / 尚未验证 四状态不混标 |
 
 ## §5 · OneDrive 镜像同步（云备份契约）
 

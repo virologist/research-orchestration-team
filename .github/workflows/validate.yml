@@ -24,6 +24,12 @@ on:
       # 在列），漏掉会导致改它不触发 CI。
       - 'CONTRIBUTING.md'
       - 'settings.json'
+      # W1–W12 / feedback F1–F8 校验的是工作地图双源与反馈记录；只改这些文件
+      # 若不在 paths 里，CI 不触发，等于对应门禁形同虚设（同 tests/、vendor/ 先例）。
+      - 'workmap.json'
+      - 'WORKMAP.md'
+      - 'feedback/**'
+      - 'test-prompts.json'
   pull_request:
     branches: [master, main]
   workflow_dispatch:

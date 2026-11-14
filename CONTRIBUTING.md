@@ -11,10 +11,10 @@
 ## 提交前必跑（强制 CI）
 
 ```bash
-# 推荐：一条命令跑完 22 条门禁并落盘「检查对象/结果/证据」，再单独做文档差集与反馈检查。
+# 推荐：一条命令跑完 22 条门禁（含第 22 条 feedback_check）并落盘证据；verify 为文档差集，须单跑。
 python3 scripts/rot.py check
 python3 scripts/rot.py verify
-python3 scripts/rot.py feedback
+python3 scripts/rot.py feedback  # 可选：仅单独查看反馈报告时使用，check 已覆盖
 
 # CI 共 23 个门禁 step（18 静态 + 4 结构 + 1 文档差集；另有 6 个平台 step 不计入），
 # 以下按 workflow 顺序给出本地等价命令。
@@ -51,8 +51,69 @@ python3 scripts/routing_eval_selftest.py
 # 10. 联邦防漂移 V1–V6
 python3 tests/test_vendor_core.py
 
-# 11–12. State IO lifecycle smoke / 熔断路径：这两段是 workflow 内嵌脚本（heredoc），
-#        本地等价命令见 .github/workflows/validate.yml 同名 step，直接复制其命令块执行。
+# 11–12. State IO lifecycle smoke / 熔断路径：等价于 .github/workflows/validate.yml 同名 step，
+#        断言集合一致（八阶段 + 8 检查点 + 断点续跑 + 预算 + finish；fail x5 熔断 /
+#        advance 拒绝 / finish rc=0 且不改写终态）。可直接粘贴执行。
+
+# 11. 八阶段 + 8 检查点 + 断点续跑 + 预算 + finish
+set -e
+S=skills/research-orchestration-workflow/scripts/state_io.py
+W=$(mktemp -d)
+python3 "$S" init --task-id ci-smoke --workspace "$W" >/dev/null
+i=1
+for P in FREEZE IDENTIFY COLLAPSE CLARIFY ALIGN EXECUTE REVIEW NEXT; do
+  CP=$(printf 'cp-%03d' "$i")
+  python3 "$S" advance --task-id ci-smoke --workspace "$W" \
+    --phase "$P" --checkpoint "$CP" --note "CI $P" >/dev/null
+  i=$((i + 1))
+done
+python3 "$S" resume --task-id ci-smoke --workspace "$W"
+python3 "$S" budget --task-id ci-smoke --workspace "$W" --turns 8 --tokens 8000
+python3 "$S" finish --task-id ci-smoke --workspace "$W"
+test -f "$W/.harness-runs/ci-smoke/_state.json"
+N=$(find "$W/.harness-runs/ci-smoke/checkpoints" -name 'cp-*.md' | wc -l | tr -d ' ')
+test "$N" -eq 8
+echo "✅ state_io 八阶段 + 8 检查点 + 断点续跑 + 预算 + finish 全链路通过"
+
+# 12. 熔断（circuit breaker）：fail x5 → status=aborted / reason=circuit_breaker；
+#     熔断后 advance 拒绝；finish rc=0 且不改写终态
+set -e
+S=skills/research-orchestration-workflow/scripts/state_io.py
+W=$(mktemp -d)
+python3 "$S" init --task-id ci-cb --workspace "$W" >/dev/null
+for i in 1 2 3 4 5; do
+  python3 "$S" fail --task-id ci-cb --workspace "$W" --reason "fail-$i" >/dev/null
+done
+ST="$W/.harness-runs/ci-cb/_state.json"
+python3 - "$ST" <<'PYEOF'
+import json, sys
+st = json.load(open(sys.argv[1]))
+assert st["status"] == "aborted", f'期望 aborted，实得 {st["status"]}'
+assert st["abort_reason"] == "circuit_breaker", f'期望 circuit_breaker，实得 {st["abort_reason"]}'
+print("✅ fail x5 → 熔断终态（status=aborted, reason=circuit_breaker）")
+PYEOF
+set +e
+python3 "$S" advance --task-id ci-cb --workspace "$W" \
+  --phase FREEZE --checkpoint cp-001 --note post-abort >/dev/null 2>&1
+RC_A=$?
+set -e
+if [ "$RC_A" -eq 0 ]; then
+  echo "❌ 熔断后 advance 被放行（应拒绝 rc!=0）"; exit 1
+fi
+echo "✅ 熔断后 advance 拒绝（rc=$RC_A）"
+set +e
+python3 "$S" finish --task-id ci-cb --workspace "$W" >/dev/null 2>&1
+RC_F=$?
+set -e
+if [ "$RC_F" -ne 0 ]; then
+  echo "❌ 熔断后 finish 应仍 rc=0（归档收尾允许），实际 rc=$RC_F"; exit 1
+fi
+python3 - "$ST" <<'PYEOF'
+import json, sys
+st = json.load(open(sys.argv[1]))
+assert st["status"] == "aborted", "finish 不得改写熔断终态"
+print("✅ 熔断后 finish rc=0 且 status 仍 aborted（熔断信号未被抹掉）")
+PYEOF
 
 # 13. 编排层四项硬上限语义锁定（4 条）：turns/tokens 触顶=告警、max_time/failures=终态熔断
 python3 tests/test_state_ceilings.py
@@ -74,6 +135,11 @@ python3 skills/research-orchestration-workflow/scripts/topic_scoring.py \
   --topic test --originality 11 --feasibility 7 --value-density 9 \
   --data-availability 7 --competition 6 --cognition 8 --resource-fit 7 --sustainability 7
 # 期望：退出码 1 + "评分超出有效范围"
+python3 skills/research-orchestration-workflow/scripts/topic_scoring.py --topic miss --originality 8
+# 期望：退出码 2（argparse 缺维）
+python3 skills/research-orchestration-workflow/scripts/topic_scoring.py --topic healthy --originality 8 --feasibility 7 \
+  --value-density 9 --data-availability 7 --competition 6 --cognition 8 --resource-fit 7 --sustainability 7
+# 期望：退出码 0
 
 # 19. 工作地图一致性 W1–W12（任务/阶段/依赖/工具/验收/地图与样例不漂移）
 python3 scripts/workmap_check.py -v
