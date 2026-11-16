@@ -2,6 +2,12 @@
 
 所有重要变更按版本倒序记录。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
+## [Unreleased]
+
+> **宿主接管看门狗**（程序检查，R2 修复 2026-11-16）。运行时、协议、评分、状态机行为**零变更**；CI 门禁 step 数量**不变**。
+
+宿主（WorkBuddy ExpertPluginService）自 2026-11-15 起分钟级反复删除 Team 型包根 `settings.json`（跨 11-15 / 11-16 实测 5+ 次），每次都让 `manifest_check` 的 C12 判红并连锁导致 `rot.py check` 19/22 或 21/22 NOT GREEN。本次落成 A2 类程序检查器修复：新增 `scripts/host_guard.py`（detect / repair / report 三段式，git HEAD 恢复优先、direct_write 回退，事件证据 JSONL 落盘 `.harness-runs/host_guard.log`，60 秒冷却防回灌日志爆炸，`--self-test` 4 用例）；`rot.py check` 前置接入（guard 故障不阻断门禁）；`manifest_check.py` C12 缺失 / 损坏时先自愈再判红；`manifest_check_selftest.py` N18 健壮化（`missing_ok` + 降级态语义拆分）并新增 N31 宿主接管端到端用例（负例总数 30 → 31）；`test_lead_source_of_truth.py` 基线副本从真仓 git HEAD 恢复 settings.json（M1 不再被宿主删除误伤）。
+
 ## [2.5.8] - 2026-11-12
 
 > **统一 CLI 可靠性补丁**（工具修复）。运行时、协议、评分、状态机行为**零变更**；CI 门禁 step **仍为 23**（平台 6，总 29），无新增 step。

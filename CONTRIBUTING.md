@@ -156,6 +156,10 @@ python3 scripts/rot.py feedback
 # 23. 文档 ↔ 仓库实际 全量差集（V0–V10，发布契约第 5 条的程序化实现）
 python3 scripts/rot.py selftest
 python3 scripts/rot.py verify
+
+# 24. 宿主接管自检（只检测不修复；宿主反复删除包根 settings.json 的看门狗）
+python3 scripts/host_guard.py --check
+# 期望 rc=0（健康态）；rc=2 表示检出接管/损坏态，去掉 --check 跑一次即自动修复
 ```
 
 > `scripts/manifest_check.py` 的校验项为 C1–C13，全部为**硬失败**（`rc=1`）。

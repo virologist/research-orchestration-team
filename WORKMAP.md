@@ -76,6 +76,8 @@ python3 scripts/rot.py roadmap   # 打印本图摘要
 
 每次 `check` 生成结构化报告（检查对象 / 结果 / rc / 耗时 / 证据尾行）到 `.harness-runs/verify/`，内容变化后重跑即可比对。
 
+结构检查另含 `scripts/host_guard.py`：宿主接管看门狗——检测宿主反复删除的包根 settings.json → 自动修复（git 优先，回退直写）→ 证据 JSONL 落盘 `.harness-runs/host_guard.log`；`--self-test` 4 用例（健康不误报 / 删除判接管 / 修复与 HEAD 全等 / 损坏判损坏）。`rot.py check` 前置接入，C12 缺失时也会先自愈再判红。
+
 ## 六、反馈如何进入下一轮
 
 错误按此优先级转化，而不是继续加提示词：**工具修复 → 程序检查 → 认可样例 → 文字规则**。

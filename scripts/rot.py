@@ -166,6 +166,37 @@ def run_cmd(root: Path, args: list[str], timeout: int | None = None) -> dict:
                 "cmd": "python3 " + " ".join(args)}
 
 
+def _run_host_guard(root: Path, json_only: bool = False) -> None:
+    """check 前置接入宿主接管看门狗（R2 修复，2026-11-16）。
+
+    背景：宿主（WorkBuddy ExpertPluginService）会分钟级反复删除包根
+    settings.json（11-15 / 11-16 跨会话实测 5+ 次），C12 判红连锁导致
+    19/22 或 21/22 NOT GREEN。此处先 detect/repair/report，再跑门禁。
+
+    加载纪律：以路径加载 host_guard.py（runpy），不假设包结构；guard
+    自身故障（文件缺失 / 语法错误 / 运行异常）只打印警告不阻断 check
+    ——修复工具不能变成新的单点故障。GATES 列表、超时策略、输出格式
+    均不受本函数影响。
+    """
+    guard_path = root / "scripts" / "host_guard.py"
+    if not guard_path.is_file():
+        if not json_only:
+            print("[host-guard] 警告：scripts/host_guard.py 不存在，跳过接管预检")
+        return
+    try:
+        import runpy
+        guard = runpy.run_path(str(guard_path))
+        rc, msg = guard["run_guard"](root)
+        if not json_only:
+            print(msg)
+            if rc == 1:
+                print("[host-guard] 警告：settings.json 修复失败，后续 C12 可能判红")
+    except Exception as exc:  # guard 故障不得阻断 check 主流程
+        if not json_only:
+            print(f"[host-guard] 警告：看门狗加载/执行失败（{type(exc).__name__}: {exc}），"
+                  "继续执行门禁")
+
+
 def cmd_check(root: Path, fast: bool = False, json_only: bool = False) -> int:
     report = {"schema": "rot-check-report/v1",
               "timestamp": datetime.now().isoformat(timespec="seconds"),
@@ -173,6 +204,8 @@ def cmd_check(root: Path, fast: bool = False, json_only: bool = False) -> int:
               "mode": "fast" if fast else "full", "items": [], "summary": {}}
     if not json_only:
         print("=== rot.py check · 全仓门禁逐条独立执行 ===")
+    # 前置宿主接管预检：settings.json 被宿主删除时先自愈，避免 C12 连锁判红
+    _run_host_guard(root, json_only=json_only)
     slow = {"manifest_check_selftest", "harness_eval_selftest"}
     ok = True
     for name, args, expected in GATES:

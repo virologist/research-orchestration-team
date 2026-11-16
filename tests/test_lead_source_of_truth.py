@@ -46,7 +46,14 @@ RESULTS: list[tuple[str, bool, str]] = []
 
 
 def _clone_pkg() -> Path:
-    """整包克隆到临时目录（APFS cp -cR 优先，copytree 兜底）。"""
+    """整包克隆到临时目录（APFS cp -cR 优先，copytree 兜底）。
+
+    宿主接管健壮化（R2，2026-11-16）：宿主会分钟级反复删除真仓 settings.json，
+    克隆出的副本也随之缺文件 → C12 判红 → M1 基线 rc!=0 误报。克隆完成后
+    立即把 settings.json 从真仓 git HEAD 恢复写入副本（副本目录不是 git 仓，
+    git 命令必须指向真仓库执行，再把字节拷回副本），保证 M1 测的是
+    「校验器对基线的判定」而非「宿主是否恰好又删了文件」。
+    """
     tmp = Path(tempfile.mkdtemp(prefix="lead-sot-"))
     dst = tmp / "pkg"
     proc = subprocess.run(["cp", "-cR", str(PKG), str(dst)], capture_output=True)
@@ -55,6 +62,24 @@ def _clone_pkg() -> Path:
             PKG, dst,
             ignore=shutil.ignore_patterns(".git", "__pycache__", ".backups"),
         )
+    # 基线自愈：从真仓 git HEAD 取 settings.json 字节写入副本。副本不是
+    # git 仓（cp -cR 不带 .git / copytree ignore 掉了），无法在副本内 checkout。
+    settings = dst / "settings.json"
+    head = subprocess.run(
+        ["git", "-C", str(PKG), "show", "HEAD:settings.json"],
+        capture_output=True,
+    )
+    if head.returncode == 0:
+        settings.write_bytes(head.stdout)
+    elif not settings.exists():
+        # git 不可用且副本缺文件 → 回退按 Team 型约定构造期望内容
+        # （与 scripts/host_guard.py 的 direct_write 路径同语义）
+        import json as _json
+        name = _json.loads((dst / ".codebuddy-plugin" / "plugin.json")
+                           .read_text(encoding="utf-8"))["name"]
+        settings.write_text(
+            _json.dumps({"agent": f"{name}-team-lead"}, ensure_ascii=False,
+                        indent=2) + "\n", encoding="utf-8")
     return dst
 
 

@@ -25,11 +25,17 @@ CI 的术语清单写成了精确串，导致真实存在的违规因插入词�
   E 组（N20–N21）旧团队规模表述（C8 规则扩充）
   F 组（N22–N23）C8 声明式豁免（负例拦截 / 正例护栏）
   G 组（N24–N26）成员 ID 集合一致性（C13）
+  H 组（N27–N30）C8 规则覆盖矩阵补全 + C13 分支（R2 新增）
+  I 组（N31）    宿主接管看门狗 host_guard 端到端（R2 新增 2026-11-16）
 
 其中 N11 是**反向用例**：破坏一种契约标记但保留另一种，期望校验器**放行**（rc=0），
 用于确认 C9 接受三种等价命名，而不是只认一种。
 N23 同为**正向用例**：注入带豁免标记的审计文档，期望 rc=0 且 C8 汇总出现豁免计数，
 用于确认「带标记放行」没有退化成「什么都不扫」。
+N18 为**降级态用例**：同时移除副本内的 host_guard.py，模拟「settings.json 被删
+且看门狗不可用」场景，C12 修复失败仍须报「包根缺 settings.json」；看门狗可用
+时的自愈正路径由 N31 覆盖。
+N31 验证 host_guard：删除副本 settings.json → detect 判「接管态」→ repair 恢复。
 
 ## 用法
 
@@ -215,8 +221,22 @@ case("N17", "市场文件 JSON 非法", "市场文件 JSON 非法", n17)
 
 # ── D 组：Team 型 settings.json（C12）────────────────────────────────────
 def n18(root):
-    (root / "settings.json").unlink()
-case("N18", "Team 型包根 settings.json 被删", "包根缺 settings.json", n18)
+    # 健壮化（R2，2026-11-16）：宿主接管背景下真仓 settings.json 可能已被
+    # 宿主删除，基准副本随之缺文件，unlink 对不存在文件会抛 FileNotFoundError
+    # 并让整个自测进程崩溃（用例崩溃 ≠ 校验器判红，FM-R1-08：先查命令、路径，
+    # 不误报门禁失效）。missing_ok=True 只消除「文件必在」的隐式依赖。
+    #
+    # 语义保持说明：C12 已接入 host_guard 自愈（缺文件先修复再校验），本用例
+    # 要继续证明「缺 settings.json 会被判红」，必须在副本中同时移除
+    # host_guard.py，模拟「看门狗不可用」的降级场景 —— 此时 C12 修复失败，
+    # 仍走 fail 路径报「包根缺 settings.json」。修复可用时的自愈正路径由
+    # N31 端到端覆盖。断言对象始终是 manifest_check 的 C12 输出文案 + rc
+    # （由 run_case 统一判定），不依赖进程存活形态。
+    (root / "settings.json").unlink(missing_ok=True)
+    guard = root / "scripts" / "host_guard.py"
+    if guard.exists():
+        guard.unlink()
+case("N18", "Team 型包根 settings.json 被删（看门狗不可用降级态）", "包根缺 settings.json", n18)
 
 
 def n19(root):
@@ -564,6 +584,57 @@ def n30(root):
 
 case("N30", "C13 agents/ 目录整体删除（fail-closed）",
      "C13 真值源目录不存在", n30)
+
+
+# ── I 组：宿主接管看门狗（N31，R2 新增 2026-11-16）─────────────────────────
+# 背景：宿主（WorkBuddy ExpertPluginService）分钟级反复删除包根 settings.json
+# （11-15 / 11-16 实测 5+ 次），C12 判红连锁导致 rot.py check NOT GREEN。
+# host_guard.py 负责 detect → repair → report 自愈。本组负例验证：
+#   1. 删除 settings.json 后 host_guard detect() 判「接管态」
+#   2. repair() 能把文件恢复（副本无 .git → 走 direct_write 回退路径）
+# 用例编号说明：任务原定「N22」，查重发现 N22 已被 C8 声明式豁免负例占用
+# （现有负例 N1–N30），按「编号查重后顺序插入」原则定为 N31，总负例 31 条。
+
+HOST_GUARD_REL = "scripts/host_guard.py"
+
+
+def _load_host_guard(root: Path):
+    """以路径加载副本内的 host_guard.py（importlib，不假设包结构）。
+
+    加载失败抛异常 → run_case 的前置断言分支捕获，用例显式失败而非静默通过。
+    """
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "host_guard_under_test", root / HOST_GUARD_REL)
+    assert spec is not None and spec.loader is not None, \
+        f"无法构造 importlib spec: {root / HOST_GUARD_REL}"
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def n31(root):
+    """宿主接管端到端：删副本 settings.json → host_guard detect 判接管态
+    → manifest_check 的 C12 自愈链路完成修复（期望 rc=0 + 命中「宿主接管」）。
+
+    mutate 只负责：加载副本内 host_guard.py、删除 settings.json、断言
+    detect() 判「接管态」。修复交给被测对象本身（C12 的 _c12_self_heal），
+    与生产链路同构 —— 校验器发现缺失时自己调 host_guard 修复并给 ok。
+    run_case 统一断言 rc=0 且输出含「宿主接管」，证明自愈真实生效。
+    """
+    mod = _load_host_guard(root)
+    # 前置：副本内 settings.json 应存在（pristine 快照含该文件）
+    settings = root / "settings.json"
+    assert settings.exists(), "N31 前置断言失败：副本内 settings.json 不存在"
+    # 步骤：删除 → 独立断言 host_guard detect 必判接管态（看门狗自身的
+    # 修复语义已由 host_guard.py --self-test 的 ST2/ST3 覆盖，此处不重复）
+    settings.unlink()
+    state = mod.detect(root)
+    assert state == "taken_over", f"N31 断言失败：删除后 detect={state}（期望 taken_over）"
+
+
+case("N31", "宿主接管：settings.json 被删 → C12 调 host_guard 自愈（应放行）",
+     "宿主接管", n31, expect_rc=0)
 
 
 def make_copy(src: Path, dst: Path) -> None:

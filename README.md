@@ -86,6 +86,7 @@ research-orchestration-team/
 │   ├── routing_eval_selftest.py                    # v2.2.0 路由注入式负例自测（12 条 · 含 raw_probe 未归一化护栏）
 │   ├── test_phase_normalization.py                 # 阶段名归一化自测 · 26 条
 │   ├── rot.py                                      # ★ 统一 CLI：check / verify / selftest / sample / feedback / roadmap / report
+│   ├── host_guard.py                               # ★ 宿主接管看门狗：检测宿主反复删除的包根 settings.json → 自动修复 → 证据落盘（--self-test 4 用例）
 │   ├── workmap_check.py                            # ★ 工作地图一致性校验 W1–W12（含注入式负例自测）
 │   └── sample_check.py                             # ★ 真实任务样例结构化断言 A1–A9（含正/反例自测）
 ├── vendor/shared-core/                              # 联邦共享件兜底副本 + VENDOR.json 清单
@@ -177,6 +178,7 @@ research-orchestration-team/
 | `--self-test` | 7 组注入破坏，每组精确命中一个检查项 | 校验器永远返回 0 |
 | `scripts/sample_check.py --self-test` | 9 条断言正例 PASS / 反例 FAIL | 断言形同虚设 |
 | `scripts/rot.py feedback` | **F1–F8**：反馈记录字段 / 承接检查真实存在 / 长期规则上限 / 认可样例未冒充用户确认 | 规则无限膨胀、口头已修复 |
+| `scripts/host_guard.py --check` | 宿主接管检测：包根 settings.json 缺失 / 损坏 / 健康三态判定（`--self-test` 4 用例；`rot.py check` 前置自动修复，C12 缺失时亦自愈） | 宿主（ExpertPluginService）分钟级反复删除 settings.json 导致 C12 连锁判红（11-15 / 11-16 实测 5+ 次） |
 
 另有 `scripts/rot.py verify`（**V0–V10**）：把 README 发布契约第 5 条「全量文档差集核对」变成程序检查，逐项比对 `tests/`、`scripts/`、CI step、四处版本、版本历史顺序、状态文件、LEARNING 回流、提交前清单——根治 FM-R2-07 的累计型文档滞后；V0 额外校验统一 CLI 的慢门禁超时策略未被削弱。配 `scripts/rot.py selftest`（4 组注入式负例）证明 V0 会红。
 

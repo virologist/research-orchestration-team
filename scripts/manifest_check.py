@@ -1057,6 +1057,37 @@ def check_c11_frontmatter(chk: Checker, manifests: dict) -> None:
             chk.ok(f"{rel} frontmatter 合法（name={declared}, description {len(desc)} 字符）")
 
 
+def _c12_self_heal(root: Path) -> bool:
+    """C12 专属自愈：settings.json 缺失 / 损坏时尝试用 host_guard 修复。
+
+    背景（宿主接管，2026-11-15 / 11-16 实测时间线）：宿主
+    （WorkBuddy ExpertPluginService）分钟级反复删除包根 settings.json，
+    跨会话累计 5+ 次；每次都让 C12 判红并连锁导致 rot.py check
+    19/22 或 21/22 NOT GREEN。本函数在 C12 判定前先给一次自愈机会：
+    以路径加载 scripts/host_guard.py（importlib，不假设包结构）执行
+    detect/repair。加载或执行失败一律静默降级（返回 False，走原 fail
+    路径）——自愈是增强，绝不能成为新的单点故障。
+    返回 True = 修复成功（文件已恢复）；False = 无需或无法修复。
+    """
+    guard = root / "scripts" / "host_guard.py"
+    if not guard.is_file():
+        return False
+    try:
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("host_guard_c12", guard)
+        if spec is None or spec.loader is None:
+            return False
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        if mod.detect(root) == "healthy":
+            return False  # 健康态无需修复（正常路径继续校验内容）
+        result = mod.repair(root)
+        return bool(result.get("repaired"))
+    except Exception:
+        # guard 缺陷 / 环境异常（如只读 FS）不得让 C12 崩溃，降级为原判定
+        return False
+
+
 def check_c12_settings(chk: Checker, manifests: dict) -> None:
     """C12 Team 型包根 settings.json 存在且指向主理人。
 
@@ -1065,6 +1096,10 @@ def check_c12_settings(chk: Checker, manifests: dict) -> None:
     「宿主启动时必然删除该文件」的假设将其移除，导致官方校验器报 1 error；
     反证：同类 Team 包 agent-harness-expert 的同格式 settings.json 存活数周。
     本检查把「settings.json 必须在」固化为发行门禁，防止再次被误删。
+
+    自愈前置（R2，2026-11-16）：检出缺失 / 损坏时先尝试调 host_guard
+    修复并重查一次——修好后按正常路径校验内容并给 ok；修不好才 fail。
+    校验语义、fail 文案主体、其它检查一律不变。
     """
     chk.section("C12 Team 型包根 settings.json")
     codebuddy = manifests.get("WorkBuddy")
@@ -1073,12 +1108,20 @@ def check_c12_settings(chk: Checker, manifests: dict) -> None:
         return
     path = chk.root / "settings.json"
     if not path.exists():
-        chk.fail("包根缺 settings.json（官方 validate_expert 对 Team 型为硬要求）")
-        return
+        # 先自愈再判红：宿主接管是环境故障而非仓库缺陷，能修就不红
+        if _c12_self_heal(chk.root) and path.exists():
+            chk.ok("settings.json 缺失已由 host_guard 自动修复（宿主接管态）")
+        else:
+            chk.fail("包根缺 settings.json（官方 validate_expert 对 Team 型为硬要求）")
+            return
     data = chk.load_json(path)
     if data is None:
-        chk.fail("settings.json JSON 非法")
-        return
+        # 损坏态同样先给一次自愈机会（宿主可能写坏了内容）
+        if _c12_self_heal(chk.root) and chk.load_json(path) is not None:
+            chk.ok("settings.json 损坏已由 host_guard 自动修复（宿主接管态）")
+        else:
+            chk.fail("settings.json JSON 非法")
+            return
     agent = data.get("agent")
     lead = None
     if codebuddy:
