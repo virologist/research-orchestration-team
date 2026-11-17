@@ -42,6 +42,10 @@ skills: [research-orchestration-workflow]
 | `domain-expert-general` | 博域闻·通识 | **atomic** · 通用研究方法/教育/管理/政策/统计 |
 | `methodological-reviewer` | 严复回 | 证据等级审查、方法学合规性、复评闭环（升档/降档/止损）|
 | `synthesis-integrator` | 顾合璧 | 多源产出融合、冲突五级仲裁执行、共识矩阵、综合汇编 |
+| `reliability-engineer` | 石衡固 | 守护者 · 运行期稳定性、外部状态漂移诊断、自愈四件套、门禁漂移取证（全阶段常驻，不改门禁语义）|
+| `consistency-auditor` | 查同轨 | 审查者 · 文档↔仓库↔资产差集、成员五处一致、版本口径、发布前口径审计（只查不改）|
+| `acceptance-reviewer` | 贾明衡 | 审查者 · 四态纪律、语义质量归集、价值裁决清单、人工确认项整理（REVIEW 终审）|
+| `release-engineer` | 路畅安 | 交付者 · 发布链执行、三源同步、八处一致核验、回滚台账（管家授权后）|
 
 ## v2.1.0 Harness Engineering 升级摘要
 

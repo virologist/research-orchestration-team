@@ -18,8 +18,13 @@
 | `domain-expert-general` | 博域闻·通识 | 执行者 / Executor (atomic) | 通用研究方法/教育/管理/政策/统计 | 按需 |
 | `methodological-reviewer` | 严复回 | 审查者 / Reviewer | 证据等级 / 复评闭环 | always-on（REVIEW 阶段常驻） |
 | `synthesis-integrator` | 顾合璧 | 整合者 / Integrator | 多源融合 / 冲突仲裁 / 共识矩阵 | always-on（NEXT 阶段常驻） |
+| `reliability-engineer` | 石衡固 | 守护者 / Guardian | 运行期稳定性 / 外部状态漂移 / 自愈 | 全阶段常驻 |
+| `consistency-auditor` | 查同轨 | 审查者 / Reviewer | 交付物一致性 / 差集 / 版本口径 | REVIEW / 发布前（只查不改） |
+| `acceptance-reviewer` | 贾明衡 | 审查者 / Reviewer | 四态纪律 / 语义归集 / 人工确认清单 | REVIEW 终审 / NEXT |
+| `release-engineer` | 路畅安 | 交付者 / Delivery | 发布链 / 多副本同步 / 八处一致 / 回滚台账 | 交付发布（管家授权后） |
 
 > **变化说明**：v2.1.0 起，原 `domain-expert` 拆为 3 个 atomic subagent（biomed / ai / general），符合 Vercel / LangChain 实测的"工具最小化、atomic 优于集成"原则。每个 atomic 能力边界更窄，工具调用更明确。
+> **v2.6.0 起**：新增 4 名工程保障成员（守护者石衡固 / 审查者查同轨·贾明衡 / 交付者路畅安），补齐「系统可靠发布与稳定运行」维度的结构性缺位——原 7 名成员全部是科研决策产出角色，无人负责把系统本身可靠发布、稳定运行。四名新成员均无工具授权（零 `tools` 行），不改门禁语义与 GATES/CI 计数。
 
 ---
 
@@ -68,6 +73,26 @@
 - **trigger**: 整合 / 融合 / 汇总 / 冲突 / 仲裁 / 共识 / 综合报告 / 多源合并
 - **stage**: REVIEW → NEXT（仲裁 + 汇总）
 - **routing**: always-on 整合者
+
+### reliability-engineer（石衡固）
+- **trigger**: 宿主接管 / settings.json被删 / 门禁漂移 / 时绿时红 / 自愈 / 看门狗 / 可观测性 / 外部状态 / 沙箱误伤排查 / skip不算通过 / 超时不算通过
+- **stage**: 全阶段常驻守护
+- **routing**: 门禁结果随外部状态漂移、宿主接管事件、CI 绿但本地反复红时触发；不改门禁语义与 GATES/CI 计数
+
+### consistency-auditor（查同轨）
+- **trigger**: 一致性 / 差集 / 对账 / 口径 / 版本滞后 / 写死版本名 / 成员集合 / 发布前审计 / 文档脱节 / 五处一致 / 断言误伤
+- **stage**: REVIEW / 发布前（只查不改）
+- **routing**: 发布前强制调用（发布门禁，出 PASS/BLOCK）；成员增删后五处一致核验；不改文档不改代码
+
+### acceptance-reviewer（贾明衡）
+- **trigger**: 验收 / 终审 / 四种状态 / 语义质量 / 人工确认 / 认可样例 / 裁决清单 / 混标 / 没证据不宣称 / 待人工确认清单 / 诚实清单
+- **stage**: REVIEW 终审 / NEXT
+- **routing**: 交付终审时触发；四态纪律守护 + 语义质量归集；不替人做价值裁决
+
+### release-engineer（路畅安）
+- **trigger**: 发布 / 推送 / 打tag / 发版 / 上传 / 资产 / 镜像同步 / 八处一致 / 回滚 / 版本台账 / 多副本同步
+- **stage**: 交付发布（管家节点授权后）
+- **routing**: 仅管家节点明确授权发布时触发；执行完整发布链；不产生科研结论、不替管家授权
 
 ---
 

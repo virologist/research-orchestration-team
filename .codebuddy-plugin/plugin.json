@@ -1,7 +1,7 @@
 {
   "name": "research-orchestration-team",
-  "version": "2.5.8",
-  "description": "Eight-agent cross-disciplinary research orchestration team with ACP communication protocol, five-role matrix (orchestrator/analyzer/executor/reviewer/integrator), L1-L5 conflict arbitration, harness-compliant runtime, Orchestrator Pattern routing, Loop hard-stop (max_turns/time/token), per-step verification, atomic subagent split (biomed/ai/general), and Ralph Loop cross-session memory. For Claude Code / WorkBuddy / Claude Desktop.",
+  "version": "2.6.0",
+  "description": "Twelve-agent cross-disciplinary research orchestration team with ACP communication protocol, seven-role matrix (orchestrator/analyzer/executor/reviewer/integrator/guardian/delivery), L1-L5 conflict arbitration, harness-cognition framework and runtime reliability guards.",
   "author": {
     "name": "TZUVet",
     "email": "yzuvet@outlook.com"
@@ -33,7 +33,11 @@
     "./agents/domain-expert-ai.md",
     "./agents/domain-expert-general.md",
     "./agents/methodological-reviewer.md",
-    "./agents/synthesis-integrator.md"
+    "./agents/synthesis-integrator.md",
+    "./agents/release-engineer.md",
+    "./agents/reliability-engineer.md",
+    "./agents/consistency-auditor.md",
+    "./agents/acceptance-reviewer.md"
   ],
   "skills": "./skills",
   "expertType": "team",
@@ -47,7 +51,11 @@
       "domain-expert-ai",
       "domain-expert-general",
       "methodological-reviewer",
-      "synthesis-integrator"
+      "synthesis-integrator",
+      "release-engineer",
+      "reliability-engineer",
+      "consistency-auditor",
+      "acceptance-reviewer"
     ]
   },
   "displayName": {
@@ -200,6 +208,58 @@
         "zh": "整合者"
       },
       "avatar": "avatars/synthesis-integrator.png",
+      "role": "member"
+    },
+    {
+      "id": "release-engineer",
+      "displayName": {
+        "en": "Lu Chang'an",
+        "zh": "路畅安"
+      },
+      "profession": {
+        "en": "Release & DevOps Engineer",
+        "zh": "发布运维工程师"
+      },
+      "avatar": "avatars/release-engineer.png",
+      "role": "member"
+    },
+    {
+      "id": "reliability-engineer",
+      "displayName": {
+        "en": "Shi Henggu",
+        "zh": "石衡固"
+      },
+      "profession": {
+        "en": "Site Reliability Engineer",
+        "zh": "可靠性工程师"
+      },
+      "avatar": "avatars/reliability-engineer.png",
+      "role": "member"
+    },
+    {
+      "id": "consistency-auditor",
+      "displayName": {
+        "en": "Zha Tonggui",
+        "zh": "查同轨"
+      },
+      "profession": {
+        "en": "Consistency & Compliance Auditor",
+        "zh": "一致性审计员"
+      },
+      "avatar": "avatars/consistency-auditor.png",
+      "role": "member"
+    },
+    {
+      "id": "acceptance-reviewer",
+      "displayName": {
+        "en": "Jia Mingheng",
+        "zh": "贾明衡"
+      },
+      "profession": {
+        "en": "Acceptance & Value Reviewer",
+        "zh": "验收评审员"
+      },
+      "avatar": "avatars/acceptance-reviewer.png",
       "role": "member"
     }
   ]

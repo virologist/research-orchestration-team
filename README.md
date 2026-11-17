@@ -1,9 +1,9 @@
 # 科研价值驱动研究编排团
 
 > **团队名称**：科研价值驱动研究编排团 / Research Value-Driven Research Orchestration Team
-> **专家类型**：Team 型（8 人协作团 · v2.3.0 工具真实性门禁 R1-R6）
+> **专家类型**：Team 型（12 人协作团 · v2.6.0：新增守护者/一致性/验收/发布四成员，工具真实性门禁 R1-R6）
 > **行业分类**：12-IndustryConsultant（跨学科咨询）
-> **版本**：2.5.8
+> **版本**：2.6.0
 > **许可证**：MIT
 > **仓库**：[github.com/virologist/research-orchestration-team](https://github.com/virologist/research-orchestration-team)
 
@@ -50,7 +50,7 @@ research-orchestration-team/
 ├── .github/
 │   └── workflows/
 │       └── validate.yml     # CI：23 门禁 step（18 静态 + 4 结构 + 1 文档差集）+ 6 平台 step
-├── agents/                                          # 8 名成员（主理人 1 + 团员 7）
+├── agents/                                          # 12 名成员（主理人 1 + 团员 11）
 │   ├── research-orchestration-team-team-lead.md   # 主理人：沈知枢
 │   ├── socratic-questioner.md                      # 问清源（分析者）
 │   ├── meta-architect.md                           # 梁构局（分析者）
@@ -78,7 +78,7 @@ research-orchestration-team/
 │           └── result-envelope-v2.4.json           # result_envelope v2.4 空白信封模板
 ├── scripts/
 │   ├── assemble_spawn_prompt.py                    # 成员人设注入装配器（联邦两级查找 shim）
-│   ├── manifest_check.py                           # 包一致性校验 C1–C13（含成员 ID 一致性与 Team settings.json，74 项）
+│   ├── manifest_check.py                           # 包一致性校验 C1–C13（含成员 ID 一致性与 Team settings.json；项数随成员数变动，以脚本实测为准）
 │   ├── manifest_check_selftest.py                  # 注入式负例自测（30 条）
 │   ├── harness_eval.py                             # Harness Engineering H1–H12 设计检查
 │   ├── harness_eval_selftest.py                    # harness 注入式负例自测（14 条）
@@ -97,7 +97,7 @@ research-orchestration-team/
 │   ├── test_lead_source_of_truth.py                # 主理人双重事实源一致性 · 6 条
 │   ├── test_state_runtime_sequencing.py            # 运行时序 / 终态污染 / 观测一致性 · 8 条
 │   └── test_state_file_robustness.py               # 状态文件健壮性 / cp 编号 / 孤儿 tmp · 12 条
-├── avatars/                                         # 10 张（8 成员 + 团队 + 保留的历史 domain-expert.png），随 git 分发
+├── avatars/                                         # 14 张（12 成员 + 团队 + 保留的历史 domain-expert.png），随 git 分发
 ├── docs/
 │   ├── REDTEAM-REPORT.md                           # 红队审查报告（5 维度 · 缺陷 · 回归证据）
 │   ├── arbitration-L4L5-live-test.md               # 冲突仲裁 L4/L5 真实团队实测记录

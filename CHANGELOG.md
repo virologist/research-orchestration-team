@@ -2,9 +2,24 @@
 
 所有重要变更按版本倒序记录。格式基于 [Keep a Changelog](https://keepachangelog.com/)。
 
-## [Unreleased]
+## [2.6.0] - 2026-11-17
 
-> **宿主接管看门狗**（程序检查，R2 修复 2026-11-16）。运行时、协议、评分、状态机行为**零变更**；CI 门禁 step 数量**不变**。
+> **团队扩充 8 → 12 成员 + 宿主接管看门狗**（feature + 程序检查）。运行时科研产出逻辑、协议 result_envelope v2.4、评分口径、八阶段状态机行为**零变更**；门禁语义（C1–C13 / H1–H12 / R1–R6 / V0–V10）**零变更**，仅成员集合基数随之扩展。
+
+### Added — 团队扩充 4 名工程保障成员
+
+依据 2026-11-13~16 全项目审计与发布链实战暴露的能力缺口（原 7 名成员全是科研决策产出角色，无人负责「把系统本身可靠发布、稳定运行」），新增 4 名成员（雅号沿用三字风格，派单用成员 ID）：
+
+- `reliability-engineer` 石衡固（守护者·全阶段常驻）：外部状态漂移三态诊断、自愈四件套、门禁漂移取证、可观测性护栏、注入负例盯防；不改门禁语义与 GATES/CI 计数。
+- `consistency-auditor` 查同轨（审查者·REVIEW/发布前）：文档↔仓库↔资产差集、成员集合五处一致（C13）、版本口径、断言误伤裁决；**只查不改**。
+- `acceptance-reviewer` 贾明衡（审查者·REVIEW 终审/NEXT）：四态纪律、语义质量归集、价值裁决清单、人工确认项整理；**不替人裁决**。
+- `release-engineer` 路畅安（交付者·管家授权后）：发布链执行、多副本同步、八处一致核验、回滚台账；**不产生科研结论、不替管家授权**。
+
+四维验证正交：tester（一次性功能对不对）／守护者（长期运行稳不稳）／一致性（静态交付物对不对齐）／验收（语义好不好）。同步五处成员集合：协议 §1 角色矩阵（五类→七类，新增守护者/交付者、扩展审查者）、registry 团队成员一览 + 触发条件、team-lead 名册表、双 manifest（agents 8→12 / members / teamInfo）、`routing_eval` 动态基数；新增 4 张 512×512 头像；version 2.5.8 → 2.6.0 同步 README / WORKMAP / workmap.json / 双 manifest / 市场清单。
+
+校验实测：`manifest_check` 94/94（C13 五处一致）、`routing_eval` 51/51、`harness_eval` 12/12、`workmap_check` 18/18、`protocol_check` 三 suite rc=0、`compileall` rc=0、`validate_expert` rc=0。
+
+### Fixed — 宿主接管看门狗（R2 程序检查，2026-11-16）
 
 宿主（WorkBuddy ExpertPluginService）自 2026-11-15 起分钟级反复删除 Team 型包根 `settings.json`（跨 11-15 / 11-16 实测 5+ 次），每次都让 `manifest_check` 的 C12 判红并连锁导致 `rot.py check` 19/22 或 21/22 NOT GREEN。本次落成 A2 类程序检查器修复：新增 `scripts/host_guard.py`（detect / repair / report 三段式，git HEAD 恢复优先、direct_write 回退，事件证据 JSONL 落盘 `.harness-runs/host_guard.log`，60 秒冷却防回灌日志爆炸，`--self-test` 4 用例）；`rot.py check` 前置接入（guard 故障不阻断门禁）；`manifest_check.py` C12 缺失 / 损坏时先自愈再判红；`manifest_check_selftest.py` N18 健壮化（`missing_ok` + 降级态语义拆分）并新增 N31 宿主接管端到端用例（负例总数 30 → 31）；`test_lead_source_of_truth.py` 基线副本从真仓 git HEAD 恢复 settings.json（M1 不再被宿主删除误伤）。
 

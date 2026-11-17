@@ -7,22 +7,24 @@
 
 ## 1. 角色矩阵（Role Matrix）
 
-抽象为五类通用角色，现有 8 名成员归位如下（v2.1.0 起 domain-expert 拆为 biomed/ai/general 三个 atomic）。**能力边界是硬约束，越界即违规。**
+抽象为七类通用角色，现有 12 名成员归位如下（v2.1.0 起 domain-expert 拆为 biomed/ai/general 三个 atomic；v2.6.0 起新增交付者 / 守护者两类工程保障角色，并将审查者扩展为三名）。**能力边界是硬约束，越界即违规。**
 
 | 抽象角色 | 成员 ID | 成员 | 核心能力 | 能力边界（禁止） | 接口契约 |
 |---------|--------|------|---------|----------------|---------|
 | **编排者** Orchestrator | `research-orchestration-team-team-lead` | 沈知枢（主理人） | 任务解析、状态机驱动、调度编排、仲裁升级 | ❌ 代写任何成员的专业产出<br>❌ 替用户做价值选择<br>❌ 成员间直连 | 入：`TASK`（来自用户）<br>出：`TASK`/`HANDOFF`（至成员/用户） |
 | **分析者** Analyzer | `socratic-questioner`<br>`meta-architect` | 问清源（追问）<br>梁构局（架构） | 信息完整度评估、假设识别、MECE 结构分解、骨架设计 | ❌ 输出研究结论<br>❌ 替用户作答<br>❌ 做可行性判断（属执行者） | 入：`TASK`<br>出：`CLARIFY`/`RESULT` |
 | **执行者** Executor | `domain-expert-biomed`<br>`domain-expert-ai`<br>`domain-expert-general` | 博域闻·生医<br>博域闻·AI<br>博域闻·通识 | 多源检索、证据评级、可行性核查、前沿扫描 | ❌ 做价值判断（值不值得做）<br>❌ 替用户下结论<br>❌ 隐藏负面证据 | 入：`TASK`<br>出：`RESULT`（必带 `evidence[]`） |
-| **审查者** Reviewer | `methodological-reviewer` | 严复回（复评） | 证据等级审查、方法学合规、复评闭环决策 | ❌ 判断研究方向价值<br>❌ 输出「待定/观察」<br>❌ 因证据不足跳过评级 | 入：`RESULT`<br>出：`REVIEW`（必带 `decision`） |
+| **审查者** Reviewer | `methodological-reviewer`<br>`consistency-auditor`<br>`acceptance-reviewer` | 严复回（复评）<br>查同轨（一致性）<br>贾明衡（验收） | 证据等级审查、方法学合规、复评闭环决策；交付物静态差集与版本口径审计；四态纪律与语义质量归集 | ❌ 判断研究方向价值<br>❌ 输出「待定/观察」<br>❌ 因证据不足跳过评级<br>❌ 只查却动手改文档/代码<br>❌ 替人做价值裁决 | 入：`RESULT`<br>出：`REVIEW`（必带 `decision`） |
 | **整合者** Integrator | `synthesis-integrator` | 顾合璧（融合） | 多源 RESULT 聚合、冲突检测、五级仲裁执行、共识矩阵、综合汇编 | ❌ 产生新知识<br>❌ 裁决价值问题（L5 直接升级）<br>❌ 隐藏分歧 | 入：`inputs_ref[]`（多方 msg_id）<br>出：`RESULT`（synthesis + 共识矩阵 + 仲裁记录） |
+| **守护者** Guardian | `reliability-engineer` | 石衡固（可靠性） | 外部状态漂移诊断、自愈四件套（检测/自愈/留痕/节流）、门禁漂移取证、可观测性护栏、注入负例盯防 | ❌ 改业务功能代码<br>❌ 改门禁语义 / GATES / CI 计数<br>❌ 静态补回冒充闭环 | 入：可靠性告警 / 主理人指令<br>出：`REVIEW`（诊断）/`RESULT`（修复） |
+| **交付者** Delivery | `release-engineer` | 路畅安（发布） | 发布链执行、多副本同步、八处一致核验、回滚边界判断、发布台账 | ❌ 产生科研结论<br>❌ 替管家节点授权发布<br>❌ 改代码/设计/文档内容<br>❌ 重写已发布 tag | 入：管家节点发布授权<br>出：`RESULT`（含 release_chain[]） |
 
 **成员 ID 取值规则**：成员 ID = 对应 `../../../agents/<成员ID>.md` 的**文件名（去 `.md`）**，与该文件 frontmatter 的 `name` 字段一致——派单与回传一律用成员 ID，禁止用中文名或自创名称。
 
 **三个 atomic 执行者的归属说明**：执行者是**一个抽象角色、三个 atomic 成员**（biomed / ai / general 按领域分工，v2.1.0 起由原 `domain-expert` 拆分为三个 atomic）。三者共享同一套能力边界与接口契约，但在证据链里是**三个独立 `agent_id`**，各自单独出具 `evidence[]` 与 `confidence`，不合并、不互相代签。跨领域任务命中两个及以上领域标签时并行 fan-out（模板见同目录 `agent-registry.md`「交叉领域组合路由模板（v2.2.0 · 补 F9）」）。
 
 **角色-阶段绑定**：FREEZE/IDENTIFY/COLLAPSE→编排者；CLARIFY→分析者（问清源）；
-骨架设计→分析者（梁构局）；领域核查→执行者；REVIEW→审查者；**多方产出汇聚→整合者（顾合璧）**。
+骨架设计→分析者（梁构局）；领域核查→执行者；REVIEW→审查者（严复回方法学 / 查同轨一致性 / 贾明衡状态终审）；**多方产出汇聚→整合者（顾合璧）**；全阶段常驻→守护者（石衡固，运行期稳定性）；交付发布→交付者（路畅安，管家授权后）。
 
 > **本表是「抽象角色 ↔ 成员 ID」归属的单一事实源（SSOT）**。成员增删或改名必须同步四处：本表、同目录 `agent-registry.md`「团队成员一览」、仓库根 `../../../.claude-plugin/plugin.json` 与 `../../../.codebuddy-plugin/plugin.json` 的 `agents` 列表（及其 `members[]` / `teamInfo`）、以及 `../../../scripts/routing_eval.py` 的成员集合校验基数。任一处漏改都会被 R1「成员集合一致」门禁判红。
 >

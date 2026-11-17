@@ -1,7 +1,7 @@
 {
   "schema": "rot-workmap/v1",
-  "version": "2.5.8",
-  "updated": "2026-11-10",
+  "version": "2.6.0",
+  "updated": "2026-11-17",
   "purpose": "科研编排团的简洁工作地图：任务 → 阶段 → 依赖 → 工具 → 验收条件 → 证据。机器真值源；人读视图见 WORKMAP.md。",
   "status_labels": [
     "自动验证通过",
