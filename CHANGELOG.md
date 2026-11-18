@@ -23,6 +23,16 @@
 
 宿主（WorkBuddy ExpertPluginService）自 2026-11-15 起分钟级反复删除 Team 型包根 `settings.json`（跨 11-15 / 11-16 实测 5+ 次），每次都让 `manifest_check` 的 C12 判红并连锁导致 `rot.py check` 19/22 或 21/22 NOT GREEN。本次落成 A2 类程序检查器修复：新增 `scripts/host_guard.py`（detect / repair / report 三段式，git HEAD 恢复优先、direct_write 回退，事件证据 JSONL 落盘 `.harness-runs/host_guard.log`，60 秒冷却防回灌日志爆炸，`--self-test` 4 用例）；`rot.py check` 前置接入（guard 故障不阻断门禁）；`manifest_check.py` C12 缺失 / 损坏时先自愈再判红；`manifest_check_selftest.py` N18 健壮化（`missing_ok` + 降级态语义拆分）并新增 N31 宿主接管端到端用例（负例总数 30 → 31）；`test_lead_source_of_truth.py` 基线副本从真仓 git HEAD 恢复 settings.json（M1 不再被宿主删除误伤）。
 
+### Added/Fixed — 审计挂起项三项闭环（2026-11-18，门禁语义增强）
+
+依据 2026-11-14 全项目审计的 R3 挂起项，以资深 agent 工程标准完成 #22 / #28 / R4 三项开发与测试，**运行时科研产出逻辑零变更**：
+
+- **#22 熔断阈值放宽护栏**（ADR-0022）：`state_io.py` 新增 `_warn_relaxed_ceilings` 纯函数——`init`/`budget` 放宽熔断层（max_failures/max_time）时 stderr 告警 + `notes` 留痕，**rc 语义不变（放宽仍允许，registry 授权入口）**，与 `fail` 只允许收紧的后门封堵形成语义闭环；告警层 turns/tokens 不触发。锁定 `tests/test_ceiling_relaxation_guard.py` 6 条（R1–R6）。
+- **#28 协议↔落盘跨层绑定契约**（ADR-0028）：`protocol_check.py` 新增 `check_envelope_state_binding` 纯函数 + `run_cross_layer_tests` 8 组，挂进 integration suite（**零 CI step 涟漪**）；四条契约：task_id 相等 / phase ∈ {当前, 下一} / turn ∈ {落盘, +1} / 终态仅许 NEXT。独立测试 `tests/test_cross_layer_binding.py` 8 条（X1–X8）。
+- **R4 V4 集合比对**：`workmap.json` 顶层新增 `ci_step_map`（step↔gate 显式映射，23↔23 闭合），`rot.py` 新增 `v4_set_check` 纯函数——V4 从「数量比对」升级为「CI step 集合 == 映射键集合」+「映射覆盖 gate == 登记 gate」双向断言，堵死审计所指「23 是数字巧合」盲区。注入负例 `tests/test_v4_set_check.py` 7 条。
+
+配套：`decisions/ADR-0022.md` / `ADR-0028.md`（O2 外置裁决，四态标注，与台账 §10.2 双向引用）；三套新测试挂进现有 CI step（不改 step name，§10.3.3 计数口径不变）；README/CONTRIBUTING 结构树与命令清单、台账 #22/#28 状态、VERIFICATION-REPORT 口径同步。校验：`rot.py check` 22/22 ALL GREEN、V0–V10 ALL GREEN、manifest 94/94、protocol_check selftest 14/14、三套新测试 6+8+7 全绿。
+
 ## [2.5.8] - 2026-11-12
 
 > **统一 CLI 可靠性补丁**（工具修复）。运行时、协议、评分、状态机行为**零变更**；CI 门禁 step **仍为 23**（平台 6，总 29），无新增 step。

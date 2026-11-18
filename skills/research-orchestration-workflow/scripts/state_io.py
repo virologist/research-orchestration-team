@@ -580,6 +580,32 @@ def _apply_ceiling_overrides(state: dict, args) -> None:
         b["max_failures"] = int(args.max_failures)
 
 
+# #22（护栏·不改 rc 语义）：registry 明确授权 init/budget 为上限写入口，
+# 「主动放宽」属合法语义（开局设定 / 运行期调整各有场景），故不拒绝、不拦截。
+# 但与 fail 的「放宽忽略并告警」形成语义闭环：后者封堵的是逐次抬高后门，
+# 前者是授权入口——两者都须让「放宽熔断」从静默变成可观测、可追溯。
+# turns_max / tokens_max 是告警层（R7 P1-1 分层），放宽不改熔断语义，不在此列。
+_RELAX_CEILING_LABELS = (("max_failures", "max_failures"),
+                         ("max_time_sec", "max_time"))
+
+
+def _warn_relaxed_ceilings(before: dict, after: dict, cmd: str) -> list[str]:
+    """比对覆写前后 budget，熔断层阈值被放宽则 stderr 告警并返回留痕文案列表。
+
+    只告警 + 返回文案（调用方写入 notes 留痕），不改 rc、不拒绝写入——
+    保持 registry 授权的向后兼容语义。入参为 budget 字典的浅拷贝。
+    """
+    relaxed: list[str] = []
+    for key, label in _RELAX_CEILING_LABELS:
+        old, new = before.get(key), after.get(key)
+        if isinstance(old, int) and isinstance(new, int) and new > old:
+            msg = (f"熔断阈值被放宽（#22）: {label} {old} → {new} "
+                   f"· 来源 {cmd}（授权上限写入口，仅告警留痕，不拦截写入）")
+            relaxed.append(msg)
+            print(f"⚠️ {msg}", file=sys.stderr)
+    return relaxed
+
+
 def _expected_next_phase(state: dict) -> str | None:
     """按序推进门禁：期望的下一个阶段（None = 末阶段之后，已无后继）。
 
@@ -673,6 +699,11 @@ def cmd_init(args) -> int:
             "notes": [],
             "metrics": None,                 # finish 时落盘 4 个 metrics
         }
+        # #22：开局以默认阈值为基线，设定值放宽熔断层则告警 + notes 留痕（不改 rc）。
+        _defaults = {"max_failures": DEFAULT_MAX_FAILURES,
+                     "max_time_sec": DEFAULT_MAX_TIME}
+        for _msg in _warn_relaxed_ceilings(_defaults, _budget(state), "init"):
+            _note(state, state["phase"], _msg)
         save_state(ws, args.task_id, state)
     print(f"✅ 状态已初始化: {state_path(ws, args.task_id)}")
     print(f"   阶段序列: {' → '.join(PHASES)}")
@@ -950,7 +981,11 @@ def cmd_budget(args) -> int:
                   f"→ 终态不可回退，不改写；如需继续请新建 task_id",
                   file=sys.stderr)
             return 1
+        # #22：覆写前后比对熔断层阈值，放宽则告警 + notes 留痕（不改 rc、不拒绝）。
+        _budget_before = dict(_budget(state))
         _apply_ceiling_overrides(state, args)
+        for _msg in _warn_relaxed_ceilings(_budget_before, _budget(state), "budget"):
+            _note(state, state.get("phase"), _msg)
         if args.turns is not None:
             state["budget"]["turns_used"] = args.turns
         if args.tokens is not None:

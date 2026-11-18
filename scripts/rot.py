@@ -286,6 +286,57 @@ def cmd_selftest(root: Path) -> int:
     return 0 if ok else 1
 
 
+def v4_set_check(wm: dict, steps: list[str], platform_steps: set[str]) -> tuple[bool, str]:
+    """R4：V4 从「数量巧合」升级为 step↔gate 双向集合相等断言。
+
+    背景（审计 R4 / 数字巧合盲区）：旧 V4 只判 `gates_n == expect_n`（CI 有效
+    step 数 == workmap 登记 gate 数）。曾出现 25 step − 2 平台 = 23 == 登记
+    23 而判绿，但集合并不对应（protocol 三子门禁共用一个 step、两个 heredoc
+    smoke step 无独立 gate）——增删 step 时仍会再次假绿。本函数改为三条断言：
+
+      1. CI 有效 step 集合 == ci_step_map 键集合（新增/改名/删除 step 立即红）；
+      2. ci_step_map 映射的真实 gate 集合 == workmap.gates 登记全集（漏登/多登红）；
+      3. 每个 step 的映射非空、无重复 gate（映射本身结构合法）。
+
+    `@smoke:` 前缀的值是 heredoc 冒烟 step 的辅助标签，不计入登记 gate 集合。
+    返回 (是否全过, 单行诊断)，诊断里保留数量信息供人读，但数量不参与判定。
+    """
+    mapped: dict = wm.get("ci_step_map")
+    if not isinstance(mapped, dict) or not mapped:
+        return False, "V4 FAIL: workmap.json 缺 ci_step_map（R4 集合映射契约未登记）"
+
+    eff_steps = set(steps) - set(platform_steps)
+    map_keys = set(mapped.keys())
+    only_ci = sorted(eff_steps - map_keys)      # CI 有、映射无 → 新增/改名 step 未登记
+    only_map = sorted(map_keys - eff_steps)     # 映射有、CI 无 → 删除 step 未同步
+
+    registered = (set(wm.get("gates", {}).get("static", []))
+                  | set(wm.get("gates", {}).get("structural", []))
+                  | set(wm.get("gates", {}).get("documentation", [])))
+    flat = [g for gs in mapped.values() for g in gs]
+    real_gates = {g for g in flat if not str(g).startswith("@smoke:")}
+    only_reg = sorted(registered - real_gates)  # 登记有、映射无 → gate 无 CI step 盯防
+    only_mapg = sorted(real_gates - registered)  # 映射有、登记无 → 幽灵 gate
+
+    bad_shape = sorted(k for k, gs in mapped.items()
+                       if not isinstance(gs, list) or not gs
+                       or len(gs) != len(set(gs)))
+
+    ok = not (only_ci or only_map or only_reg or only_mapg or bad_shape)
+    if ok:
+        n_smoke = len(flat) - len(real_gates)
+        return True, (f"CI step↔gate 集合双向相等：{len(eff_steps)} step / "
+                      f"{len(real_gates)} gate（+{n_smoke} smoke 标签）"
+                      f"——新增/改名/删 step 或 gate 漂移均会判红")
+    bits = []
+    if only_ci: bits.append(f"CI 有映射无 {only_ci}")
+    if only_map: bits.append(f"映射有 CI 无 {only_map}")
+    if only_reg: bits.append(f"登记有映射无 {only_reg}")
+    if only_mapg: bits.append(f"映射有登记无 {only_mapg}")
+    if bad_shape: bits.append(f"映射结构非法 {bad_shape}")
+    return False, "V4 FAIL: " + "；".join(bits)
+
+
 def cmd_verify(root: Path) -> int:
     """文档 ↔ 仓库实际 全量差集核对：把 README 发布契约第 5 条变成程序检查。"""
     print("=== rot.py verify · 全量文档差集核对（FM-R2-07 根治项）===")
@@ -314,12 +365,8 @@ def cmd_verify(root: Path) -> int:
 
     wf = (root / ".github/workflows/validate.yml").read_text(encoding="utf-8")
     steps = [l.strip()[8:] for l in wf.splitlines() if l.strip().startswith("- name:")]
-    gates_n = len([s for s in steps if s not in PLATFORM_STEPS])
-    expect_n = (len(wm["gates"]["static"]) + len(wm["gates"]["structural"])
-                + len(wm["gates"]["documentation"]))
-    ok &= ck_line(lines, "V4", gates_n == expect_n,
-                  f"CI 门禁 step {gates_n} == workmap 登记 {expect_n}"
-                  f"（18 静态 + 4 结构 + 1 文档差集；yml 内平台 step {len(steps)-gates_n}）")
+    v4_ok, v4_msg = v4_set_check(wm, steps, PLATFORM_STEPS)
+    ok &= ck_line(lines, "V4", v4_ok, v4_msg)
 
     v1 = json.loads((root / ".claude-plugin/plugin.json").read_text(encoding="utf-8"))["version"]
     v2 = json.loads((root / ".codebuddy-plugin/plugin.json").read_text(encoding="utf-8"))["version"]

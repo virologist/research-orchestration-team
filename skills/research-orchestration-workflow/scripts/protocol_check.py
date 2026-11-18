@@ -528,6 +528,118 @@ def load_state_phases() -> list:
     return list(phases)
 
 
+# ── #28 协议层 ↔ 落盘状态跨层绑定契约（R8 设计裁决 O2 落地）──────────────
+# 背景（审计 #28）：信封校验过去只看信封自身字段，信封 phase/task_id 与落盘
+# 状态完全不符时仍返回空失败列表（rc=0）——协议层与状态机层之间没有绑定
+# 契约。本函数补上这道跨层断言，契约四条（经管家节点确认的方案）：
+#   1. 绑定键：信封 task_id == 落盘 status.task_id（同一任务）；
+#   2. phase 对齐：信封 phase ∈ {落盘当前 phase, 其下一阶段}（允许在途信封）；
+#   3. turn：信封带 turn 时须 ∈ {落盘 turn, turn+1}；缺失不强制（向后兼容）；
+#   4. 终态守卫：落盘 status ∈ {done, aborted} 时，信封不得声明非终态 phase。
+# 入参 state 为 dict（落盘 _state.json 已解析），phases 为阶段序列；不读文件、
+# 不 import state_io——保持纯函数，便于注入负例测试与将来被 envelope 入口复用。
+TERMINAL_PHASE = "NEXT"   # 八阶段状态机的终态阶段（done/aborted 信封只能落此处）
+
+
+def check_envelope_state_binding(env: dict, state: dict, phases: list) -> list:
+    """跨层绑定校验：返回失败原因列表，空列表=通过。信封或状态非 dict 直接判红。"""
+    if not isinstance(env, dict):
+        return ["[cross-layer] 信封不是字典"]
+    if not isinstance(state, dict):
+        return ["[cross-layer] 落盘状态不是字典（未初始化或结构损坏）"]
+    fails: list[str] = []
+
+    # 契约 1：task_id 绑定
+    sid = state.get("task_id")
+    eid = env.get("task_id")
+    if not sid:
+        fails.append("[cross-layer] 落盘状态缺 task_id（无法建立绑定）")
+    elif eid != sid:
+        fails.append(f"[cross-layer] task_id 不符：信封 {eid!r} ≠ 落盘 {sid!r}")
+
+    # 契约 2：phase 对齐（当前或下一阶段）
+    sphase = state.get("phase")
+    ephase = env.get("phase")
+    if not phases:
+        fails.append("[cross-layer] 阶段序列为空（契约 2 无法判定）")
+    elif sphase not in phases:
+        fails.append(f"[cross-layer] 落盘 phase {sphase!r} 不在阶段序列")
+    elif ephase not in phases:
+        fails.append(f"[cross-layer] 信封 phase {ephase!r} 不在阶段序列")
+    else:
+        idx = phases.index(sphase)
+        allowed = {sphase}
+        if idx + 1 < len(phases):
+            allowed.add(phases[idx + 1])
+        if ephase not in allowed:
+            fails.append(f"[cross-layer] phase 未对齐：信封 {ephase!r} ∉ "
+                         f"{{当前 {sphase}, 下一 {phases[idx+1] if idx+1 < len(phases) else '无'}}}")
+
+    # 契约 3：turn 在途（缺失不强制）
+    if "turn" in env and env.get("turn") is not None:
+        eturn, sturn = env.get("turn"), state.get("turn")
+        if isinstance(eturn, int) and isinstance(sturn, int):
+            if eturn not in (sturn, sturn + 1):
+                fails.append(f"[cross-layer] turn 未对齐：信封 {eturn} ∉ {{{sturn}, {sturn+1}}}")
+        elif not isinstance(eturn, int):
+            fails.append(f"[cross-layer] 信封 turn 非整数：{eturn!r}")
+
+    # 契约 4：终态守卫
+    if state.get("status") in ("done", "aborted") and ephase != TERMINAL_PHASE:
+        fails.append(f"[cross-layer] 落盘终态 status={state['status']!r} 但信封 "
+                     f"phase={ephase!r}（终态信封只能声明 {TERMINAL_PHASE}）")
+    return fails
+
+
+def run_cross_layer_tests() -> tuple:
+    """#28 跨层绑定契约的正例 + 注入负例。返回 (用例列表, 通过数, 失败列表)。"""
+    phases = load_state_phases()
+    # 注意：此处 status 取值刻意避开 success 状态字面串——
+    # 该串是 protocol_check_selftest N1 注入负例的唯一性锚点（要求全文恰好出现 1 次，
+    # 位于 envelope fixture）。跨层套件不依赖具体 status 值，用 "ok" 不破坏该锚点。
+    base_state = {"task_id": "task-x", "phase": "EXECUTE", "turn": 3, "status": "running"}
+    ok_env = {"task_id": "task-x", "phase": "EXECUTE", "turn": 3, "status": "ok"}
+    # cases: (名称, 实际失败列表, 是否通过) —— 通过判定内聚在 add 内，避免期望值与实际值形态不一致。
+    cases: list[tuple[str, list, bool]] = []
+
+    def add(name, env, state, must_contain=None, want_clean=False):
+        got = check_envelope_state_binding(env, state, phases)
+        if want_clean:
+            ok = got == []
+        else:
+            ok = bool(got) and all(any(tok in g for g in got) for tok in must_contain)
+        cases.append((name, got, ok))
+
+    # 正例：完全对齐
+    add("X1 完全对齐（当前 phase/turn）", ok_env, base_state, want_clean=True)
+    # 正例：在途信封（下一 phase / turn+1）
+    add("X2 在途信封（下一阶段 + turn+1）",
+        {"task_id": "task-x", "phase": "REVIEW", "turn": 4},
+        base_state, want_clean=True)
+    # 正例：缺 turn 向后兼容
+    add("X3 缺 turn 不强制", {"task_id": "task-x", "phase": "EXECUTE"},
+        base_state, want_clean=True)
+    # 负例 1：task_id 不符
+    add("X4 task_id 不符 → 红", {**ok_env, "task_id": "task-OTHER"}, base_state,
+        must_contain=["task_id 不符"])
+    # 负例 2：phase 跳级（非当前/下一）
+    add("X5 phase 跳级 → 红", {**ok_env, "phase": "NEXT"}, base_state,
+        must_contain=["phase 未对齐"])
+    # 负例 3：turn 越界
+    add("X6 turn 越界 → 红", {**ok_env, "turn": 9}, base_state,
+        must_contain=["turn 未对齐"])
+    # 负例 4：终态守卫（落盘 done，信封仍声明执行中 phase）
+    add("X7 终态声明执行中 phase → 红", ok_env,
+        {**base_state, "status": "done"}, must_contain=["落盘终态"])
+    # 正例 5：终态 + NEXT phase 合法（落盘 phase 已推进到终态 NEXT，信封同步停在此；turn 不声明以避已在途约束）
+    add("X8 终态声明 NEXT → 绿", {"task_id": "task-x", "phase": "NEXT"},
+        {**base_state, "status": "aborted", "phase": "NEXT"}, want_clean=True)
+
+    passed = sum(1 for _, _, ok in cases if ok)
+    failures = [f"{n}: got={g}" for n, g, ok in cases if not ok]
+    return cases, passed, failures
+
+
 def load_agent_ids() -> list | None:
     """读 agents/*.md 文件名集合（与 manifest C13 同源的成员真值源）。
 
@@ -1308,6 +1420,20 @@ def main():
         if not bad_ok:
             failed += 1
         print(f"  {'✅ 正确检出' if bad_ok else '❌ 未检出'} 违规回引：pointer 形态非法 → {bad_result}")
+
+        # #28 跨层绑定契约（信封 ↔ 落盘状态）：并入 integration 套件，
+        # 让既有 CI "Protocol compliance tests" step 直接覆盖，零计数涟漪。
+        try:
+            xl_cases, xl_passed, xl_failures = run_cross_layer_tests()
+            failed += len(xl_failures)
+            print(f"\n  跨层绑定契约（#28）：{xl_passed}/{len(xl_cases)} 通过")
+            for name, got, ok in xl_cases:
+                mark = "✅" if ok else "❌"
+                print(f"    {mark} {name}" + (f"  ↳ {got}" if not ok else ""))
+        except Exception as exc:
+            # 阶段序列加载失败等环境异常 → fail-closed，不静默跳过。
+            failed += 1
+            print(f"  ❌ 跨层绑定契约无法执行（fail-closed）: {type(exc).__name__}: {exc}")
 
     print()
     print(f"[rc] failed={failed} → {'PASS' if failed == 0 else 'FAIL'}")

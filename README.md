@@ -93,10 +93,13 @@ research-orchestration-team/
 ├── tests/
 │   ├── test_vendor_core.py                         # 防漂移门禁 V1–V6
 │   ├── test_state_ceilings.py                      # 编排层上限语义锁定 · 4 条
+│   ├── test_ceiling_relaxation_guard.py            # #22 熔断放宽告警+留痕护栏（ADR-0022）· 6 条
 │   ├── test_state_io_guards.py                     # state_io 输入护栏注入式验证 · 10 条
 │   ├── test_lead_source_of_truth.py                # 主理人双重事实源一致性 · 6 条
 │   ├── test_state_runtime_sequencing.py            # 运行时序 / 终态污染 / 观测一致性 · 8 条
-│   └── test_state_file_robustness.py               # 状态文件健壮性 / cp 编号 / 孤儿 tmp · 12 条
+│   ├── test_state_file_robustness.py               # 状态文件健壮性 / cp 编号 / 孤儿 tmp · 12 条
+│   ├── test_cross_layer_binding.py                 # #28 协议↔落盘跨层绑定契约（ADR-0028）· 8 条
+│   └── test_v4_set_check.py                        # R4 V4 step↔gate 集合比对注入负例 · 7 条
 ├── avatars/                                         # 14 张（12 成员 + 团队 + 保留的历史 domain-expert.png），随 git 分发
 ├── docs/
 │   ├── REDTEAM-REPORT.md                           # 红队审查报告（5 维度 · 缺陷 · 回归证据）
@@ -104,6 +107,9 @@ research-orchestration-team/
 │   ├── harness-eval-report-v2.0.2.md               # Harness 改造前基线（0/12）
 │   ├── harness-iteration-loop.md                   # Harness 迭代闭环状态文件 · 断点续跑 SSOT
 │   └── VERIFICATION-REPORT.md                  # v2.5.7 交付验证记录（四种状态标注）
+├── decisions/                                       # ★ 设计裁决 ADR（O2 外置 · 四态标注 · 与台账双向引用）
+│   ├── ADR-0022.md                                  # 熔断阈值放宽语义：告警+留痕不拦截（对应审计 #22）
+│   └── ADR-0028.md                                  # 协议↔落盘跨层绑定契约 1–4（对应审计 #28）
 ├── feedback/                                        # ★ 反馈层（单次要求 / 长期规则 / 认可样例）
 │   ├── RULES.md                                    # 转化优先级 · 晋升条件 · 规则上限 24 条
 │   ├── RECORDS.jsonl                               # 结构化反馈记录（机器真值源）
@@ -379,10 +385,13 @@ python3 skills/research-orchestration-workflow/scripts/protocol_check.py integra
 python3 skills/research-orchestration-workflow/scripts/protocol_check_selftest.py    # 协议注入式负例自测 14 条
 python3 scripts/test_phase_normalization.py                                          # 阶段名归一化自测 26 条
 python3 tests/test_state_ceilings.py               # 编排层上限语义锁定 4 条（R2）
+python3 tests/test_ceiling_relaxation_guard.py     # #22 熔断放宽护栏 6 条（ADR-0022）
 python3 tests/test_state_io_guards.py              # state_io 输入护栏 10 条（R3）
 python3 tests/test_lead_source_of_truth.py         # 主理人双重事实源 6 条（R5）
 python3 tests/test_state_runtime_sequencing.py     # 运行时序 / 终态污染 8 条（R6）
 python3 tests/test_state_file_robustness.py        # 状态文件健壮性 / cp 编号 12 条（R7）
+python3 tests/test_cross_layer_binding.py          # #28 跨层绑定契约 8 条（ADR-0028）
+python3 tests/test_v4_set_check.py                 # R4 V4 step↔gate 集合比对负例 7 条
 python3 skills/research-orchestration-workflow/scripts/state_io.py resume --help     # 状态持久化工具存在性自检
 python3 skills/research-orchestration-workflow/scripts/topic_scoring.py --topic probe \
   --originality 8 --feasibility 7 --value-density 9 --data-availability 7 \

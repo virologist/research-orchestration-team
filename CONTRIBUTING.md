@@ -160,6 +160,15 @@ python3 scripts/rot.py verify
 # 24. 宿主接管自检（只检测不修复；宿主反复删除包根 settings.json 的看门狗）
 python3 scripts/host_guard.py --check
 # 期望 rc=0（健康态）；rc=2 表示检出接管/损坏态，去掉 --check 跑一次即自动修复
+
+# 25. #22 熔断阈值放宽护栏（6 条，ADR-0022）：init/budget 放宽熔断告警+notes 留痕，收紧静默
+python3 tests/test_ceiling_relaxation_guard.py
+
+# 26. #28 协议↔落盘跨层绑定契约（8 条，ADR-0028）：task_id/phase/turn/终态 四条绑定
+python3 tests/test_cross_layer_binding.py
+
+# 27. R4 V4 step↔gate 集合比对注入负例（7 条）：数量巧合盲区封堵
+python3 tests/test_v4_set_check.py
 ```
 
 > `scripts/manifest_check.py` 的校验项为 C1–C13，全部为**硬失败**（`rc=1`）。

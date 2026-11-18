@@ -79,7 +79,9 @@ jobs:
       # 脚本内部按 __file__ 解析自身与校验器位置，不依赖 working-directory，
       # 故无需像上方 Protocol compliance tests 那样先 cd。
       - name: Protocol checker self-test (mutation-based)
-        run: python3 skills/research-orchestration-workflow/scripts/protocol_check_selftest.py
+        run: |
+          python3 skills/research-orchestration-workflow/scripts/protocol_check_selftest.py
+          python3 tests/test_cross_layer_binding.py
 
       # 阶段名归一化 shim 的自测：8 阶段名 × 2 种写法 + 大小写 + 整数 + 非法值
       # 的映射与透传行为必须正确，否则 spawn 装配第一步按官方文档执行必然失败。
@@ -182,7 +184,9 @@ jobs:
 
       # R2 P0-1：四项硬上限的语义分层锁定（告警 vs 终态）
       - name: State IO ceiling semantics lock (R2 P0-1)
-        run: python3 tests/test_state_ceilings.py
+        run: |
+          python3 tests/test_state_ceilings.py
+          python3 tests/test_ceiling_relaxation_guard.py
 
       # R3 P0-1 / P1-2：checkpoint 形态归一化 + task_id 消毒的输入护栏。
       # 10 条用例（含「不带检查点的推进」回归护栏），逐条独立取 rc，
@@ -268,3 +272,4 @@ jobs:
         run: |
           python3 scripts/rot.py selftest
           python3 scripts/rot.py verify
+          python3 tests/test_v4_set_check.py

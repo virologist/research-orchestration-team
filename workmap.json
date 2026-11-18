@@ -312,5 +312,78 @@
     ],
     "rule_cap": "长期规则总数上限 24 条；达到上限时新规则必须先归档一条旧规则并给出证据",
     "accepted_example_status": "候选认可样例默认「AI 评估通过 / 待人工确认」，经用户确认后才标「人工确认通过」"
+  },
+  "ci_step_map": {
+    "Package consistency check": [
+      "manifest_check"
+    ],
+    "Checker self-test (mutation-based negative cases)": [
+      "manifest_check_selftest"
+    ],
+    "Protocol compliance tests": [
+      "protocol_envelope",
+      "protocol_conflict",
+      "protocol_integration"
+    ],
+    "Protocol checker self-test (mutation-based)": [
+      "protocol_check_selftest"
+    ],
+    "Phase normalization self-test": [
+      "phase_normalization"
+    ],
+    "Harness design checks (H1-H12)": [
+      "harness_eval"
+    ],
+    "Harness eval self-test (mutation-based)": [
+      "harness_eval_selftest"
+    ],
+    "Routing consistency check (R1-R6)": [
+      "routing_eval"
+    ],
+    "Routing eval self-test (mutation-based)": [
+      "routing_eval_selftest"
+    ],
+    "Vendor core anti-drift (V1-V6)": [
+      "vendor_core"
+    ],
+    "State IO lifecycle smoke test (v2.2.0)": [
+      "@smoke:state_io_lifecycle"
+    ],
+    "State IO circuit breaker + ceiling semantics (R2)": [
+      "@smoke:state_io_circuit_breaker"
+    ],
+    "State IO ceiling semantics lock (R2 P0-1)": [
+      "state_ceilings"
+    ],
+    "State IO input guards (R3 P0-1/P1-2)": [
+      "state_io_guards"
+    ],
+    "Lead source-of-truth consistency (R5 E4)": [
+      "lead_source_of_truth"
+    ],
+    "State IO runtime sequencing + terminal state (R6)": [
+      "state_runtime_sequencing"
+    ],
+    "State IO file robustness + checkpoint consistency (R7)": [
+      "state_file_robustness"
+    ],
+    "Topic scoring edge cases": [
+      "topic_scoring_edge"
+    ],
+    "Workmap consistency (W1-W12)": [
+      "workmap_check"
+    ],
+    "Workmap checker mutation self-test": [
+      "workmap_check_selftest"
+    ],
+    "Sample assertion self-test (A1-A9)": [
+      "sample_check_selftest"
+    ],
+    "Feedback records and rule cap (F1-F8)": [
+      "feedback_check"
+    ],
+    "Documentation delta verification (V0-V10)": [
+      "rot_verify"
+    ]
   }
 }

@@ -478,13 +478,13 @@ evidence 表。CI 门禁 step 17→18（+State IO file robustness + checkpoint c
 | 19 | 终态污染：已完成（`done`）的任务被事后超时翻案为 `aborted` | **已闭环**（v2.5.4 R6 P0-1） | `resume` / `budget` 的 `max_time` 改写守卫原先只排除 `aborted`、漏了 `done`；`budget` 更无任何终态守卫。修复：新增 `_is_terminal()`（`status ∈ {done, aborted}`）统一判定 + `budget` 补终态守卫（rc=1 拒绝、状态文件完全不变）。锁定 `tests/test_state_runtime_sequencing.py` T1/T2/T3/T8 + N1 注入破坏实锤 |
 | 20 | 熔断可被绕过：`fail --max-failures` 能抬高阈值（8 次失败后仍 `running`） | **已闭环**（v2.5.4 R6 P0-2） | registry 只授权 `init` / `budget` 覆写上限，`fail` 的逐次抬高等于给熔断开后门。修复：改为**只允许收紧**（放宽忽略并告警）。锁定 T4/T5 + N2 注入破坏实锤 |
 | 21 | 观测数据静默丢失：`advance` 用 `turn` 覆盖 `turns_used`，冲掉上报值 | **已闭环**（v2.5.4 R6 P1-1） | 改为 `max(已落盘值, turn)`——`turn` 是结构化事实，主理人上报值可能更大（编排轮次 ≠ 阶段数），两者不冲突。锁定 T6/T7 + N3 注入破坏实锤 |
-| 22 | 熔断阈值仍可由 `init` / `budget` **主动放宽** | **未闭环 · 设计语义 · 登记备查** | R6 只封堵了 `fail` 的逐次抬高绕过路径；`budget --max-failures 99` 仍是 registry 明确授权的上限写入口。要杜绝「主动放宽」属 registry 语义变更，需另开轮次裁决，不在 R6 范围内 |
+| 22 | 熔断阈值仍可由 `init` / `budget` **主动放宽** | **已裁决 · 护栏闭环（ADR-0022，2026-11-18）** | R6 只封堵了 `fail` 的逐次抬高绕过路径；`init`/`budget` 是 registry 授权的上限写入口，放宽属合法语义，一刀切拒绝会破坏兼容。裁决：维持放宽 rc=0，但熔断层（max_failures/max_time）放宽时 stderr 告警 + notes 留痕（可观测可追溯），与 `fail` 后门封堵形成语义闭环；告警层 turns/tokens 不触发。实现 `state_io._warn_relaxed_ceilings` + 锁定 `tests/test_ceiling_relaxation_guard.py` 6 条全绿。返还 ADR `decisions/ADR-0022.md`（双向引用）。语义裁决属人工确认点，管家节点可推翻 |
 | 23 | 半损坏状态文件 → 裸 Traceback（合法 JSON 但缺关键字段，13 组组合命中） | **已闭环**（v2.5.5 R7 P0-1） | `load_state` 原先只做 JSON 解析层校验；缺字段时下游直接 `state["phase"]` → 裸 KeyError。修复：新增 `_validate_state_shape` 结构层校验（缺字段 / 类型非法 / status·phase 取值非法 → rc=3，逐条指名字段，不静默重建） |
 | 24 | 缺 `status` 时 `budget` / `fail` rc=0 假绿（静默按 running 处理） | **已闭环**（v2.5.5 R7 P0-2） | 随 P0-1 的结构校验一并拦截（rc=3）——「未知状态」不得被静默当成 running |
 | 25 | `budget` 触顶文案宣称「熔断」实为告警 | **已闭环**（v2.5.5 R7 P1-1） | registry 明确 turns/tokens 是告警层、max_time/failures 才是终态熔断层；文案改为「⚠️ 预算触顶（告警层，不自动熔断）」（FM-R2-03 同族复发） |
 | 26 | 检查点编号与阶段序号解耦 + 编号可复用 + marker 不重写 | **已闭环**（v2.5.5 R7 P1-2） | 协议 §3 约定 cp 编号 = 阶段序号，protocol_check 的 HANDOFF 覆盖校验按此生成清单；`advance` 强制编号 = `cp-{turn:03d}`（不符 rc=1）、同编号复用 rc=1、marker 每次重写 |
 | 27 | SIGKILL 崩溃留下孤儿 tmp，无清理机制 | **已闭环**（v2.5.5 R7 P1-3） | 写盘前清理**已确认孤儿**的 tmp（`os.kill(pid,0)` 探测持有进程已死才删）；已确认无下游代码 glob 该目录，属空间泄漏而非正确性缺陷 |
-| 28 | 协议层与落盘状态无跨层校验入口 | **未闭环 · 设计缺口 · 登记备查** | R7 Phase A 实锤：信封 `phase` / `task_id` 与落盘状态完全不符时，协议校验返回**空失败列表**（rc=0）。补这道断言需先定义「信封与状态的绑定契约」，属设计裁决，不在 R7 范围内，留待 R8 |
+| 28 | 协议层与落盘状态无跨层校验入口 | **已裁决 · 契约闭环（ADR-0028，2026-11-18）** | R7 Phase A 实锤：信封 `phase`/`task_id` 与落盘状态完全不符时协议校验返回空失败列表（rc=0）。裁决四条绑定契约：① task_id 相等 ② phase ∈ {当前, 下一}（在途放行）③ turn（若带）∈ {落盘, +1} ④ 终态仅许 NEXT。实现 `protocol_check.check_envelope_state_binding` + `run_cross_layer_tests`，挂进 integration suite（零 CI step 涟漪）；锁定 `tests/test_cross_layer_binding.py` 8 条全绿。返还 ADR `decisions/ADR-0028.md`（双向引用）。契约 1–4 语义终审属人工确认点，管家节点可调整 |
 | 29 | 文档口径（结构树 / 用例计数 / 提交前清单 / SSOT 入口轮次）无自动化门禁 | **已闭环**（v2.5.7） | 用户发起的工作系统升级把 README 发布契约第 5 条脚本化为 `scripts/rot.py verify`（V1–V10）：逐项比对 `tests/`/`scripts/` 清单 ↔ README 结构树 ↔ CONTRIBUTING、CI 门禁 step 数 ↔ workmap 登记、四处版本、版本历史顺序、状态文件、LEARNING 回流、命令清单计数；并作为 CI 第 23 个门禁 step。FM-R2-07 由「部分闭环」升级为工具承接 |
 
 ### 10.3 R1 验收遗留
