@@ -6,7 +6,7 @@
     "expected": "走 ALIGN → EXECUTE，输出《选题评分卡》+ S/A/B/C 分档 + 3条止损线（数据/时间/资源）",
     "tests": "happy path · Workflow A · 选题评分卡生成 · 脚本调用",
     "target_agents": [
-      "team-lead",
+      "research-orchestration-team-team-lead",
       "meta-architect",
       "domain-expert-biomed",
       "domain-expert-ai",
@@ -30,7 +30,7 @@
     "expected": "触发 FREEZE → IDENTIFY → CLARIFY，问清源输出 Round 1 五个宏观追问，**严禁直接给方案**",
     "tests": "核心防御机制 · 不跳过澄清 · 5轮×5问结构",
     "target_agents": [
-      "team-lead",
+      "research-orchestration-team-team-lead",
       "socratic-questioner"
     ],
     "assertions": [
@@ -48,7 +48,7 @@
     "expected": "复评闭环，严复回必给四项决策之一（维持/升档/降档/止损），**禁止「待定/观察」**",
     "tests": "决策闭环 · GRADE评级 · 必给决策",
     "target_agents": [
-      "team-lead",
+      "research-orchestration-team-team-lead",
       "socratic-questioner",
       "methodological-reviewer"
     ],

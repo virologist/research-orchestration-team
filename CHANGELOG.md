@@ -53,7 +53,7 @@
 | `rot.py selftest` | 无 | **4 组负例精确命中 + 正例零错误** |
 | CI 门禁 step | 23（平台 6，总 29） | 23（平台 6，总 29） |
 
-> 最终证据：`/tmp/rot_check_v258.log` + `.harness-runs/verify/latest.json`（22/22 ALL GREEN，git_head 指向本次补丁）。慢门禁耗时随机器 IO 波动，两次实测均 `rc=0`、条目数不减。
+> 最终证据：CI run `43122438650`（success，v2.5.8 tag `97e181c` 锚点）+ commit `97e181c`；本地复跑结构化报告 `.harness-runs/verify/latest.json`（22/22 ALL GREEN，git_head=`97e181c`，该文件被 .gitignore 忽略、不进发布资产，故以 CI run / commit 为可复跑真值锚点）。慢门禁耗时随机器 IO 波动，两次实测均 `rc=0`、条目数不减。（R9：原证据指向本机 `/tmp/rot_check_v258.log`，不可复跑，已按 CI/commit 锚点更正。）
 
 ## [2.5.7] - 2026-11-10
 
